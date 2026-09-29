@@ -2,7 +2,9 @@ import Foundation
 
 /// Combines the events of every account and calendar into one list.
 public enum EventMerger {
-    public static func merge(_ events: [CalendarEvent], showDeclined: Bool) -> [CalendarEvent] {
+    /// `keeping` holds ids of events shown even when declined: an event the
+    /// user just declined stays in the list until the popover closes.
+    public static func merge(_ events: [CalendarEvent], showDeclined: Bool, keeping: Set<String> = []) -> [CalendarEvent] {
         var best: [String: CalendarEvent] = [:]
         for event in events {
             let key = event.occurrenceKey
@@ -10,7 +12,7 @@ public enum EventMerger {
             best[key] = event
         }
         return best.values
-            .filter { showDeclined || $0.selfResponse != .declined }
+            .filter { showDeclined || $0.selfResponse != .declined || keeping.contains($0.id) }
             .sorted { ($0.start, $0.title, $0.id) < ($1.start, $1.title, $1.id) }
     }
 

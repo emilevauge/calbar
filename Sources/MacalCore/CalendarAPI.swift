@@ -15,11 +15,39 @@ extension URLSession: HTTPClient {
 public enum APIError: Error, Equatable {
     /// Access token expired or revoked: refresh it and retry once.
     case unauthorized
+    /// The access token lacks the scope the request needs: the account
+    /// was signed in before Macal asked for it and must reconnect.
+    case insufficientScope
     case http(status: Int, body: String)
     case invalidResponse
+
+    /// Error for a non-2xx answer of the Calendar API.
+    static func from(status: Int, body: Data) -> APIError {
+        if status == 401 { return .unauthorized }
+        if status == 403 && isScopeError(body) { return .insufficientScope }
+        return .http(status: status, body: String(decoding: body, as: UTF8.self))
+    }
+
+    /// Google reports a missing scope with the legacy reason
+    /// `insufficientPermissions` in `errors` and, in newer answers,
+    /// `ACCESS_TOKEN_SCOPE_INSUFFICIENT` in `details`.
+    private static func isScopeError(_ body: Data) -> Bool {
+        struct Envelope: Decodable {
+            struct Body: Decodable {
+                struct Reason: Decodable { let reason: String? }
+                let errors: [Reason]?
+                let details: [Reason]?
+            }
+            let error: Body
+        }
+        guard let envelope = try? JSONDecoder().decode(Envelope.self, from: body) else { return false }
+        let reasons = (envelope.error.errors ?? []) + (envelope.error.details ?? [])
+        return reasons.contains { $0.reason == "insufficientPermissions" || $0.reason == "ACCESS_TOKEN_SCOPE_INSUFFICIENT" }
+    }
 }
 
-/// Read-only client for the two Calendar API endpoints Macal needs.
+/// Client for the Calendar API endpoints Macal needs: the calendar list
+/// and events to read, one event to answer an invitation.
 public struct CalendarAPI: Sendable {
     private static let base = "https://www.googleapis.com/calendar/v3"
     private let http: HTTPClient
@@ -72,6 +100,17 @@ public struct CalendarAPI: Sendable {
         return result
     }
 
+    /// Answers an invitation for one occurrence: reads the event, changes
+    /// the user's `responseStatus` in its attendee list and sends the list
+    /// back. `sendUpdates=all` lets the organizer know, as the Google
+    /// Calendar web UI does.
+    public func respond(token: String, calendarID: String, eventID: String, response: ResponseStatus) async throws {
+        let path = "/calendars/\(FormEncoding.escape(calendarID))/events/\(FormEncoding.escape(eventID))"
+        let event = try await send("GET", path, query: [], body: nil, token: token)
+        let body = try RSVPPatch.body(event: event, response: response)
+        _ = try await send("PATCH", path, query: [URLQueryItem(name: "sendUpdates", value: "all")], body: body, token: token)
+    }
+
     /// Token of the next page, or `nil` to stop. An empty or repeated token
     /// would otherwise loop forever.
     private static func next(_ token: String?, after previous: String?) -> String? {
@@ -80,20 +119,25 @@ public struct CalendarAPI: Sendable {
     }
 
     private func get<T: Decodable>(_ path: String, query: [URLQueryItem], token: String) async throws -> T {
+        try JSONDecoder().decode(T.self, from: await send("GET", path, query: query, body: nil, token: token))
+    }
+
+    private func send(_ method: String, _ path: String, query: [URLQueryItem], body: Data?, token: String) async throws -> Data {
         var c = URLComponents(string: Self.base)!
         c.percentEncodedPath += path
-        c.percentEncodedQueryItems = FormEncoding.percentEncoded(query)
+        if !query.isEmpty { c.percentEncodedQueryItems = FormEncoding.percentEncoded(query) }
         var request = URLRequest(url: c.url!)
+        request.httpMethod = method
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await http.send(request)
-        switch response.statusCode {
-        case 200..<300:
-            return try JSONDecoder().decode(T.self, from: data)
-        case 401:
-            throw APIError.unauthorized
-        default:
-            throw APIError.http(status: response.statusCode, body: String(decoding: data, as: UTF8.self))
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
         }
+        let (data, response) = try await http.send(request)
+        guard (200..<300).contains(response.statusCode) else {
+            throw APIError.from(status: response.statusCode, body: data)
+        }
+        return data
     }
 }
 

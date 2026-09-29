@@ -38,6 +38,8 @@ func describe(_ error: Error) -> String {
         switch error {
         case .unauthorized:
             return "Google authorization refused."
+        case .insufficientScope:
+            return "Reconnect the account to reply."
         case .http(let status, _):
             return "Google Calendar API error (\(status))."
         case .invalidResponse:
@@ -45,5 +47,21 @@ func describe(_ error: Error) -> String {
         }
     default:
         return "Google sign-in failed."
+    }
+}
+
+/// Short message shown under the RSVP control when an answer fails.
+func describeReply(_ error: Error) -> String {
+    switch error {
+    case RSVPPatch.Failure.notInvited:
+        return "You are not a guest of this event."
+    case APIError.http(403, _):
+        return "Google refused the answer (403)."
+    case APIError.http(404, _), APIError.http(410, _):
+        return "This event no longer exists."
+    case is URLError, is APIError, OAuthError.invalidGrant:
+        return describe(error)
+    default:
+        return "Could not send the answer."
     }
 }

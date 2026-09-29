@@ -77,8 +77,16 @@ public struct TokenResponse: Decodable, Equatable, Sendable {
     /// Only returned on the first code exchange.
     public let refreshToken: String?
     public let idToken: String?
+    /// Space-separated scopes of the grant, as Google returns them.
+    public let scope: String?
+
+    /// `scope` as a list, `nil` when Google did not send it.
+    public var grantedScopes: [String]? {
+        scope.map { $0.split(separator: " ").map(String.init) }
+    }
 
     enum CodingKeys: String, CodingKey {
+        case scope
         case accessToken = "access_token"
         case expiresIn = "expires_in"
         case refreshToken = "refresh_token"
@@ -118,7 +126,12 @@ public enum CallbackKind: Equatable, Sendable {
 }
 
 public enum GoogleOAuth {
-    public static let scopes = "openid email https://www.googleapis.com/auth/calendar.readonly"
+    /// `calendar.readonly` reads the calendar list, which `calendar.events`
+    /// does not cover; `calendar.events` lets Macal answer invitations.
+    public static let scopes = "openid email https://www.googleapis.com/auth/calendar.readonly \(eventsScope)"
+    public static let eventsScope = "https://www.googleapis.com/auth/calendar.events"
+    /// Scopes that allow changing an event's attendee list.
+    public static let writeScopes: Set<String> = [eventsScope, "https://www.googleapis.com/auth/calendar"]
     private static let authEndpoint = "https://accounts.google.com/o/oauth2/v2/auth"
     private static let tokenEndpoint = URL(string: "https://oauth2.googleapis.com/token")!
     private static let revokeEndpoint = URL(string: "https://oauth2.googleapis.com/revoke")!

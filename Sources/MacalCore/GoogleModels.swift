@@ -177,7 +177,8 @@ extension CalendarEvent {
                 conferenceURIs: videoURIs, hangoutLink: g.hangoutLink,
                 location: g.location, description: g.description
             ),
-            selfResponse: attendees.first(where: \.isSelf)?.response ?? .accepted
+            selfResponse: attendees.first(where: \.isSelf)?.response ?? .accepted,
+            googleEventID: g.id
         )
     }
 }

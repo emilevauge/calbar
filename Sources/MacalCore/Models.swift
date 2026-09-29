@@ -54,6 +54,9 @@ public struct Attachment: Equatable, Codable, Sendable {
 public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
     /// Unique across accounts: "<account>/<calendar>/<google event id>".
     public let id: String
+    /// The event id in Google's API, needed to answer the invitation. For
+    /// an occurrence of a recurring event, the id of that occurrence.
+    public let googleEventID: String
     /// Shared by every copy of the same meeting, across accounts, and by
     /// every occurrence of a recurring meeting.
     public let iCalUID: String
@@ -81,9 +84,10 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
         colorHex: String, title: String, start: Date, end: Date, isAllDay: Bool,
         location: String?, notes: String?, htmlLink: URL?, organizer: Person?,
         attendees: [Attendee], attachments: [Attachment], meeting: MeetingLink?,
-        selfResponse: ResponseStatus
+        selfResponse: ResponseStatus, googleEventID: String? = nil
     ) {
         self.id = id
+        self.googleEventID = googleEventID ?? Self.googleID(fromCompositeID: id)
         self.iCalUID = iCalUID
         self.accountEmail = accountEmail
         self.calendarID = calendarID
@@ -100,6 +104,71 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
         self.attachments = attachments
         self.meeting = meeting
         self.selfResponse = selfResponse
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, googleEventID, iCalUID, accountEmail, calendarID, colorHex, title, start, end, isAllDay
+        case location, notes, htmlLink, organizer, attendees, attachments, meeting, selfResponse
+    }
+
+    /// Events cached before `googleEventID` existed take it from the end
+    /// of the composite `id`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try c.decode(String.self, forKey: .id)
+        self.init(
+            id: id,
+            iCalUID: try c.decode(String.self, forKey: .iCalUID),
+            accountEmail: try c.decode(String.self, forKey: .accountEmail),
+            calendarID: try c.decode(String.self, forKey: .calendarID),
+            colorHex: try c.decode(String.self, forKey: .colorHex),
+            title: try c.decode(String.self, forKey: .title),
+            start: try c.decode(Date.self, forKey: .start),
+            end: try c.decode(Date.self, forKey: .end),
+            isAllDay: try c.decode(Bool.self, forKey: .isAllDay),
+            location: try c.decodeIfPresent(String.self, forKey: .location),
+            notes: try c.decodeIfPresent(String.self, forKey: .notes),
+            htmlLink: try c.decodeIfPresent(URL.self, forKey: .htmlLink),
+            organizer: try c.decodeIfPresent(Person.self, forKey: .organizer),
+            attendees: try c.decode([Attendee].self, forKey: .attendees),
+            attachments: try c.decode([Attachment].self, forKey: .attachments),
+            meeting: try c.decodeIfPresent(MeetingLink.self, forKey: .meeting),
+            selfResponse: try c.decode(ResponseStatus.self, forKey: .selfResponse),
+            googleEventID: try c.decodeIfPresent(String.self, forKey: .googleEventID)
+        )
+    }
+
+    /// "<account>/<calendar>/<google event id>" to its last part. Google
+    /// event ids never contain a slash.
+    static func googleID(fromCompositeID id: String) -> String {
+        id.split(separator: "/", omittingEmptySubsequences: false).last.map(String.init) ?? id
+    }
+
+    /// The user is invited by someone else and can answer yes, maybe or no.
+    ///
+    /// Only on the account's primary calendar: Google flags as `self` the
+    /// owner of the calendar a copy was read from, so on a colleague's
+    /// shared calendar an answer would change the colleague's answer.
+    public var canRespond: Bool {
+        calendarID == accountEmail && attendees.contains { $0.isSelf && !$0.isOrganizer }
+    }
+
+    /// The same event with the user's answer set to `response`, in
+    /// `selfResponse` and in the attendee list.
+    public func answering(_ response: ResponseStatus) -> CalendarEvent {
+        CalendarEvent(
+            id: id, iCalUID: iCalUID, accountEmail: accountEmail, calendarID: calendarID,
+            colorHex: colorHex, title: title, start: start, end: end, isAllDay: isAllDay,
+            location: location, notes: notes, htmlLink: htmlLink, organizer: organizer,
+            attendees: attendees.map { a in
+                a.isSelf
+                    ? Attendee(person: a.person, response: response, isOrganizer: a.isOrganizer,
+                               isSelf: true, isOptional: a.isOptional)
+                    : a
+            },
+            attachments: attachments, meeting: meeting, selfResponse: response,
+            googleEventID: googleEventID
+        )
     }
 
     /// Identifies one occurrence at one time slot. Used to deduplicate
@@ -142,10 +211,25 @@ public struct Account: Identifiable, Equatable, Codable, Sendable {
     public var calendars: [CalendarInfo]
     /// The refresh token was revoked or expired: the user must sign in again.
     public var needsReconnect: Bool
+    /// Scopes Google granted, from the last token response. `nil` for an
+    /// account saved before Macal recorded them.
+    public var grantedScopes: [String]?
 
-    public init(email: String, calendars: [CalendarInfo], needsReconnect: Bool) {
+    public init(email: String, calendars: [CalendarInfo], needsReconnect: Bool, grantedScopes: [String]? = nil) {
         self.email = email
         self.calendars = calendars
         self.needsReconnect = needsReconnect
+        self.grantedScopes = grantedScopes
+    }
+
+    /// Macal may answer invitations for this account. An account signed in
+    /// when Macal only asked for read access must reconnect first.
+    public var canReply: Bool {
+        (grantedScopes ?? []).contains { GoogleOAuth.writeScopes.contains($0) }
+    }
+
+    /// Google refused a write for lack of scope.
+    public mutating func markReadOnly() {
+        grantedScopes = (grantedScopes ?? []).filter { !GoogleOAuth.writeScopes.contains($0) }
     }
 }
