@@ -1,0 +1,11 @@
+.build/
+.swiftpm/
+Package.resolved
+DerivedData/
+*.xcodeproj
+Macal.app/
+.DS_Store
+Macal.app.zip
+*.dmg
+.claude/settings.local.json
+Sources/Macal/Resources/google-oauth.json
