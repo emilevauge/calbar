@@ -1,0 +1,190 @@
+import SwiftUI
+import AppKit
+import MacalCore
+
+/// Expanded part of a row: link, place, people, documents, description,
+/// with a Google Calendar button at the top right.
+struct EventDetail: View {
+    let event: CalendarEvent
+    @State private var showAllAttendees = false
+    private static let attendeeLimit = 8
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 6) {
+                lines
+                Spacer(minLength: 0)
+                if let url = event.webURL {
+                    Link(destination: url) {
+                        GoogleCalendarIcon(size: 15)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open in Google Calendar")
+                    // Centers the 16 pt icon on the first caption line.
+                    .padding(.vertical, -1.5)
+                }
+            }
+            // Notes use the full width, below the icon.
+            if let notes = event.notes {
+                let text = HTMLText.plainText(notes)
+                if !text.isEmpty {
+                    Text(Linkify.attributed(text))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .font(.caption)
+        // Plain text is secondary; clickable items opt back into the accent.
+        .foregroundStyle(.secondary)
+    }
+
+    private var lines: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let meeting = event.meeting {
+                line("video") {
+                    Button(meeting.provider.displayName) { MeetingOpener.open(meeting) }
+                        .buttonStyle(.link)
+                        .clickable()
+                }
+            }
+            if let location = event.location, !location.isEmpty {
+                line("mappin.and.ellipse") {
+                    Button(location) { openLocation(location) }
+                        .buttonStyle(.link)
+                        .clickable()
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            if let organizer = event.organizer, !event.attendees.contains(where: \.isOrganizer) {
+                line("person.crop.circle") { Text("Organized by \(organizer.displayName)") }
+            }
+            if !event.attendees.isEmpty {
+                attendees
+            }
+            if !event.attachments.isEmpty {
+                attachments
+            }
+        }
+    }
+
+    private func line<Content: View>(_ symbol: String, @ViewBuilder _ content: () -> Content) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: symbol)
+                .frame(width: 14)
+            content()
+        }
+    }
+
+    // MARK: attendees
+
+    private var sortedAttendees: [Attendee] {
+        event.attendees.sorted { (rank($0), $0.person.displayName) < (rank($1), $1.person.displayName) }
+    }
+
+    private func rank(_ a: Attendee) -> Int {
+        if a.isOrganizer { return 0 }
+        switch a.response {
+        case .accepted: return 1
+        case .tentative: return 2
+        case .needsAction: return 3
+        case .declined: return 4
+        }
+    }
+
+    private var attendees: some View {
+        let all = sortedAttendees
+        let visible = showAllAttendees ? all : Array(all.prefix(Self.attendeeLimit))
+        let yes = all.filter { $0.response == .accepted }.count
+
+        return VStack(alignment: .leading, spacing: 3) {
+            line("person.2") { Text("\(all.count) guests · \(yes) yes") }
+            ForEach(visible, id: \.person.email) { attendee in
+                HStack(spacing: 6) {
+                    responseIcon(attendee.response)
+                        .frame(width: 14)
+                    Text(attendee.person.displayName)
+                        .lineLimit(1)
+                        .help(attendee.person.email)
+                    if attendee.isOrganizer {
+                        Text("organizer").foregroundStyle(.tertiary)
+                    } else if attendee.isOptional {
+                        Text("optional").foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.leading, 20)
+            }
+            if all.count > Self.attendeeLimit {
+                Button(showAllAttendees ? "Show less" : "Show \(all.count - Self.attendeeLimit) more") {
+                    showAllAttendees.toggle()
+                }
+                .buttonStyle(.link)
+                .clickable()
+                .padding(.leading, 20)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func responseIcon(_ response: ResponseStatus) -> some View {
+        switch response {
+        case .accepted:
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        case .declined:
+            Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
+        case .tentative:
+            Image(systemName: "questionmark.circle.fill").foregroundStyle(.orange)
+        case .needsAction:
+            Image(systemName: "circle.dotted").foregroundStyle(.tertiary)
+        }
+    }
+
+    // MARK: attachments
+
+    private var attachments: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(event.attachments, id: \.url) { file in
+                line(file.symbolName) {
+                    Link(file.title, destination: file.url)
+                        .clickable()
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    // MARK: actions
+
+    private func openLocation(_ location: String) {
+        if let url = URL(string: location), url.scheme?.hasPrefix("http") == true {
+            NSWorkspace.shared.open(url)
+            return
+        }
+        var c = URLComponents(string: "maps://")!
+        c.queryItems = [URLQueryItem(name: "q", value: location)]
+        if let url = c.url { NSWorkspace.shared.open(url) }
+    }
+}
+
+private extension View {
+    /// Accent color for links and link-style buttons, which would otherwise
+    /// inherit the container's secondary style and look like plain text.
+    func clickable() -> some View {
+        foregroundStyle(Color.accentColor)
+    }
+}
+
+extension Attachment {
+    /// SF Symbol matching the file type, for attachment rows.
+    var symbolName: String {
+        switch mimeType ?? "" {
+        case let m where m.contains("document"): return "doc.text"
+        case let m where m.contains("spreadsheet"): return "tablecells"
+        case let m where m.contains("presentation"): return "rectangle.on.rectangle"
+        case let m where m.contains("pdf"): return "doc.richtext"
+        default: return "paperclip"
+        }
+    }
+}

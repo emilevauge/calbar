@@ -1,0 +1,366 @@
+import AppKit
+import SwiftUI
+import Combine
+import KeyboardShortcuts
+import MacalCore
+
+/// App controller: status item, popover, account actions. AppKit
+/// NSStatusItem + NSPopover rather than MenuBarExtra, to open the popover
+/// from code (hotkey, "Open Macal"), like Claudette. A single status item:
+/// while a meeting with a link is due, its image becomes a capsule that
+/// holds the join link and the calendar glyph.
+@MainActor
+final class AppDelegate: NSObject, ObservableObject {
+    static let shared = AppDelegate()
+
+    let accounts: AccountStore
+    /// Nil until a Google OAuth client is imported (or bundled in a dev
+    /// build). Replaced in place when the user imports another one.
+    @Published private(set) var auth: GoogleAuth?
+    let store: EventStore
+    let join: JoinController
+    let notifier: MeetingNotifier
+    let hoverCard: HoverCardController
+
+    /// Last sign-in failure, shown in the settings panel.
+    @Published var authError: String?
+    /// Last failed OAuth client import, shown next to the import button.
+    @Published private(set) var clientImportError: String?
+    /// A browser sign-in is waiting for Google's redirect.
+    @Published private(set) var isSigningIn = false
+    /// Bumped every time the popover closes, so it opens on today again.
+    @Published private(set) var popoverCloseCount = 0
+
+    private var signInTask: Task<Void, Never>?
+    /// Tells a finished sign-in whether a newer one replaced it.
+    private var signInGeneration = 0
+
+    private var statusItem: NSStatusItem?
+    private var popover: NSPopover?
+    private var lastRender: Render?
+    /// Width from the image's left edge where a click joins; 0 without capsule.
+    private var joinZoneWidth: CGFloat = 0
+    private var cancellables = Set<AnyCancellable>()
+    private var dayStart: DayStartOpener?
+
+    private override init() {
+        Prefs.register()
+        let accounts = AccountStore()
+        let client = OAuthConfig.load()
+        if let client {
+            Self.adopt(client, accounts: accounts)
+        }
+        let auth = client.map { GoogleAuth(client: $0) }
+        self.accounts = accounts
+        self.auth = auth
+        let store = EventStore(accounts: accounts, auth: auth)
+        self.store = store
+        let join = JoinController(store: store)
+        self.join = join
+        self.notifier = MeetingNotifier(store: store, join: join)
+        self.hoverCard = HoverCardController(store: store, accounts: accounts)
+        super.init()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(didFinishLaunching(_:)),
+            name: NSApplication.didFinishLaunchingNotification,
+            object: nil
+        )
+    }
+
+    @objc private func didFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        AppIcon.install()
+        LaunchAgent.syncIfNeeded()
+        notifier.onOpenMacal = { [weak self] id in
+            self?.store.requestedEventID = id
+            self?.showPopover()
+        }
+        NotificationHub.shared.start()
+        notifier.start()
+        UpdateChecker.startPeriodicCheck()
+
+        setupStatusItem()
+        setupPopover()
+        join.onOpenMacal = { [weak self] event in
+            self?.store.requestedEventID = event.id
+            self?.showPopover()
+        }
+        join.onChange = { [weak self] in self?.refreshIndicators() }
+        observe()
+        store.start()
+        let dayStart = DayStartOpener(
+            store: store,
+            isPopoverShown: { [weak self] in self?.popover?.isShown == true },
+            open: { [weak self] in self?.showPopover() }
+        )
+        dayStart.start()
+        self.dayStart = dayStart
+
+        KeyboardShortcuts.onKeyDown(for: .toggleMacal) { [weak self] in
+            self?.togglePopover(nil)
+        }
+    }
+
+    // MARK: status item
+
+    private func setupStatusItem() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = item.button {
+            button.action = #selector(statusItemClicked(_:))
+            button.target = self
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.imagePosition = .imageOnly
+            // No plain toolTip: the hover card replaces it.
+            button.setAccessibilityLabel("Macal")
+            hoverCard.attach(to: button)
+        }
+        statusItem = item
+        hoverCard.canShow = { [weak self] in self?.popover?.isShown != true }
+        hoverCard.dueState = { [weak self] now in
+            guard let self else { return nil }
+            let state = self.indicatorState(now: now)
+            guard let primary = state.queue.primary, let style = state.style else { return nil }
+            return (primary, style)
+        }
+        refreshIndicators()
+    }
+
+    private func setupPopover() {
+        let p = NSPopover()
+        p.behavior = .transient
+        p.animates = true
+        p.contentSize = NSSize(width: 380, height: 480)
+        p.contentViewController = NSHostingController(
+            rootView: MenuView(store: store, accounts: accounts)
+        )
+        popover = p
+        // Covers every way it closes: click outside, esc, joining a meeting.
+        NotificationCenter.default.addObserver(
+            forName: NSPopover.didCloseNotification, object: p, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.popoverCloseCount += 1 }
+        }
+    }
+
+    private func observe() {
+        // `receive(on:)` defers to the next main queue pass: @Published fires
+        // in willSet, so reading the stores synchronously would see old values.
+        // DispatchQueue rather than RunLoop.main, which pauses while a menu
+        // or a drag tracks events.
+        Publishers.CombineLatest3(store.$now, store.$rawEvents, accounts.$accounts)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.refreshIndicators() }
+            .store(in: &cancellables)
+    }
+
+    /// What the item draws: the redraw happens only when this changes.
+    private struct Render: Equatable {
+        let badge: MenuBarBadge
+        let join: StatusItemImage.Join?
+    }
+
+    private func indicatorState(now: Date) -> (badge: MenuBarBadge, queue: JoinQueue, style: CapsuleStyle?) {
+        let badge = MenuBarBadge.compute(
+            events: store.events,
+            now: now,
+            leadTime: Prefs.alertPolicy.leadTime,
+            calendar: .current,
+            needsAttention: accounts.needsAttention,
+            due: join.due(now: now)
+        )
+        let queue = join.queue(now: now)
+        return (badge, queue, CapsuleStyle.make(badge: badge, primary: queue.primary, now: now))
+    }
+
+    private func refreshIndicators() {
+        notifier.update(now: store.now)
+        let state = indicatorState(now: store.now)
+        var capsule: StatusItemImage.Join?
+        if let event = state.queue.primary, let style = state.style {
+            capsule = StatusItemImage.Join(title: event.title, extraCount: state.queue.extraCount, style: style)
+        }
+        let render = Render(badge: state.badge, join: capsule)
+        guard render != lastRender, let button = statusItem?.button else { return }
+        lastRender = render
+        let (image, zone) = StatusItemImage.make(badge: render.badge, join: render.join)
+        button.image = image
+        joinZoneWidth = zone
+        button.setAccessibilityLabel(capsule.map { "Macal, Join \($0.title)" } ?? "Macal")
+        hoverCard.repositionIfVisible()
+    }
+
+    // MARK: clicks
+
+    /// Left click on the title part of the capsule joins, elsewhere it
+    /// toggles the popover. Right click or control-click opens the menu of
+    /// due meetings, or toggles the popover when nothing is due.
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        let event = NSApp.currentEvent
+        let wantsMenu = event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true
+        // The state may be stale by up to one tick: recompute before acting.
+        let now = Date()
+        if wantsMenu {
+            if let menu = join.makeMenu(now: now) {
+                showMenu(menu)
+            } else {
+                togglePopover(sender)
+            }
+            return
+        }
+        if let event, let primary = join.queue(now: now).primary, joinZoneWidth > 0,
+           let image = sender.image {
+            // The button centers its image: measure from the image's edge.
+            let x = sender.convert(event.locationInWindow, from: nil).x
+                - (sender.bounds.width - image.size.width) / 2
+            if x < joinZoneWidth {
+                hoverCard.dismissForClick()
+                join.join(primary)
+                return
+            }
+        }
+        togglePopover(sender)
+    }
+
+    /// Attached to the item only while it tracks, so a left click keeps
+    /// going to `statusItemClicked(_:)`.
+    private func showMenu(_ menu: NSMenu) {
+        guard let statusItem else { return }
+        hoverCard.dismissForClick()
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    // MARK: popover
+
+    @objc func togglePopover(_ sender: Any?) {
+        hoverCard.dismissForClick()
+        if popover?.isShown == true {
+            closePopover()
+        } else {
+            showPopover()
+        }
+    }
+
+    func showPopover() {
+        guard let popover, let button = statusItem?.button, !popover.isShown else { return }
+        hoverCard.hide()
+        NSApp.activate(ignoringOtherApps: true)
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+    }
+
+    func closePopover() {
+        popover?.performClose(nil)
+    }
+
+    // MARK: accounts
+
+    /// Sign in a new account, or reconnect an existing one via `loginHint`.
+    /// Starting a sign-in cancels the one in progress.
+    func addAccount(loginHint: String? = nil) {
+        guard let auth else {
+            authError = "Import a Google OAuth client first."
+            return
+        }
+        signInTask?.cancel()
+        signInGeneration += 1
+        let generation = signInGeneration
+        authError = nil
+        isSigningIn = true
+        signInTask = Task {
+            let result: Result<String, Error>
+            do {
+                result = .success(try await auth.signIn(loginHint: loginHint))
+            } catch {
+                result = .failure(error)
+            }
+            // A newer sign-in replaced this one: it owns the state now.
+            guard generation == signInGeneration else { return }
+            isSigningIn = false
+            signInTask = nil
+            switch result {
+            case .success(let email):
+                accounts.upsert(email: email)
+                await store.refresh()
+            case .failure(let error):
+                NSLog("Macal: sign-in failed: %@", "\(error)")
+                // Cancelled by the user: no message. Timeout: "Sign-in cancelled."
+                if !Task.isCancelled { authError = describe(error) }
+            }
+        }
+    }
+
+    // MARK: OAuth client
+
+    /// Asks for the JSON file of a Google "Desktop app" OAuth client,
+    /// validates it, keeps a private copy and starts using it right away.
+    func importOAuthClient() {
+        // After the current event: the button may sit in a popover that
+        // closes when the panel takes focus.
+        DispatchQueue.main.async { [weak self] in
+            self?.runImportPanel()
+        }
+    }
+
+    private func runImportPanel() {
+        let panel = NSOpenPanel()
+        panel.title = "Import a Google OAuth client"
+        panel.message = "Choose the JSON file of a Desktop app client downloaded from Google Cloud Console."
+        panel.prompt = "Import"
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let client = try OAuthConfig.importFile(at: url)
+            clientImportError = nil
+            use(client)
+            NSLog("Macal: OAuth client imported")
+        } catch {
+            NSLog("Macal: OAuth client import failed: %@", "\(type(of: error))")
+            clientImportError = error is DecodingError || error is OAuthClientFile.InvalidClient
+                ? "This file is not a Google OAuth client for a Desktop app."
+                : "Could not import this file."
+        }
+    }
+
+    /// Switches to `client` without a restart. Accounts signed in with a
+    /// different client are marked for reconnection.
+    private func use(_ client: OAuthClient) {
+        guard auth?.client != client else { return }
+        Self.adopt(client, accounts: accounts)
+        signInTask?.cancel()
+        let auth = GoogleAuth(client: client)
+        self.auth = auth
+        store.auth = auth
+        Task { await store.refresh() }
+    }
+
+    /// Records `client` as the current one, marking the saved accounts for
+    /// reconnection when they were signed in with another client.
+    private static func adopt(_ client: OAuthClient, accounts: AccountStore) {
+        if OAuthClientFile.accountsMustReconnect(
+            knownClientID: OAuthConfig.knownClientID, newClientID: client.clientID,
+            hasAccounts: !accounts.accounts.isEmpty
+        ) {
+            NSLog("Macal: OAuth client changed, accounts must reconnect")
+            for account in accounts.accounts {
+                accounts.setNeedsReconnect(true, email: account.email)
+            }
+        }
+        OAuthConfig.knownClientID = client.clientID
+    }
+
+    func cancelSignIn() {
+        signInTask?.cancel()
+    }
+
+    func removeAccount(_ email: String) async {
+        await auth?.signOut(email)
+        accounts.remove(email)
+        store.forget(email)
+    }
+}
