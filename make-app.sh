@@ -1,0 +1,154 @@
+#!/bin/zsh
+# Builds Macal.app, the minimal .app bundle that gives UNUserNotificationCenter
+# a CFBundleIdentifier, and Macal.dmg, the release artifact. Also renders the
+# app icon through `Macal --generate-icon` and iconutil.
+#
+# The bundle never contains a Google OAuth client: each user imports their
+# own google-oauth.json from the app. The script fails if one ends up inside.
+#
+# Usage: ./make-app.sh [--install]
+#   --install: also copies the bundle to /Applications.
+
+set -euo pipefail
+cd "$(dirname "$0")"
+
+CONFIG="release"
+APP="Macal.app"
+BUNDLE_ID="dev.macal.app"
+VERSION="0.1.0"
+BUILD="1"
+
+echo "▶ Building $CONFIG…"
+swift build -c "$CONFIG"
+
+BIN=".build/$CONFIG/Macal"
+[ -x "$BIN" ] || { echo "✗ binary not found: $BIN"; exit 1; }
+
+echo "▶ Packaging $APP…"
+rm -rf "$APP"
+mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/Resources"
+
+cp "$BIN" "$APP/Contents/MacOS/Macal"
+
+# No SwiftPM resource bundle is copied. Macal_Macal.bundle only holds the
+# dev OAuth client and its example, and the generated `Bundle.module`
+# accessors look at the .app root, where a signed bundle cannot hold
+# anything, so a copy in Contents/Resources would never be read anyway.
+
+# ─── icon ───────────────────────────────────────────────────────────────────
+echo "▶ Generating the .icns icon…"
+ICON_TMP=$(mktemp -d)
+ICONSET="$ICON_TMP/AppIcon.iconset"
+mkdir -p "$ICONSET"
+
+# Macal renders itself as a 1024×1024 PNG (CLI mode).
+"$BIN" --generate-icon "$ICONSET/icon_512x512@2x.png" || {
+    echo "✗ icon rendering failed"; exit 1;
+}
+
+# Sizes iconutil expects.
+sips -z 16   16   "$ICONSET/icon_512x512@2x.png" --out "$ICONSET/icon_16x16.png"        >/dev/null
+sips -z 32   32   "$ICONSET/icon_512x512@2x.png" --out "$ICONSET/icon_16x16@2x.png"     >/dev/null
+sips -z 32   32   "$ICONSET/icon_512x512@2x.png" --out "$ICONSET/icon_32x32.png"        >/dev/null
+sips -z 64   64   "$ICONSET/icon_512x512@2x.png" --out "$ICONSET/icon_32x32@2x.png"     >/dev/null
+sips -z 128  128  "$ICONSET/icon_512x512@2x.png" --out "$ICONSET/icon_128x128.png"      >/dev/null
+sips -z 256  256  "$ICONSET/icon_512x512@2x.png" --out "$ICONSET/icon_128x128@2x.png"   >/dev/null
+sips -z 256  256  "$ICONSET/icon_512x512@2x.png" --out "$ICONSET/icon_256x256.png"      >/dev/null
+sips -z 512  512  "$ICONSET/icon_512x512@2x.png" --out "$ICONSET/icon_256x256@2x.png"   >/dev/null
+sips -z 512  512  "$ICONSET/icon_512x512@2x.png" --out "$ICONSET/icon_512x512.png"      >/dev/null
+
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+rm -rf "$ICON_TMP"
+
+# ─── Info.plist ─────────────────────────────────────────────────────────────
+cat > "$APP/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>Macal</string>
+    <key>CFBundleIdentifier</key>
+    <string>$BUNDLE_ID</string>
+    <key>CFBundleName</key>
+    <string>Macal</string>
+    <key>CFBundleDisplayName</key>
+    <string>Macal</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$VERSION</string>
+    <key>CFBundleVersion</key>
+    <string>$BUILD</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+</dict>
+</plist>
+EOF
+
+# ─── no OAuth client inside ─────────────────────────────────────────────────
+LEAKED=$(find "$APP" -iname 'google-oauth*.json')
+if [ -n "$LEAKED" ]; then
+    echo "✗ OAuth client file inside $APP, refusing to package:"
+    echo "$LEAKED"
+    rm -rf "$APP"
+    exit 1
+fi
+
+# Signing. With a stable identity (a self-signed code signing certificate in
+# the keychain, see README) the app's designated requirement stays the same
+# from one build to the next, so macOS keeps its Keychain and notification
+# grants. Without one, ad hoc signing: the code hash changes on every build.
+SIGN_IDENTITY="${MACAL_SIGN_IDENTITY:-Claudette Dev}"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$SIGN_IDENTITY\""; then
+    echo "▶ Signing with \"$SIGN_IDENTITY\"…"
+    codesign --force --deep --sign "$SIGN_IDENTITY" "$APP" >/dev/null
+else
+    echo "▶ Ad hoc signing (no \"$SIGN_IDENTITY\" identity in the keychain)."
+    codesign --force --deep --sign - "$APP" >/dev/null
+fi
+
+# Refreshes the icon cache so Finder shows the icon.
+touch "$APP"
+
+# Registers the bundle with LaunchServices. Without it UNUserNotificationCenter
+# refuses notifications ("bundle proxy not found").
+LSREG="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+[ -x "$LSREG" ] && "$LSREG" -f "$APP" 2>/dev/null || true
+
+echo "✓ $APP ready."
+echo "  Launch: open $(pwd)/$APP"
+
+# ─── DMG (release artifact) ─────────────────────────────────────────────────
+# A drag-and-drop Macal.dmg: Macal.app next to an Applications alias. Native
+# hdiutil, no Homebrew dependency.
+DMG="Macal.dmg"
+echo "▶ Packaging $DMG…"
+rm -f "$DMG"
+STAGE=$(mktemp -d)
+cp -R "$APP" "$STAGE/"
+ln -s /Applications "$STAGE/Applications"
+hdiutil create \
+    -volname "Macal" \
+    -srcfolder "$STAGE" \
+    -ov -format UDZO \
+    "$DMG" >/dev/null
+rm -rf "$STAGE"
+echo "✓ $DMG ready ($(du -h "$DMG" | cut -f1))."
+
+if [ "${1:-}" = "--install" ]; then
+    echo "▶ Installing into /Applications…"
+    rm -rf "/Applications/$APP"
+    cp -R "$APP" "/Applications/"
+    echo "✓ /Applications/$APP installed."
+    echo "  Launch: open /Applications/$APP"
+fi
