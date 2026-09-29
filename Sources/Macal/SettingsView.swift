@@ -79,7 +79,7 @@ struct SettingsView: View {
             } header: {
                 Text("Startup")
             } footer: {
-                Text("Once a day, when a meeting is still ahead today.")
+                Text("Once a day, from 6:00, when a meeting is still ahead today.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

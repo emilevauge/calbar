@@ -4,6 +4,8 @@ import MacalCore
 /// Opens the popover at the first user activity of the day (launch, wake,
 /// unlock, return to the session) when a meeting is left today. At most
 /// once per calendar day: the day is marked only once the popover opened.
+/// Not before 06:00: an earlier trigger arms a timer for 06:00, so a user
+/// already at the desk then still gets the popover.
 ///
 /// The decision waits for a refresh that completed after the trigger, so
 /// it uses today's events rather than a cache from yesterday. After a
@@ -26,6 +28,8 @@ final class DayStartOpener {
 
     /// The check in progress. A trigger arriving meanwhile joins it.
     private var pending: Task<Void, Never>?
+    /// Fires at today's day start after an earlier trigger.
+    private var dayStartTimer: Timer?
     private var observers: [NSObjectProtocol] = []
     private var distributedObservers: [NSObjectProtocol] = []
 
@@ -57,6 +61,10 @@ final class DayStartOpener {
     /// `requestRefresh`: nothing else refreshes the store for this trigger.
     private func trigger(requestRefresh: Bool) {
         guard Prefs.openPanelAtDayStart, !openedToday(), pending == nil else { return }
+        if DayStartPolicy.isBeforeDayStart(Date(), calendar: .current) {
+            armDayStartTimer()
+            return
+        }
         let since = Date()
         if requestRefresh {
             Task { await store.refresh() }
@@ -65,6 +73,20 @@ final class DayStartOpener {
             await self?.run(since: since)
             self?.pending = nil
         }
+    }
+
+    /// One timer at a time; a later early trigger keeps the one in place.
+    private func armDayStartTimer() {
+        guard dayStartTimer == nil,
+              let start = DayStartPolicy.dayStart(for: Date(), calendar: .current) else { return }
+        let timer = Timer(fire: start, interval: 0, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.dayStartTimer = nil
+                self?.trigger(requestRefresh: true)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        dayStartTimer = timer
     }
 
     private func openedToday() -> Bool {

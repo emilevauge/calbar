@@ -278,7 +278,8 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
   most once a day: the day (`yyyy-MM-dd`, current calendar) is recorded only once the popover
   really opened, so a day without meetings left is checked again at the next trigger. The
   decision waits for a refresh completed after the trigger, 60 s at most, then uses the cache.
-  Nothing while the screen is locked. The popover opens 1.5 s after the decision. Setting "Open
+  Nothing while the screen is locked. Nothing before 06:00 local time: an earlier trigger arms
+  a timer for 06:00, which runs the same check. The popover opens 1.5 s after the decision. Setting "Open
   the panel at the start of the day", on by default.
 
 ## Notifications

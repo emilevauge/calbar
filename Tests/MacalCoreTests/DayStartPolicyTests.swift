@@ -36,12 +36,26 @@ import Testing
         #expect(!shouldOpen(last: "2026-09-28", now: morning, enabled: false))
     }
 
-    @Test func opensAgainAfterMidnight() {
+    @Test func opensAgainTheNextMorning() {
         let beforeMidnight = TestClock.date("2026-09-29T23:59:00+02:00")
-        let afterMidnight = TestClock.date("2026-09-30T00:01:00+02:00")
+        let nextMorning = TestClock.date("2026-09-30T06:00:00+02:00")
         let key = DayStartPolicy.dayKey(for: beforeMidnight, calendar: calendar)
         #expect(!shouldOpen(last: key, now: beforeMidnight))
-        #expect(shouldOpen(last: key, now: afterMidnight))
+        #expect(shouldOpen(last: key, now: nextMorning))
+    }
+
+    @Test func doesNotOpenBeforeSix() {
+        #expect(!shouldOpen(last: "2026-09-29", now: TestClock.date("2026-09-30T00:01:00+02:00")))
+        #expect(!shouldOpen(last: "2026-09-29", now: TestClock.date("2026-09-30T05:59:59+02:00")))
+        #expect(shouldOpen(last: "2026-09-29", now: TestClock.date("2026-09-30T06:00:00+02:00")))
+    }
+
+    @Test func dayStartIsSixLocalTime() {
+        let start = DayStartPolicy.dayStart(for: TestClock.date("2026-09-30T02:00:00+02:00"), calendar: calendar)
+        #expect(start == TestClock.date("2026-09-30T06:00:00+02:00"))
+        // Winter time: still 06:00 on the wall clock.
+        let winter = DayStartPolicy.dayStart(for: TestClock.date("2026-10-26T02:00:00+01:00"), calendar: calendar)
+        #expect(winter == TestClock.date("2026-10-26T06:00:00+01:00"))
     }
 
     @Test func dayKeyIsStableAcrossDaylightSavingChanges() {
@@ -52,7 +66,7 @@ import Testing
         #expect(DayStartPolicy.dayKey(for: autumnStart, calendar: calendar) == "2026-10-25")
         #expect(DayStartPolicy.dayKey(for: autumnEnd, calendar: calendar) == "2026-10-25")
         #expect(!shouldOpen(last: "2026-10-25", now: autumnEnd))
-        #expect(shouldOpen(last: "2026-10-25", now: TestClock.date("2026-10-26T00:10:00+01:00")))
+        #expect(shouldOpen(last: "2026-10-25", now: TestClock.date("2026-10-26T06:10:00+01:00")))
 
         let springStart = TestClock.date("2026-03-29T00:30:00+01:00")
         let springEnd = TestClock.date("2026-03-29T23:30:00+02:00")

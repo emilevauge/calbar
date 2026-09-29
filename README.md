@@ -28,7 +28,7 @@ Macal does not ship with a Google OAuth client: on first launch, it asks you to 
 - **Meeting notification**: a standard macOS banner when a meeting enters the alert window, once per meeting, with the time left, the time slot and the provider. Click it (or "Join") to join the call, or to open the event in Macal when it has no link. It is withdrawn once the meeting is dismissed or its alert window ends. Can be turned off in the settings.
 - **Hover card**: rest the pointer on the icon to see the next meeting, or, while one is due, a card with the capsule's color, time left, provider, guests and attachments.
 - **Global shortcut**: show or hide the popover from anywhere (default `⌃⌥M`).
-- **Open at the start of the day**: the popover opens by itself at the first launch, wake or unlock of the day, when a meeting is still ahead today. Once a day at most, can be turned off in the settings.
+- **Open at the start of the day**: the popover opens by itself at the first launch, wake or unlock of the day, from 6:00, when a meeting is still ahead today. Once a day at most, can be turned off in the settings.
 - **Automatic updates**: Macal checks GitHub for a new release every day. The notification's `Update` action downloads the DMG, replaces the app and relaunches it. Also available from *Settings > About*.
 - **Launch at login**: optional auto-start via a user `LaunchAgent`.
 
