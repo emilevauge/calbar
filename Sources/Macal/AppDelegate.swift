@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, ObservableObject {
         if let client {
             Self.adopt(client, accounts: accounts)
         }
-        let auth = client.map { GoogleAuth(client: $0) }
+        let auth = client.map { Self.makeAuth($0, accounts: accounts) }
         self.accounts = accounts
         self.auth = auth
         let store = EventStore(accounts: accounts, auth: auth)
@@ -139,7 +139,10 @@ final class AppDelegate: NSObject, ObservableObject {
         NotificationCenter.default.addObserver(
             forName: NSPopover.didCloseNotification, object: p, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.popoverCloseCount += 1 }
+            MainActor.assumeIsolated {
+                self?.popoverCloseCount += 1
+                self?.store.popoverDidClose()
+            }
         }
     }
 
@@ -270,7 +273,7 @@ final class AppDelegate: NSObject, ObservableObject {
         authError = nil
         isSigningIn = true
         signInTask = Task {
-            let result: Result<String, Error>
+            let result: Result<(email: String, scopes: [String]?), Error>
             do {
                 result = .success(try await auth.signIn(loginHint: loginHint))
             } catch {
@@ -281,8 +284,8 @@ final class AppDelegate: NSObject, ObservableObject {
             isSigningIn = false
             signInTask = nil
             switch result {
-            case .success(let email):
-                accounts.upsert(email: email)
+            case .success(let signedIn):
+                accounts.upsert(email: signedIn.email, grantedScopes: signedIn.scopes)
                 await store.refresh()
             case .failure(let error):
                 NSLog("Macal: sign-in failed: %@", "\(error)")
@@ -333,10 +336,19 @@ final class AppDelegate: NSObject, ObservableObject {
         guard auth?.client != client else { return }
         Self.adopt(client, accounts: accounts)
         signInTask?.cancel()
-        let auth = GoogleAuth(client: client)
+        let auth = Self.makeAuth(client, accounts: accounts)
         self.auth = auth
         store.auth = auth
         Task { await store.refresh() }
+    }
+
+    /// A `GoogleAuth` that keeps each account's granted scopes up to date.
+    private static func makeAuth(_ client: OAuthClient, accounts: AccountStore) -> GoogleAuth {
+        let auth = GoogleAuth(client: client)
+        auth.onGrantedScopes = { [weak accounts] email, scopes in
+            accounts?.setGrantedScopes(scopes, email: email)
+        }
+        return auth
     }
 
     /// Records `client` as the current one, marking the saved accounts for

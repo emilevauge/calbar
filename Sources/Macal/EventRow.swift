@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import MacalCore
 
 struct EventRow: View {
@@ -77,6 +78,7 @@ struct EventRow: View {
             .padding(.vertical, 6)
             .contentShape(Rectangle())
             .onTapGesture(perform: onToggle)
+            .contextMenu { contextMenu }
 
             if expanded {
                 EventDetail(event: event)
@@ -87,6 +89,33 @@ struct EventRow: View {
         }
         .background(background)
         .opacity(isPast ? 0.55 : 1)
+    }
+
+    /// Right click: answer the invitation, open the event in Google Calendar.
+    @ViewBuilder
+    private var contextMenu: some View {
+        let store = AppDelegate.shared.store
+        let accounts = AppDelegate.shared.accounts
+        if event.canRespond {
+            let canReply = accounts.canReply(event.accountEmail)
+            let pending = store.pendingAnswers.contains(event.id)
+            ForEach(RSVPControl.answers, id: \.self) { answer in
+                Toggle("Going: \(answer.answerLabel)", isOn: Binding(
+                    get: { event.selfResponse == answer },
+                    set: { _ in store.respond(to: event, with: answer) }
+                ))
+                .disabled(!canReply || pending)
+            }
+            if !canReply {
+                Button("Reconnect to reply") {
+                    AppDelegate.shared.addAccount(loginHint: event.accountEmail)
+                }
+            }
+            Divider()
+        }
+        if let url = event.webURL {
+            Button("Open in Google Calendar") { NSWorkspace.shared.open(url) }
+        }
     }
 
     /// Attendee and attachment badges shown in the collapsed row; the expanded detail lists them in full.

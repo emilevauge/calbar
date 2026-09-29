@@ -7,16 +7,20 @@ final class GoogleAuth {
     let client: OAuthClient
     private let http: HTTPClient
     private var accessTokens: [String: (token: String, expiry: Date)] = [:]
+    /// Called with the scopes Google granted each time a token refresh
+    /// reports them, so the account knows whether it may answer invitations.
+    var onGrantedScopes: ((_ email: String, _ scopes: [String]) -> Void)?
 
     init(client: OAuthClient, http: HTTPClient = URLSession.shared) {
         self.client = client
         self.http = http
     }
 
-    /// Browser sign-in. Returns the account email. The refresh token goes
+    /// Browser sign-in. Returns the account email and the scopes Google
+    /// granted (the user may untick some on the consent screen). The refresh token goes
     /// to the Keychain. Cancelling the calling task stops the wait for the
     /// browser and throws `CancellationError`.
-    func signIn(loginHint: String? = nil) async throws -> String {
+    func signIn(loginHint: String? = nil) async throws -> (email: String, scopes: [String]?) {
         let state = UUID().uuidString
         let server = try LoopbackServer(expectedState: state)
         defer { server.stop() }
@@ -51,7 +55,7 @@ final class GoogleAuth {
 
         try Keychain.save(refreshToken, account: email)
         remember(tokens, for: email)
-        return email
+        return (email, tokens.grantedScopes)
     }
 
     /// Cached access token, refreshed when expired or when `forceRefresh`
@@ -66,6 +70,7 @@ final class GoogleAuth {
         let (data, response) = try await http.send(GoogleOAuth.refreshRequest(client: client, refreshToken: refreshToken))
         let tokens = try GoogleOAuth.parseTokenResponse(data: data, status: response.statusCode)
         remember(tokens, for: email)
+        if let scopes = tokens.grantedScopes { onGrantedScopes?(email, scopes) }
         return tokens.accessToken
     }
 

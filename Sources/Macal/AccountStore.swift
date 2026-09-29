@@ -53,12 +53,30 @@ final class AccountStore: ObservableObject {
         account(email)?.calendars.first { $0.id == calendarID }?.enabled ?? false
     }
 
-    func upsert(email: String) {
+    func upsert(email: String, grantedScopes: [String]?) {
         if let i = index(email) {
             accounts[i].needsReconnect = false
+            if let grantedScopes { accounts[i].grantedScopes = grantedScopes }
         } else {
-            accounts.append(Account(email: email, calendars: [], needsReconnect: false))
+            accounts.append(Account(email: email, calendars: [], needsReconnect: false, grantedScopes: grantedScopes))
         }
+    }
+
+    /// The account may answer invitations. Unknown accounts may not.
+    func canReply(_ email: String) -> Bool {
+        account(email)?.canReply ?? false
+    }
+
+    func setGrantedScopes(_ scopes: [String], email: String) {
+        guard let i = index(email), accounts[i].grantedScopes != scopes else { return }
+        accounts[i].grantedScopes = scopes
+    }
+
+    /// Google refused an answer for lack of scope: "Reconnect to reply"
+    /// until the user signs in again.
+    func markReadOnly(_ email: String) {
+        guard let i = index(email), accounts[i].canReply else { return }
+        accounts[i].markReadOnly()
     }
 
     func remove(_ email: String) {

@@ -42,6 +42,9 @@ struct EventDetail: View {
 
     private var lines: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if event.canRespond {
+                RSVPSection(event: event)
+            }
             if let meeting = event.meeting {
                 line("video") {
                     Button(meeting.provider.displayName) { MeetingOpener.open(meeting) }
@@ -165,6 +168,25 @@ struct EventDetail: View {
         var c = URLComponents(string: "maps://")!
         c.queryItems = [URLQueryItem(name: "q", value: location)]
         if let url = c.url { NSWorkspace.shared.open(url) }
+    }
+}
+
+/// The RSVP control bound to the store: answers, pending state, errors,
+/// and the account's permission to reply.
+private struct RSVPSection: View {
+    let event: CalendarEvent
+    @ObservedObject private var store = AppDelegate.shared.store
+    @ObservedObject private var accounts = AppDelegate.shared.accounts
+
+    var body: some View {
+        RSVPControl(
+            current: event.selfResponse,
+            isPending: store.pendingAnswers.contains(event.id),
+            isReadOnly: !accounts.canReply(event.accountEmail),
+            error: store.answerErrors[event.id],
+            onAnswer: { store.respond(to: event, with: $0) },
+            onReconnect: { AppDelegate.shared.addAccount(loginHint: event.accountEmail) }
+        )
     }
 }
 

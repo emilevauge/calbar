@@ -23,6 +23,20 @@ final class EventStore: ObservableObject {
     /// Days with a fetch scheduled or running. Not published: it is set
     /// while a view reads `events(for:)`.
     private var pendingDays: Set<Date> = []
+    /// Invitations being answered, by event id: the pills dim meanwhile.
+    @Published private(set) var pendingAnswers: Set<String> = []
+    /// Last failed answer per event id, shown under the RSVP control for a
+    /// few seconds.
+    @Published private(set) var answerErrors: [String: String] = [:]
+    /// Events answered since the popover opened. A declined one stays in
+    /// the list until the popover closes, so the row does not vanish under
+    /// the pointer.
+    @Published private(set) var recentlyAnswered: Set<String> = []
+    /// Answers laid over fetched events: while in flight, and once
+    /// confirmed until a fetch started after the confirmation brings them
+    /// back from Google. A fetch that started earlier may carry the old
+    /// answer and must not flip the control back.
+    private var answerOverlay: [String: (response: ResponseStatus, confirmedAt: Date?)] = [:]
 
     let accounts: AccountStore
     /// Set by `AppDelegate`, replaced when another OAuth client is imported.
@@ -44,7 +58,7 @@ final class EventStore: ObservableObject {
 
     private func visible(_ raw: [CalendarEvent]) -> [CalendarEvent] {
         let enabled = raw.filter { accounts.isEnabled(calendarID: $0.calendarID, email: $0.accountEmail) }
-        return EventMerger.merge(enabled, showDeclined: Prefs.showDeclined)
+        return EventMerger.merge(enabled, showDeclined: Prefs.showDeclined, keeping: recentlyAnswered)
     }
 
     /// A refresh runs and some account has never been fetched: the popover
@@ -110,7 +124,7 @@ final class EventStore: ObservableObject {
                                         failedAccounts: result.failedAccounts,
                                         failedCalendars: result.failedCalendars)
             .filter { accounts.account($0.accountEmail) != nil }
-        dayCache.finish(day, value: merged, at: Date())
+        dayCache.finish(day, value: overlayAnswers(merged, fetchStarted: started), at: Date())
         NSLog("Macal: day fetch done in %.2fs: %d fetched, %d kept",
               Date().timeIntervalSince(started), result.collected.count, merged.count)
     }
@@ -233,10 +247,12 @@ final class EventStore: ObservableObject {
 
         if result.reachedGoogle || accounts.accounts.isEmpty {
             // An account removed during the pass must not come back.
-            rawEvents = RefreshMerge.merge(collected: collected, previous: rawEvents,
-                                           failedAccounts: result.failedAccounts,
-                                           failedCalendars: result.failedCalendars)
+            let merged = RefreshMerge.merge(collected: collected, previous: rawEvents,
+                                            failedAccounts: result.failedAccounts,
+                                            failedCalendars: result.failedCalendars)
                 .filter { accounts.account($0.accountEmail) != nil }
+            rawEvents = overlayAnswers(merged, fetchStarted: started)
+            dropConfirmedAnswers(fetchedSince: started)
             lastFetch = Date()
             isOffline = false
             saveCache()
@@ -346,6 +362,102 @@ final class EventStore: ObservableObject {
                 }
             }
             return results
+        }
+    }
+
+    // MARK: answers
+
+    /// Answers an invitation: yes, maybe or no. The answer shows at once;
+    /// a failure puts the previous one back and shows a short error.
+    func respond(to event: CalendarEvent, with response: ResponseStatus) {
+        guard let auth, event.canRespond, response != .needsAction, response != event.selfResponse,
+              !pendingAnswers.contains(event.id), accounts.canReply(event.accountEmail) else { return }
+        let id = event.id
+        let previous = event.selfResponse
+        pendingAnswers.insert(id)
+        recentlyAnswered.insert(id)
+        answerErrors[id] = nil
+        answerOverlay[id] = (response, nil)
+        apply(response, to: id)
+        NSLog("Macal: answering an invitation")
+
+        Task {
+            do {
+                try await withAccessToken(event.accountEmail, auth: auth) { [api] token in
+                    try await api.respond(token: token, calendarID: event.calendarID,
+                                          eventID: event.googleEventID, response: response)
+                }
+                pendingAnswers.remove(id)
+                answerOverlay[id] = (response, Date())
+                NSLog("Macal: invitation answered")
+                await refresh()
+            } catch {
+                NSLog("Macal: answering an invitation failed: %@", "\(error)")
+                pendingAnswers.remove(id)
+                answerOverlay[id] = nil
+                apply(previous, to: id)
+                switch error {
+                case APIError.insufficientScope:
+                    accounts.markReadOnly(event.accountEmail)
+                case OAuthError.invalidGrant:
+                    accounts.setNeedsReconnect(true, email: event.accountEmail)
+                default:
+                    break
+                }
+                showAnswerError(describeReply(error), for: id)
+            }
+        }
+    }
+
+    /// Declined events answered while the popover was open leave the list.
+    func popoverDidClose() {
+        recentlyAnswered = recentlyAnswered.intersection(pendingAnswers)
+    }
+
+    /// Runs `body` with the account's access token, once more with a fresh
+    /// token after a 401.
+    private func withAccessToken(
+        _ email: String, auth: GoogleAuth, _ body: (String) async throws -> Void
+    ) async throws {
+        do {
+            try await body(try await auth.accessToken(for: email))
+        } catch APIError.unauthorized {
+            try await body(try await auth.accessToken(for: email, forceRefresh: true))
+        }
+    }
+
+    private func apply(_ response: ResponseStatus, to id: String) {
+        func change(_ events: inout [CalendarEvent]) {
+            for i in events.indices where events[i].id == id {
+                events[i] = events[i].answering(response)
+            }
+        }
+        change(&rawEvents)
+        dayCache.modifyValues(change)
+    }
+
+    private func overlayAnswers(_ events: [CalendarEvent], fetchStarted: Date) -> [CalendarEvent] {
+        guard !answerOverlay.isEmpty else { return events }
+        return events.map { event in
+            guard let answer = answerOverlay[event.id], event.selfResponse != answer.response else { return event }
+            if let confirmed = answer.confirmedAt, confirmed <= fetchStarted { return event }
+            return event.answering(answer.response)
+        }
+    }
+
+    /// A refresh started after the confirmation has Google's own answer.
+    private func dropConfirmedAnswers(fetchedSince started: Date) {
+        answerOverlay = answerOverlay.filter { _, answer in
+            guard let confirmed = answer.confirmedAt else { return true }
+            return confirmed > started
+        }
+    }
+
+    private func showAnswerError(_ message: String, for id: String) {
+        answerErrors[id] = message
+        Task {
+            try? await Task.sleep(for: .seconds(5))
+            if answerErrors[id] == message { answerErrors[id] = nil }
         }
     }
 
