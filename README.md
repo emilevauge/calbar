@@ -22,6 +22,7 @@ Macal does not ship with a Google OAuth client: on first launch, it asks you to 
 
 - **Today's agenda**: every event of the day from all connected Google accounts, merged and deduplicated in one list. Browse other days with the arrows in the header.
 - **Expandable details**: guests with their RSVP status, location, attached Drive documents and the event description.
+- **Reply to invitations**: answer Yes, Maybe or No from the expanded event, or right-click any event row. The organizer gets the usual Google notification. Accounts connected before this feature must reconnect once ("Reconnect to reply").
 - **Join button in the Macal icon**: a few minutes before a meeting with a video link, the menu bar icon grows into one orange capsule (red from 1 minute before the start and during the first minutes) holding a camera, the meeting title and the calendar countdown. Click the title to join the call (Google Meet, Zoom, Teams, ...), click the calendar to open Macal, right-click for attachments, dismiss, or the event details.
 - **Countdown icon**: the menu bar glyph always shows the time left before the next meeting of the day ("12", "2h"), never the date. It turns orange when a meeting is close, red 1 minute before the start, and stays red during the first minutes of a meeting, even after you joined, until you dismiss it.
 - **Meeting notification**: a standard macOS banner when a meeting enters the alert window, once per meeting, with the time left, the time slot and the provider. Click it (or "Join") to join the call, or to open the event in Macal when it has no link. It is withdrawn once the meeting is dismissed or its alert window ends. Can be turned off in the settings.
@@ -46,7 +47,7 @@ Macal talks to the Google Calendar API with your own OAuth client, so no secret 
 3. Open *Google Auth Platform*. On a new project, the *Get started* wizard asks for the *Branding* and *Audience* settings below in one go:
    - *Branding*: set the app name to `Macal` and pick a support email.
    - *Audience*: choose the **External** user type, then click **Publish app** to move it to *In production*. Do not request verification: you will see the "Google hasn't verified this app" screen once (click *Advanced > Go to Macal*). While the app stays in *Testing*, refresh tokens expire after 7 days.
-   - *Data access*: add the scopes `openid`, `.../auth/userinfo.email` and `.../auth/calendar.readonly`.
+   - *Data access*: add the scopes `openid`, `.../auth/userinfo.email`, `.../auth/calendar.readonly` (to list your calendars) and `.../auth/calendar.events` (to reply to invitations).
 4. In *Clients > Create client*, choose the **Desktop app** type, then download the JSON file.
 5. In Macal, click **Import google-oauth.json…** in the popover (or *Settings > Accounts > Import OAuth client…*) and pick the downloaded file. Macal checks it and keeps a private copy (permissions `0600`) in `~/Library/Application Support/Macal/google-oauth.json`. Then connect your Google accounts.
 
@@ -84,7 +85,7 @@ To publish a release, bump `VERSION` and `BUILD` in `make-app.sh`, run it, and a
 
 ## Privacy
 
-- Read-only access to your calendars (`calendar.readonly` scope).
+- Macal reads your calendars (`calendar.readonly` scope) and can modify events (`calendar.events` scope). It only uses the latter to reply to an invitation when you click Yes, Maybe or No: it changes your own answer and nothing else.
 - Refresh tokens are stored in the macOS Keychain.
 - Your OAuth client is stored in `~/Library/Application Support/Macal/google-oauth.json`, readable by you only.
 - Today's and tomorrow's events are cached in `~/Library/Application Support/Macal/events.json`.

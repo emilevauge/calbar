@@ -41,12 +41,21 @@ Core (`Sources/MacalCore`), no AppKit:
   forces the accounts to reconnect.
 - `CalendarAPI`: `GET /users/me/calendarList` and
   `GET /calendars/{id}/events?singleEvents=true&orderBy=startTime&timeMin=...&timeMax=...`,
-  paginated, with strict percent encoding (`FormEncoding`) so a "+" in an email survives.
+  paginated, with strict percent encoding (`FormEncoding`) so a "+" in an email survives. To
+  answer an invitation, `GET /calendars/{id}/events/{eventId}` then
+  `PATCH` of the same URL with `sendUpdates=all`. A 403 whose reason is
+  `insufficientPermissions` or `ACCESS_TOKEN_SCOPE_INSUFFICIENT` becomes
+  `APIError.insufficientScope`.
+- `RSVPPatch`, `JSONValue`: the PATCH body, `{"attendees": [...]}`, built from the attendee list
+  Google returned, kept as raw JSON objects, with only the `responseStatus` of the attendee
+  flagged `self` changed.
 - `GoogleModels`: wire formats reduced to the fields Macal uses. Cancelled events and
   "working location" markers are dropped, meeting rooms are removed from the attendees, an
-  empty title becomes "(No title)". All-day dates are local midnights.
+  empty title becomes "(No title)". All-day dates are local midnights. Each event keeps its raw
+  Google id (`googleEventID`), derived from the end of the composite id for events cached before
+  the field existed.
 - `EventMerger`: merges every account and calendar, removes duplicates by `occurrenceKey`
-  (`iCalUID` plus start time), hides declined events unless the setting shows them. Among copies
+  (`iCalUID` plus start time), hides declined events unless the setting shows them or the event was just answered. Among copies
   of the same meeting, the one on the account's primary calendar wins, then a copy not declined,
   then one with a video link: Google reports the answer of the calendar owner, so only the
   primary calendar copy reliably holds the user's own answer.
@@ -112,7 +121,14 @@ App (`Sources/Macal`):
   else gets a 404 and the server keeps listening. The consent page opens in the default
   browser, with `access_type=offline` and `prompt=consent` so Google always returns a refresh
   token, and `login_hint` when reconnecting an account.
-- Scopes: `openid email https://www.googleapis.com/auth/calendar.readonly`.
+- Scopes: `openid email https://www.googleapis.com/auth/calendar.readonly
+  https://www.googleapis.com/auth/calendar.events`. `calendar.readonly` reads the calendar list,
+  which `calendar.events` does not cover; `calendar.events` lets Macal change an event, and
+  Macal only uses it to answer invitations.
+- The scopes Google granted (the `scope` field of the token response) are saved with the account
+  at sign-in and on every token refresh. An account without `calendar.events` (or the full
+  `calendar` scope) is read-only: signed in before Macal asked for it, or with the box unticked
+  on the consent screen.
 - The browser page after the redirect says "Macal is connected." or "Sign-in refused.". The
   wait gives up after 5 minutes, and "Cancel" stops it.
 - One refresh token per account in the login keychain (service
@@ -137,6 +153,31 @@ App (`Sources/Macal`):
 - New calendars start disabled, except each account's primary calendar. The user turns the
   others on in the settings. The choice survives calendar list refreshes.
 - Logs carry counts and positions only, never calendar names, IDs or event content.
+
+## Answering invitations
+
+- `CalendarEvent.canRespond`: the event has an attendee flagged `self` who is not the organizer,
+  and it was read from the account's primary calendar. On a colleague's shared calendar, Google
+  flags the calendar owner as `self`, and an answer there would change the colleague's answer.
+  Events the user organizes and events without guests have no RSVP control.
+- Expanded row: a first line "Going?" with three pills, "Yes", "Maybe", "No". The current answer
+  is filled (green, orange, red, white text); the others have a neutral outline. While the answer
+  is sent the pills are dimmed and disabled, without a spinner. A read-only account shows a
+  "Reconnect to reply" link instead, which runs the usual reconnect sign-in (`login_hint`).
+- Right click on any event row, today or another day: "Going: Yes", "Going: Maybe", "Going: No"
+  with a checkmark on the current answer, disabled and followed by "Reconnect to reply" for a
+  read-only account; then "Open in Google Calendar".
+- `EventStore.respond(to:with:)`: the answer is applied at once to the event in memory (and in
+  the day cache), so the row, the guest list and the declined filter follow. The API call uses
+  the access token with the usual refresh after a 401. The answer covers only that occurrence of
+  a recurring meeting. On success, a normal refresh follows. The answer is laid over fetched
+  events while in flight, and once confirmed until a refresh started after the confirmation,
+  so a refresh already running does not flip it back.
+- On failure the previous answer comes back and a short red message shows under the pills for
+  5 seconds. `insufficientScope` marks the account read-only ("Reconnect to reply"); an expired
+  refresh token marks it "needs reconnect".
+- An event declined from the popover stays in the list, with "· declined", until the popover
+  closes, even when "Show declined events" is off, so the row does not vanish under the pointer.
 
 ## Menu bar icon
 
@@ -226,6 +267,7 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
   location is one), organizer, guests with their answer ("5 guests · 3 yes", folded after 8
   with "Show 3 more"), Drive attachments with a type icon, the description as plain text with
   clickable links, and a Google Calendar button that opens the event pinned to its account.
+  For an invitation, a "Going?" line comes first (see "Answering invitations").
 - Keyboard: `↑` `↓` move the selection, `←` `→` change the day, `↵` expands, `⌘↵` joins, `esc`
   closes. `⌘R` refreshes, `⌘,` opens the settings, `⌘Q` quits.
 - Empty states: "Macal needs a Google OAuth client" (see above), or "No Google account connected"
@@ -300,6 +342,8 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
 
 ## Errors
 
+- A reply refused for lack of scope marks the account read-only: "Reconnect to reply" in the
+  expanded row and the context menu.
 - A revoked or expired refresh token marks the account "needs reconnect": "Reconnect" in red in
   the settings, "!" in the menu bar icon, a red line in the hover card.
 - Sign-in errors show under the account list with a short message ("Access denied in the
@@ -322,7 +366,8 @@ exits at once.
 ## Tests
 
 `MacalCoreTests`, Swift Testing, covering the core: OAuth URLs, callbacks and token parsing,
-OAuth client file lookup and masking, Calendar API pagination and encoding, Google models,
+OAuth client file lookup and masking, Calendar API pagination and encoding, the RSVP request
+(method, URL, body with unknown attendee fields kept, scope errors), granted scopes, Google models,
 merging and deduplication, refresh merging, link extraction, HTML text, day windows and
 listings, the day cache, next meeting, badge, alerts, join queue, capsule style, notification
 planning, day start policy, labels, version comparison, release parsing, update policy and the
@@ -330,6 +375,6 @@ update script. OAuth sign-in, the UI and the update itself are tested by hand.
 
 ## Out of scope
 
-- Creating or editing events.
-- Answering invitations.
+- Creating or editing events, other than answering an invitation.
+- Answering every occurrence of a recurring meeting at once, and adding a note to an answer.
 - Other calendar providers (iCloud, Outlook).
