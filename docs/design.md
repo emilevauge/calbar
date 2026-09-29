@@ -1,0 +1,335 @@
+# Macal design
+
+Macal is a native macOS menu bar app. It shows the Google Calendar events of the day across
+several Google accounts, and alerts before each meeting with its video link. Its structure comes
+from Claudette (`~/dev/claudette`), a sibling app by the same author on the same stack.
+
+This document describes the current behaviour. The code is the reference when they disagree.
+
+## Decisions
+
+- Data source: the Google Calendar API, live, through OAuth, with any number of accounts.
+- Alert: the join link is part of the Macal menu bar item (a single `NSStatusItem`), plus a
+  standard macOS notification when a meeting enters its alert window.
+- Menu bar: an icon only. It always shows the time left before the next meeting of the day,
+  never the date, and is an empty calendar page once no meeting is left today.
+- UI in English only, no localization system. Dates are formatted with the `en_US` locale
+  whatever the system language.
+- Distribution: a DMG on GitHub Releases, signed ad hoc or with a local self-signed identity,
+  updated in place by the app. The DMG never contains a Google OAuth client: each user creates
+  their own and imports its JSON file into Macal.
+
+## Stack
+
+- SwiftPM (tools 5.9), Swift 6.2 toolchain in Swift 5 language mode, macOS 14 or later,
+  SwiftUI and AppKit.
+- `LSUIElement`: no Dock icon.
+- One dependency: `KeyboardShortcuts` (sindresorhus), for the global shortcut. Its `Recorder`
+  view is not used, see "Settings".
+- No Google SDK: OAuth and REST are written by hand on `URLSession`.
+- Two targets: `MacalCore`, the pure logic, tested with Swift Testing (`MacalCoreTests`), and
+  `Macal`, the app.
+
+## Components
+
+Core (`Sources/MacalCore`), no AppKit:
+
+- `GoogleOAuth`, `OAuthClient`, `PKCE`: authorization URL, callback parsing, token requests and
+  responses, email from the `id_token`. Secrets and tokens are redacted from `description`.
+- `OAuthClientFile`: where the OAuth client comes from (imported file first, bundled resource of
+  a dev build second), the shortened client ID shown in the settings, and when a new client
+  forces the accounts to reconnect.
+- `CalendarAPI`: `GET /users/me/calendarList` and
+  `GET /calendars/{id}/events?singleEvents=true&orderBy=startTime&timeMin=...&timeMax=...`,
+  paginated, with strict percent encoding (`FormEncoding`) so a "+" in an email survives.
+- `GoogleModels`: wire formats reduced to the fields Macal uses. Cancelled events and
+  "working location" markers are dropped, meeting rooms are removed from the attendees, an
+  empty title becomes "(No title)". All-day dates are local midnights.
+- `EventMerger`: merges every account and calendar, removes duplicates by `occurrenceKey`
+  (`iCalUID` plus start time), hides declined events unless the setting shows them. Among copies
+  of the same meeting, the one on the account's primary calendar wins, then a copy not declined,
+  then one with a video link: Google reports the answer of the calendar owner, so only the
+  primary calendar copy reliably holds the user's own answer.
+- `RefreshMerge`: keeps the previous events of an account or a calendar whose fetch failed.
+- `MeetingLinkExtractor`, `MeetingLink`: video link from `conferenceData` entry points of type
+  `video`, then `hangoutLink`, then the earliest known provider URL in the location or the
+  description (Meet, Zoom, Teams, Webex, Around, Whereby). Zoom meeting links also get a
+  `zoommtg://` URL that opens the Zoom app directly.
+- `HTMLText`, `Linkify`: event descriptions as plain text with clickable links.
+- `DayWindow`, `DayAgenda`, `DayListing`, `DayCache`: day boundaries in the local time zone,
+  today's split into ongoing, upcoming and past events, the listing of any other day, and the
+  in-memory cache of days fetched on demand.
+- `NextMeeting`, `MenuBarBadge`, `AlertPlanner`, `JoinQueue`, `CapsuleStyle`,
+  `NotificationPlanner`, `DayStartPolicy`: what the icon, the join capsule, the notifications
+  and the day start opening show and when.
+- `AgendaFormat`: "10:30-11:00", "in 12 min", "now", "now · 18 min left", "ended",
+  "1 h 5 min", "3 events".
+- `AppVersion`, `GitHubRelease`, `UpdatePolicy`, `SelfUpdateScript`: version comparison, parsing
+  of the latest release, check cooldown and notification deduplication, and the installer
+  script of the self-updater.
+
+App (`Sources/Macal`):
+
+- `AppDelegate`: status item, popover, account actions, OAuth client import.
+- `GoogleAuth`, `LoopbackServer`, `Keychain`: browser sign-in and access tokens.
+- `EventStore`, `AccountStore`: events and accounts.
+- `JoinController`, `StatusItemImage`, `StatusBarImage` (`CalendarGlyph`): the join capsule and
+  the menu bar glyph.
+- `MenuView`, `DayHeader`, `DayList`, `EventRow`, `EventDetail`, `MenuFooter`: the popover.
+- `HoverCard`, `HoverCardController`: the card shown on hover.
+- `NotificationHub`, `MeetingNotifier`: system notifications.
+- `UpdateChecker`, `SelfUpdater`: updates.
+- `SettingsView`, `CalendarPicker`, `ShortcutRecorder`, `LaunchAgent`, `DayStartOpener`.
+
+## Google OAuth client
+
+- Macal ships without a client. Until one is configured, the popover shows "Macal needs a Google
+  OAuth client", a short explanation, an "Import google-oauth.json…" button and a "How to create
+  one" link to the README section on GitHub. The settings "Accounts" section has "Import OAuth
+  client…" (or "Replace OAuth client…" once one is set), with the client ID shortened as
+  "4840…apps.googleusercontent.com". The secret is never shown.
+- The import opens an `NSOpenPanel` limited to JSON files. The file is read with
+  `OAuthClient.load(json:)`, which accepts only a "Desktop app" client (`installed` key) with a
+  non-empty ID and secret. A valid file is copied, unchanged, to
+  `~/Library/Application Support/Macal/google-oauth.json`, created with permissions 0600 and
+  swapped in atomically. An invalid file changes nothing and shows an error under the button.
+- The new client is used at once, without a restart: `AppDelegate.auth` (published) and
+  `EventStore.auth` get a new `GoogleAuth`, a sign-in in progress is cancelled, and a refresh
+  starts. The client ID in use is remembered in the user defaults. When it changes, every saved
+  account is marked "needs reconnect", since its refresh token belongs to the old client. The
+  same client ID keeps the accounts working.
+- Lookup at launch: the imported file first, then `google-oauth.json` in the
+  `Macal_Macal.bundle` next to a dev binary (`Sources/Macal/Resources/google-oauth.json`,
+  git-ignored). The resource bundle is found by hand rather than with `Bundle.module`, whose
+  generated accessor aborts the process when the bundle is missing, as in the release app.
+- `make-app.sh` copies no SwiftPM resource bundle into `Macal.app`, and fails if any file named
+  `google-oauth*.json` ends up inside the bundle.
+
+## Sign-in and tokens
+
+- OAuth "installed app" flow with PKCE (S256). A loopback HTTP server listens on `127.0.0.1`
+  on a port picked by the system. Only a request carrying the expected `state` counts; anything
+  else gets a 404 and the server keeps listening. The consent page opens in the default
+  browser, with `access_type=offline` and `prompt=consent` so Google always returns a refresh
+  token, and `login_hint` when reconnecting an account.
+- Scopes: `openid email https://www.googleapis.com/auth/calendar.readonly`.
+- The browser page after the redirect says "Macal is connected." or "Sign-in refused.". The
+  wait gives up after 5 minutes, and "Cancel" stops it.
+- One refresh token per account in the login keychain (service
+  `dev.macal.app.google-refresh-token`), updated in place so a failed write never loses the
+  previous token. Access tokens stay in memory with one minute of margin before expiry, and are
+  refreshed once after a 401.
+- Removing an account revokes its refresh token and deletes it.
+
+## Events
+
+- `EventStore` fetches today and tomorrow for every enabled calendar of every account, accounts
+  in parallel and at most 6 event requests in flight per account. It polls every 5 minutes,
+  every 30 seconds while offline, on wake, and when the day changes. It publishes `now` every
+  15 seconds so countdowns move.
+- A refresh requested while one runs is not dropped: the running refresh does one more pass,
+  so a new account or a toggled calendar is picked up.
+- Offline means no account got an answer from Google. The previous events stay on screen and
+  alerts keep working on them. A failed account or calendar keeps its previous events.
+- Today's and tomorrow's events are cached in `~/Library/Application Support/Macal/events.json`
+  and shown at launch before the first refresh. An account never fetched yet shows "Loading…"
+  instead of an empty day.
+- New calendars start disabled, except each account's primary calendar. The user turns the
+  others on in the settings. The choice survives calendar list refreshes.
+- Logs carry counts and positions only, never calendar names, IDs or event content.
+
+## Menu bar icon
+
+- A small calendar page drawn in code (`CalendarGlyph`): rounded outline, header band, and the
+  minutes left before the next meeting of the day inside, rounded up ("25"), then whole hours
+  from 60 minutes ("1h", "2h"). The next meeting is the earliest timed, not declined event that
+  starts after now and before the end of today.
+- Outside the alert window: template image, tinted by macOS for light and dark menu bars. Within
+  the alert window (from start minus the lead time): the same page with outline, band and
+  digits in `systemOrange`, a slightly heavier outline, no background. One minute or less before
+  the start: the same in `systemRed`. No timed meeting left today: empty outline.
+- An account that needs reconnecting: filled template page with a punched-out "!", above
+  everything else.
+- During the first minutes of a meeting (from its start to start plus the linger delay, until
+  it is dismissed; joining does not count): red page with the usual countdown to the next
+  meeting, empty when none is left today, with or without a video link. A meeting without a
+  link cannot be dismissed from the menu bar: the page stays red until the delay ends.
+- While a meeting with a link is due, the page is drawn inside the join capsule instead.
+
+## Join capsule
+
+- No second status item: while a meeting with a video link is due, the item's image becomes one
+  capsule. Due means from start minus the lead time (10 minutes by default) to start plus the
+  linger delay (5 minutes by default), not declined, not all-day, not dismissed.
+- Look: white capsule 18 pt high, corner radius 5.5 pt, 1 pt border in the urgency color:
+  `systemOrange` in the alert window, `systemRed` one minute or less before the start and after
+  it, the accent color as a fallback. Left to right in that color: `video.fill`, the title
+  truncated to 160 pt (a darker orange for text, for contrast on white), a "+1" chip when
+  several meetings are due, a thin separator, then the colored calendar page with its countdown.
+- Left click on the title part joins the earliest due meeting, in the provider's app when a
+  native URL exists and the app is installed. Left click on the calendar page toggles the
+  popover. The capsule stays until the linger delay ends, so the link is still there to rejoin.
+- Right click or control-click: a menu with, for each due meeting, its title and time range,
+  "Join", one item per attachment, "Dismiss"; then "Open Macal", which opens the popover with
+  the meeting expanded. Without a due meeting, a right click toggles the popover.
+- Only "Dismiss" removes a meeting from the capsule and the red page. Dismissed meetings are kept
+  in memory per occurrence: a relaunch during the window shows them again.
+- Accessibility label: "Macal", or "Macal, Join <title>" while a meeting is due.
+
+## Hover card
+
+- Shown after the pointer rests 0.5 s anywhere on the item, capsule included, in a
+  non-activating panel that ignores the mouse. Hidden on exit, on click, and while the popover
+  is open. Width 300 pt, corner radius 12 pt, `.regularMaterial` background. Aligned on the
+  capsule's left edge, centered under the plain page, kept inside the screen, updated live.
+- With a due meeting: a header band tinted with the capsule color (12 % in light mode, 18 % in
+  dark mode), text in that color: camera and "In 4 min", "Now" or "Now · 16 min left" on the
+  left, the time range on the right. Below: the calendar dot, the title on up to 2 lines, the
+  provider, the location, the number of guests and up to 3 attachments, then
+  "Click: join · right-click: options".
+- Without a due meeting: the next meeting of the day with its time range and relative time, or
+  "Nothing left today".
+- In both cases, a red "An account needs to be reconnected" line when needed, and a
+  "Now: <title> · 16 min left" line for an ongoing meeting other than the capsule's.
+
+## Popover
+
+`NSStatusItem` plus `NSPopover` (transient) rather than `MenuBarExtra`, so code can open it (the
+global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt high.
+
+- Header: `‹` and `›` icon buttons (28 x 24 pt, tooltips "Previous day" and "Next day") around
+  the title of the day shown, "Tuesday, September 29". The title has a fixed width, the width
+  of "Wednesday, September 30", the widest date of the year, so the chevrons do not move. On
+  another day a click on the title goes back to today ("Back to today"). On the right: for
+  today, "offline · updated 5 min ago" when offline, otherwise the number of events left
+  ("3 left"); for another day, "Yesterday" or "Tomorrow" when it applies and the number of
+  events ("Tomorrow · 3 events"), nothing for an empty day. The popover goes back to today
+  every time it closes.
+- Today: all-day events as a compact strip of colored titles, then ongoing and upcoming timed
+  events, then an "Ended" section with past events dimmed. The ongoing meeting, or else the
+  next one, stays expanded and cannot be collapsed. Once the timed events are over: "Nothing
+  left today" and the first event of tomorrow ("Tomorrow 09:00 · Standup").
+- Other days: today and tomorrow come from the regular refresh. Any other day is fetched on
+  demand (one day window, every enabled calendar of every account, same parallel fetch and 401
+  handling), kept in memory for 5 minutes, and marked stale by every regular refresh, so also
+  when a calendar is toggled. A stale day keeps its events on screen while it is fetched again.
+  "Loading…" during the first fetch, "Could not load this day" with "Retry" after a failure.
+  The listing has the all-day strip then every timed event in order: no "Ended" section, nothing
+  dimmed, no row kept expanded, the time range without relative time, no camera button for an
+  event already over. An event across midnight shows on both days; a multi-day all-day event
+  shows on each day. The icon, the capsule, the notifications and the hover card stay on today.
+- Collapsed row: calendar color dot, title, time range ("10:30-11:00"), relative time on today
+  ("in 12 min", "now · 18 min left", "ended"), "· declined" for a declined event shown, guest
+  and attachment counts, and a camera button on the right when there is a video link. The
+  ongoing event is highlighted.
+- Expanded row (click, one at a time): video provider, location (opens Maps, or the URL when the
+  location is one), organizer, guests with their answer ("5 guests · 3 yes", folded after 8
+  with "Show 3 more"), Drive attachments with a type icon, the description as plain text with
+  clickable links, and a Google Calendar button that opens the event pinned to its account.
+- Keyboard: `↑` `↓` move the selection, `←` `→` change the day, `↵` expands, `⌘↵` joins, `esc`
+  closes. `⌘R` refreshes, `⌘,` opens the settings, `⌘Q` quits.
+- Empty states: "Macal needs a Google OAuth client" (see above), or "No Google account connected"
+  with a "Connect a Google account" button.
+- Footer: refresh, Google Calendar home (pinned to the first account), settings, quit.
+- Day start: at the first activity of the day (launch, wake, screen unlock, return to the
+  session), the popover opens by itself when a timed, not declined meeting is left today. At
+  most once a day: the day (`yyyy-MM-dd`, current calendar) is recorded only once the popover
+  really opened, so a day without meetings left is checked again at the next trigger. The
+  decision waits for a refresh completed after the trigger, 60 s at most, then uses the cache.
+  Nothing while the screen is locked. The popover opens 1.5 s after the decision. Setting "Open
+  the panel at the start of the day", on by default.
+
+## Notifications
+
+- `NotificationHub` is the only `UNUserNotificationCenter` delegate. It asks for `[.alert, .sound]`
+  at launch, keeps one registry of categories, and routes each response to the handler of the
+  notification's kind (`meeting` or `update`, stored in the userInfo). Banners also show while
+  Macal is the active app.
+- Meetings (`MeetingNotifier`, `NotificationPlanner`): one notification per occurrence when the
+  meeting enters its alert window, before its start, for timed, not declined events, with or
+  without a link. Nothing for a meeting already started at launch. A moved meeting has a new key
+  and notifies again. Title: the event title. Body: "In 5 min · 15:00-16:00", plus " · Zoom"
+  with a link. Default sound, `.active` level. With a link, a "Join" action; a click joins
+  when there is a link, otherwise opens the popover with the event expanded. Withdrawn when the
+  meeting is dismissed or its alert window ends. Setting "Notify before a meeting", on by
+  default.
+- A dev binary (no bundle id) cannot use `UNUserNotificationCenter`: meeting notifications fall
+  back to AppleScript `display notification` with the title "Macal", without click or action.
+
+## Updates
+
+- `UpdateChecker` asks `https://api.github.com/repos/emilevauge/macal/releases/latest` at launch,
+  then every 24 hours and on wake, at most once per 24 hours (a check that did not reach GitHub
+  does not count). Only in a .app bundle: a dev binary has no version to compare.
+- The tag ("v0.2.0" or "0.2.0") is compared with `CFBundleShortVersionString` component by
+  component, a pre-release suffix ignored. A newer version posts "Macal 0.2.0 is available" once
+  per version, with an "Update" action and a "Release notes" action. A click on the body opens
+  the release page.
+- "Update" (from the notification or from the settings) runs `SelfUpdater` with the `Macal.dmg`
+  asset (https only). It refuses a dev binary, an app running translocated from the DMG or
+  Downloads, and a folder it cannot write to. It downloads the DMG, writes the helper script of
+  `SelfUpdateScript` in a temporary folder, starts it detached with zsh and quits. The script
+  waits for Macal to exit (10 s at most), mounts the DMG read-only, checks that it holds a
+  `Macal.app` with its executable, moves the installed app to a backup, copies the new one, puts
+  the backup back if the copy fails, removes the quarantine flag, detaches the DMG, relaunches
+  Macal and deletes its folder. Failures show as a notification, or under the button in the
+  settings. A release without a DMG opens the release page instead.
+
+## Settings
+
+A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling within 560 pt.
+
+- Accounts: each account with "Reconnect" when needed and a remove button, its calendars folded
+  under a "Calendars" row that reads "2 of 14 shown", with a toggle each; "Add a Google
+  account…" or the sign-in progress with "Cancel"; the last sign-in error; the OAuth client row
+  with import or replace.
+- Alerts: "Alert before" (1 to 60 min, default 10), "Keep after the start" (0 to 30 min, default
+  5), "Notify before a meeting" (on). Footer: "A Join button shows in the menu bar before each
+  meeting."
+- Display: "Show declined events" (off).
+- Global shortcut: "Open Macal", default `⌃⌥M`. Recorded by `ShortcutRecorder`: click, type the
+  shortcut, `esc` cancels, `delete` clears. It needs a modifier besides Shift, or a function key.
+  `KeyboardShortcuts.Recorder` is not used: its placeholder reads the package's resource bundle
+  through `Bundle.module`, which aborts the released app on any Mac other than the build one.
+- Startup: "Launch at login" (a user LaunchAgent `dev.macal.app` pointing at the running
+  executable, repointed at launch when the recorded binary is gone or when Macal runs from
+  `/Applications`), "Open the panel at the start of the day" (on).
+- About, always last: version, "Check for updates" with "Up to date", "0.2.0 is available" or an
+  error, "Update to 0.2.0 now" and "Release notes" when newer, license MIT, source link
+  github.com/emilevauge/macal, "© 2026 Emile Vauge".
+
+## Errors
+
+- A revoked or expired refresh token marks the account "needs reconnect": "Reconnect" in red in
+  the settings, "!" in the menu bar icon, a red line in the hover card.
+- Sign-in errors show under the account list with a short message ("Access denied in the
+  browser.", "No Internet connection.", ...). A cancelled sign-in shows nothing.
+- No network: the cache stays on screen with "offline · updated N min ago"; alerts continue.
+- An API error on one calendar keeps the other calendars, and that calendar's previous events.
+
+## Packaging
+
+`make-app.sh` builds in release, assembles `Macal.app` (bundle id `dev.macal.app`, version
+0.1.0, build 1, `LSUIElement`, icon rendered by `Macal --generate-icon` then `sips` and
+`iconutil`), checks that no OAuth client file is inside, signs with the identity in
+`MACAL_SIGN_IDENTITY` (default "Claudette Dev") or ad hoc when it is missing, registers the app
+with LaunchServices, and builds `Macal.dmg` (volume "Macal", with an `Applications` link).
+`--install` also copies the app to `/Applications`.
+
+A single instance runs at a time: a copy started while another with the same bundle id runs
+exits at once.
+
+## Tests
+
+`MacalCoreTests`, Swift Testing, covering the core: OAuth URLs, callbacks and token parsing,
+OAuth client file lookup and masking, Calendar API pagination and encoding, Google models,
+merging and deduplication, refresh merging, link extraction, HTML text, day windows and
+listings, the day cache, next meeting, badge, alerts, join queue, capsule style, notification
+planning, day start policy, labels, version comparison, release parsing, update policy and the
+update script. OAuth sign-in, the UI and the update itself are tested by hand.
+
+## Out of scope
+
+- Creating or editing events.
+- Answering invitations.
+- Other calendar providers (iCloud, Outlook).
