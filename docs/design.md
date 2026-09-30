@@ -336,10 +336,14 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
 
 A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling within 560 pt.
 
-- Accounts: each account with "Reconnect" when needed and a remove button, its calendars folded
-  under a "Calendars" row that reads "2 of 14 shown", with a toggle each; "Add a Google
-  account…" or the sign-in progress with "Cancel"; the last sign-in error; the OAuth client row
-  with import or replace.
+- Google accounts: one card per account, so its calendars plainly belong to it. At the top of the
+  card, the account initials on their color, the email, a status ("Connected", "Read only ·
+  reconnect to reply to invitations", or "Signed out · reconnect to see events" in red),
+  "Reconnect" when the account is read only or signed out, and a trash button that removes it.
+  Below, the calendars folded under a "Calendars" row that reads "2 of 14 shown", with a toggle
+  each. Then a card with "Add a Google account…" or the sign-in progress with "Cancel", and the
+  last sign-in error; its footer gives the OAuth client ID, shortened, with "Import…" or
+  "Replace…".
 - Alerts: "Alert before" (1 to 60 min, default 10), "Keep after the start" (0 to 30 min, default
   5), "Notify before a meeting" (on). Footer: "A Join button shows in the menu bar before each
   meeting."

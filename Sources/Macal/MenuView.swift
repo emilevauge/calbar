@@ -227,7 +227,7 @@ struct MenuView: View {
             }
             .font(.caption)
             .foregroundStyle(.tertiary)
-            .padding(.leading, 14 + EventRow.timeColumnWidth + 10)
+            .padding(.horizontal, 14)
             .padding(.vertical, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())

@@ -22,10 +22,17 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Accounts") {
-                ForEach(accounts.accounts) { account in
-                    accountRow(account)
+            // One card per account, its calendars inside, so the list
+            // plainly belongs to that account.
+            ForEach(Array(accounts.accounts.enumerated()), id: \.element.id) { index, account in
+                Section {
+                    accountRows(account)
+                } header: {
+                    if index == 0 { Text("Google accounts") }
                 }
+            }
+
+            Section {
                 if app.isSigningIn {
                     SignInProgress()
                 } else {
@@ -39,7 +46,10 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-                oauthClientRow
+            } header: {
+                if accounts.accounts.isEmpty { Text("Google accounts") }
+            } footer: {
+                oauthClientFooter
             }
 
             Section {
@@ -100,24 +110,33 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private func accountRow(_ account: Account) -> some View {
-        HStack {
-            Text(account.email)
-                .fontWeight(.medium)
-                .lineLimit(1)
-            Spacer()
-            if account.needsReconnect {
+    private func accountRows(_ account: Account) -> some View {
+        HStack(spacing: 10) {
+            AccountAvatar(email: account.email)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(account.email)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                accountStatus(account)
+                    .font(.caption)
+            }
+            Spacer(minLength: 8)
+            if account.needsReconnect || !account.canReply {
                 Button("Reconnect") {
                     app.addAccount(loginHint: account.email)
                 }
-                .foregroundStyle(.red)
+                .controlSize(.small)
+                .disabled(app.isSigningIn)
             }
             Button {
                 run { await app.removeAccount(account.email) }
             } label: {
                 Image(systemName: "trash")
+                    .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
+            .disabled(busy)
             .help("Remove this account")
         }
         // Collapsed by default: an account can have dozens of calendars.
@@ -149,32 +168,47 @@ struct SettingsView: View {
         .buttonStyle(.plain)
         if expanded {
             CalendarPicker(account: account)
+                .padding(.leading, 12)
+        }
+    }
+
+    /// Signed out, read only, or fine.
+    @ViewBuilder
+    private func accountStatus(_ account: Account) -> some View {
+        if account.needsReconnect {
+            Text("Signed out · reconnect to see events")
+                .foregroundStyle(.red)
+        } else if !account.canReply {
+            Text("Read only · reconnect to reply to invitations")
+                .foregroundStyle(.secondary)
+        } else {
+            Text("Connected")
+                .foregroundStyle(.secondary)
         }
     }
 
     /// The imported client, its ID shortened, never the secret.
     @ViewBuilder
-    private var oauthClientRow: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("OAuth client")
-                Text(app.auth.map { OAuthClientFile.maskedID($0.client.clientID) } ?? "None")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+    private var oauthClientFooter: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Text("OAuth client: \(app.auth.map { OAuthClientFile.maskedID($0.client.clientID) } ?? "none")")
                     .lineLimit(1)
                     .truncationMode(.middle)
+                Spacer(minLength: 8)
+                Button(app.auth == nil ? "Import…" : "Replace…") {
+                    app.importOAuthClient()
+                }
+                .controlSize(.small)
+                .disabled(app.isSigningIn)
             }
-            Spacer()
-            Button(app.auth == nil ? "Import OAuth client…" : "Replace OAuth client…") {
-                app.importOAuthClient()
+            if let error = app.clientImportError {
+                Text(error)
+                    .foregroundStyle(.red)
             }
-            .disabled(app.isSigningIn)
         }
-        if let error = app.clientImportError {
-            Text(error)
-                .font(.caption)
-                .foregroundStyle(.red)
-        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 
     // MARK: about
@@ -286,6 +320,20 @@ struct SettingsView: View {
 }
 
 /// Shown while the browser sign-in waits for Google.
+/// Initials of the account on its color, as for guests in the popover.
+private struct AccountAvatar: View {
+    let email: String
+
+    var body: some View {
+        let person = Person(email: email, name: nil)
+        Text(Avatar.initials(person))
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 28, height: 28)
+            .background(Circle().fill(Avatar.color(person)))
+    }
+}
+
 struct SignInProgress: View {
     var body: some View {
         HStack(spacing: 8) {
