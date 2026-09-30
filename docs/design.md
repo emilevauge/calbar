@@ -10,7 +10,8 @@ This document describes the current behaviour. The code is the reference when th
 
 - Data source: the Google Calendar API, live, through OAuth, with any number of accounts.
 - Alert: the join link is part of the Macal menu bar item (a single `NSStatusItem`), plus a
-  standard macOS notification when a meeting enters its alert window.
+  standard macOS notification when a meeting enters its alert window, and another when it
+  starts.
 - Menu bar: an icon only. It always shows the time left before the next meeting of the day,
   never the date, and is an empty calendar page once no meeting is left today.
 - UI in English only, no localization system. Dates are formatted with the `en_US` locale
@@ -288,11 +289,12 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
   at launch, keeps one registry of categories, and routes each response to the handler of the
   notification's kind (`meeting` or `update`, stored in the userInfo). Banners also show while
   Macal is the active app.
-- Meetings (`MeetingNotifier`, `NotificationPlanner`): one notification per occurrence when the
-  meeting enters its alert window, before its start, for timed, not declined events, with or
-  without a link. Nothing for a meeting already started at launch. A moved meeting has a new key
-  and notifies again. Title: the event title. Body: "In 5 min · 15:00-16:00", plus " · Zoom"
-  with a link. Default sound, `.active` level. With a link, a "Join" action; a click joins
+- Meetings (`MeetingNotifier`, `NotificationPlanner`): for timed, not declined events, with or
+  without a link, two notifications per occurrence. The first when the meeting enters its alert
+  window, before its start. The second at the start, until the alert window ends (so a Mac woken
+  2 min after the start still gets it); it withdraws the first. A moved meeting has a new key
+  and notifies again. Title: the event title. Body: "In 5 min · 15:00-16:00", then "Starting
+  now" (first minute) or "Started 3 min ago", plus " · Zoom" with a link. Default sound, `.active` level. With a link, a "Join" action; a click joins
   when there is a link, otherwise opens the popover with the event expanded. Withdrawn when the
   meeting is dismissed or its alert window ends. Setting "Notify before a meeting", on by
   default.

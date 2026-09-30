@@ -66,4 +66,31 @@ import Testing
         let noLink = CalendarEvent.fixture(start: TestClock.date("2026-09-29T11:05:00+02:00"), minutes: 60)
         #expect(NotificationPlanner.body(noLink, now: now, calendar: TestClock.paris) == "In 5 min · 11:05-12:05")
     }
+
+    func dueAtStart(_ e: CalendarEvent, at date: Date? = nil, skip: Set<String> = []) -> Bool {
+        !NotificationPlanner.dueAtStart([e], now: date ?? now, policy: policy, skip: skip).isEmpty
+    }
+
+    @Test func startFiresFromTheStartToTheEndOfTheWindow() {
+        #expect(!dueAtStart(event(inMinutes: 0.5)))
+        #expect(dueAtStart(event(inMinutes: 0)))
+        #expect(dueAtStart(event(inMinutes: -4)))
+        #expect(!dueAtStart(event(inMinutes: -5)))
+    }
+
+    @Test func startFiresOnceAndNotForDeclinedOrAllDay() {
+        let e = event(inMinutes: 0)
+        #expect(!dueAtStart(e, skip: [e.occurrenceKey]))
+        #expect(!dueAtStart(event(inMinutes: 0, response: .declined)))
+        #expect(!dueAtStart(event(inMinutes: 0, allDay: true)))
+    }
+
+    @Test func startBody() {
+        let e = CalendarEvent.fixture(start: now, minutes: 30)
+        #expect(NotificationPlanner.body(e, now: now, calendar: TestClock.paris) == "Starting now · 11:00-11:30")
+        #expect(NotificationPlanner.body(e, now: now.addingTimeInterval(59), calendar: TestClock.paris)
+            == "Starting now · 11:00-11:30")
+        #expect(NotificationPlanner.body(e, now: now.addingTimeInterval(190), calendar: TestClock.paris)
+            == "Started 3 min ago · 11:00-11:30")
+    }
 }

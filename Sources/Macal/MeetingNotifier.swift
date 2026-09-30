@@ -2,8 +2,9 @@ import AppKit
 import MacalCore
 import UserNotifications
 
-/// System notification when a meeting enters its alert window, adapted from
-/// Claudette's `SystemNotifications`. Standard banner, once per occurrence.
+/// System notifications for a meeting, adapted from Claudette's
+/// `SystemNotifications`: a standard banner when it enters its alert
+/// window, and another when it starts, which replaces the first.
 ///
 /// Inside a .app bundle it goes through `NotificationHub`: clickable, with
 /// a Join action when the meeting has a link, and withdrawn when the alert
@@ -19,9 +20,11 @@ final class MeetingNotifier {
     /// Opens the popover expanded on the event with this id.
     var onOpenMacal: ((String) -> Void)?
 
-    /// `occurrenceKey` of notified occurrences, with the end of their alert
-    /// window. In memory only; a key is dropped once its window ends.
+    /// `occurrenceKey` of occurrences notified before the start, and of
+    /// those notified at the start, with the end of their alert window.
+    /// In memory only; a key is dropped once its window ends.
     private var fired: [String: Date] = [:]
+    private var firedAtStart: [String: Date] = [:]
 
     private static let kind = "meeting"
     private static let categoryID = "meeting"
@@ -56,20 +59,39 @@ final class MeetingNotifier {
             fired.removeValue(forKey: key)
             hub.withdraw(id: Self.identifier(key))
         }
+        for (key, end) in firedAtStart where end <= now || dismissed.contains(key) {
+            firedAtStart.removeValue(forKey: key)
+            hub.withdraw(id: Self.identifier(key, .starting))
+        }
         guard Prefs.notifyBeforeMeetings else { return }
         let policy = Prefs.alertPolicy
-        let skip = Set(fired.keys).union(dismissed)
+        let skip = Set(fired.keys).union(firedAtStart.keys).union(dismissed)
         for event in NotificationPlanner.due(store.events, now: now, policy: policy, skip: skip) {
             fired[event.occurrenceKey] = NotificationPlanner.windowEnd(event, policy: policy)
-            post(event, now: now)
+            post(event, stage: .soon, now: now)
+        }
+        let skipAtStart = Set(firedAtStart.keys).union(dismissed)
+        for event in NotificationPlanner.dueAtStart(store.events, now: now, policy: policy, skip: skipAtStart) {
+            let key = event.occurrenceKey
+            firedAtStart[key] = NotificationPlanner.windowEnd(event, policy: policy)
+            // Its "In 5 min" banner is out of date: the new one replaces it.
+            if fired.removeValue(forKey: key) != nil {
+                hub.withdraw(id: Self.identifier(key))
+            }
+            post(event, stage: .starting, now: now)
         }
     }
 
     // MARK: posting
 
-    private static func identifier(_ key: String) -> String { "macal.meeting.\(key)" }
+    private static func identifier(_ key: String, _ stage: NotificationPlanner.Stage = .soon) -> String {
+        switch stage {
+        case .soon: "macal.meeting.\(key)"
+        case .starting: "macal.meeting.start.\(key)"
+        }
+    }
 
-    private func post(_ event: CalendarEvent, now: Date) {
+    private func post(_ event: CalendarEvent, stage: NotificationPlanner.Stage, now: Date) {
         let body = NotificationPlanner.body(event, now: now, calendar: .current)
         guard hub.isAvailable else {
             notifyViaAppleScript(title: event.title, body: body)
@@ -82,7 +104,7 @@ final class MeetingNotifier {
         content.interruptionLevel = .active
         if event.meeting != nil { content.categoryIdentifier = Self.categoryID }
         content.userInfo = [Self.keyInfo: event.occurrenceKey, Self.eventIDInfo: event.id]
-        hub.post(kind: Self.kind, id: Self.identifier(event.occurrenceKey), content: content)
+        hub.post(kind: Self.kind, id: Self.identifier(event.occurrenceKey, stage), content: content)
     }
 
     private func notifyViaAppleScript(title: String, body: String) {
