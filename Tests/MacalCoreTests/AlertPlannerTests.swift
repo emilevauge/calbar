@@ -112,10 +112,11 @@ import Testing
         #expect(badge([event(inMinutes: 12 * 60 + 59)]) == .countdown(minutes: 779, urgency: .normal))
     }
 
-    @Test func badgeSkipsOngoingMeeting() {
-        let b = badge([event(inMinutes: -10), event(inMinutes: 40)])
-        #expect(b == .countdown(minutes: 40, urgency: .normal))
-        #expect(badge([event(inMinutes: -10)]) == .none)
+    @Test func badgeShowsTheOngoingMeetingInsteadOfTheNextOne() {
+        // 30 min meetings, 10 min in: 20 min left, a third elapsed.
+        let inMeeting = MenuBarBadge.inMeeting(.init(minutesLeft: 20, fraction: 1.0 / 3))
+        #expect(badge([event(inMinutes: -10), event(inMinutes: 40)]) == inMeeting)
+        #expect(badge([event(inMinutes: -10)]) == inMeeting)
     }
 
     @Test func badgePicksEarliestUpcoming() {

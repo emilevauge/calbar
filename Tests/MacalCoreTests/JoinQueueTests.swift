@@ -80,53 +80,69 @@ import Testing
                                     due: due)
     }
 
-    @Test func startedMeetingIsLive() {
+    /// Fixture meetings last 30 minutes.
+    func progress(startedMinutesAgo m: Double) -> MenuBarBadge.Progress {
+        MenuBarBadge.Progress(minutesLeft: Int((30 - m).rounded(.up)), fraction: m / 30)
+    }
+
+    @Test func startedMeetingIsLiveWithMinutesLeft() {
         let b = badge([event(inMinutes: -2), event(inMinutes: 40)])
-        #expect(b == .live(hasLink: true, nextMinutes: 40))
+        #expect(b == .live(hasLink: true, meeting: progress(startedMinutesAgo: 2)))
         #expect(b.isProminent)
-        #expect(b.text == "40")
+        #expect(b.text == "28")
+        #expect(b.progress == 2.0 / 30)
         #expect(b.urgency == nil)
     }
 
-    @Test func liveShowsHoursToNextMeeting() {
-        #expect(badge([event(inMinutes: -2), event(inMinutes: 135)]).text == "2h")
-    }
-
-    @Test func liveWithoutNextMeetingIsEmpty() {
-        let b = badge([event(inMinutes: -2)])
-        #expect(b == .live(hasLink: true, nextMinutes: nil))
-        #expect(b.text == "")
-    }
-
     @Test func liveFromTheStartSecond() {
-        #expect(badge([event(inMinutes: 0)]) == .live(hasLink: true, nextMinutes: nil))
+        let b = badge([event(inMinutes: 0)])
+        #expect(b == .live(hasLink: true, meeting: progress(startedMinutesAgo: 0)))
+        #expect(b.text == "30")
     }
 
-    @Test func dismissedGoesBackToCountdown() {
+    @Test func dismissedShowsTheMeetingOutlined() {
         let started = event(inMinutes: -2)
-        #expect(badge([started, event(inMinutes: 40)], dismissed: [started.occurrenceKey])
-            == .countdown(minutes: 40, urgency: .normal))
+        let b = badge([started, event(inMinutes: 40)], dismissed: [started.occurrenceKey])
+        #expect(b == .inMeeting(progress(startedMinutesAgo: 2)))
+        #expect(!b.isProminent)
     }
 
-    @Test func afterLingerGoesBackToCountdown() {
-        #expect(badge([event(inMinutes: -6), event(inMinutes: 40)]) == .countdown(minutes: 40, urgency: .normal))
+    @Test func afterLingerShowsMinutesLeftNotTheNextMeeting() {
+        let b = badge([event(inMinutes: -6), event(inMinutes: 40)])
+        #expect(b == .inMeeting(progress(startedMinutesAgo: 6)))
+        #expect(b.text == "24")
+        #expect(b.progress == 0.2)
+    }
+
+    @Test func nextMeetingAlertBeatsTheOngoingOne() {
+        // Back to back: 20 min into a 30 min meeting, the next one is 10 min away.
+        #expect(badge([event(inMinutes: -20), event(inMinutes: 10)]) == .countdown(minutes: 10, urgency: .soon))
+        #expect(badge([event(inMinutes: -20), event(inMinutes: 11)]) == .inMeeting(progress(startedMinutesAgo: 20)))
+    }
+
+    @Test func longMeetingShowsHours() {
+        let long = CalendarEvent.fixture(start: now.addingTimeInterval(-600), minutes: 180, meeting: link)
+        #expect(badge([long]).text == "2h")
     }
 
     @Test func declinedIsNotLive() {
         #expect(badge([event(inMinutes: -2, response: .declined), event(inMinutes: 40)])
             == .countdown(minutes: 40, urgency: .normal))
+        #expect(badge([event(inMinutes: -10, response: .declined)]) == .none)
     }
 
     @Test func withoutLinkIsLiveWithoutCamera() {
         let b = badge([event(inMinutes: -2, meeting: false), event(inMinutes: 40)])
-        #expect(b == .live(hasLink: false, nextMinutes: 40))
+        #expect(b == .live(hasLink: false, meeting: progress(startedMinutesAgo: 2)))
         #expect(b.isProminent)
         #expect(badge([event(inMinutes: -6, meeting: false), event(inMinutes: 40)])
-            == .countdown(minutes: 40, urgency: .normal))
+            == .inMeeting(progress(startedMinutesAgo: 6)))
     }
 
-    @Test func anyStartedLinkShowsCamera() {
-        #expect(badge([event(inMinutes: -3, meeting: false), event(inMinutes: -1)]) == .live(hasLink: true, nextMinutes: nil))
+    @Test func anyStartedLinkShowsCameraAndTheFirstToEnd() {
+        // Both 30 min long: the one that started 3 min ago ends first.
+        #expect(badge([event(inMinutes: -3, meeting: false), event(inMinutes: -1)])
+            == .live(hasLink: true, meeting: progress(startedMinutesAgo: 3)))
     }
 
     @Test func allDayIsNotLive() {

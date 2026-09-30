@@ -41,7 +41,7 @@ enum StatusItemImage {
     /// click joins the meeting; 0 for the plain glyph.
     static func make(badge: MenuBarBadge, join: Join?) -> (image: NSImage, joinZoneWidth: CGFloat) {
         guard let join else { return (StatusBarImage.make(badge), 0) }
-        return capsule(join, text: badge.text)
+        return capsule(join, text: badge.text, progress: badge.progress)
     }
 
     static let height: CGFloat = 18
@@ -56,7 +56,7 @@ enum StatusItemImage {
     /// one so it keeps a margin from the capsule's edges.
     private static let glyphSize = NSSize(width: 14.5, height: 13)
 
-    private static func capsule(_ join: Join, text: String) -> (image: NSImage, joinZoneWidth: CGFloat) {
+    private static func capsule(_ join: Join, text: String, progress: Double?) -> (image: NSImage, joinZoneWidth: CGFloat) {
         let color = join.style.color
         let textColor = join.style.textColor
         let font = NSFont.systemFont(ofSize: 12, weight: .medium)
@@ -126,7 +126,7 @@ enum StatusItemImage {
             let body = NSRect(x: glyphX, y: rect.midY - glyphSize.height / 2,
                               width: glyphSize.width, height: glyphSize.height)
             // Same drawing as the standalone colored glyph.
-            CalendarGlyph.draw(text, in: body, ink: .colored(color))
+            CalendarGlyph.draw(text, in: body, ink: .colored(color), progress: progress)
             return true
         }
         image.isTemplate = false

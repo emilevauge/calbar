@@ -19,7 +19,7 @@ public enum CapsuleStyle: Equatable, Sendable {
         switch badge {
         case .countdown(_, .soon): return .soon
         case .countdown(_, .imminent), .live: return .urgent
-        case .countdown(_, .normal): return .accent
+        case .countdown(_, .normal), .inMeeting: return .accent
         case .warning, .none:
             let left = primary.start.timeIntervalSince(now)
             return left <= MenuBarBadge.imminentThreshold ? .urgent : .soon

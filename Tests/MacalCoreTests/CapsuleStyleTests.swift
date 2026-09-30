@@ -12,15 +12,15 @@ import Testing
 
     @Test func noPrimaryMeansPlainGlyph() {
         #expect(CapsuleStyle.make(badge: .countdown(minutes: 4, urgency: .soon), primary: nil, now: now) == nil)
-        #expect(CapsuleStyle.make(badge: .live(hasLink: false, nextMinutes: 40), primary: nil, now: now) == nil)
+        #expect(CapsuleStyle.make(badge: .live(hasLink: false, meeting: nil), primary: nil, now: now) == nil)
     }
 
     @Test func followsTheBadge() {
         let e = event(inMinutes: 4)
         #expect(CapsuleStyle.make(badge: .countdown(minutes: 4, urgency: .soon), primary: e, now: now) == .soon)
         #expect(CapsuleStyle.make(badge: .countdown(minutes: 1, urgency: .imminent), primary: e, now: now) == .urgent)
-        #expect(CapsuleStyle.make(badge: .live(hasLink: true, nextMinutes: 43), primary: e, now: now) == .urgent)
-        #expect(CapsuleStyle.make(badge: .live(hasLink: true, nextMinutes: nil), primary: e, now: now) == .urgent)
+        #expect(CapsuleStyle.make(badge: .live(hasLink: true, meeting: .init(minutesLeft: 25, fraction: 0.2)), primary: e, now: now) == .urgent)
+        #expect(CapsuleStyle.make(badge: .live(hasLink: true, meeting: nil), primary: e, now: now) == .urgent)
         #expect(CapsuleStyle.make(badge: .countdown(minutes: 30, urgency: .normal), primary: e, now: now) == .accent)
     }
 

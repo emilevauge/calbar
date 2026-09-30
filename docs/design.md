@@ -12,8 +12,9 @@ This document describes the current behaviour. The code is the reference when th
 - Alert: the join link is part of the Macal menu bar item (a single `NSStatusItem`), plus a
   standard macOS notification when a meeting enters its alert window, and another when it
   starts.
-- Menu bar: an icon only. It always shows the time left before the next meeting of the day,
-  never the date, and is an empty calendar page once no meeting is left today.
+- Menu bar: an icon only. It shows the time left before the next meeting of the day, or during
+  a meeting the time left in it with the page filling up, never the date, and is an empty
+  calendar page once no meeting is left today.
 - UI in English only, no localization system. Dates are formatted with the `en_US` locale
   whatever the system language.
 - Distribution: a DMG on GitHub Releases, signed ad hoc or with a local self-signed identity,
@@ -192,9 +193,13 @@ App (`Sources/Macal`):
   the start: the same in `systemRed`. No timed meeting left today: empty outline.
 - An account that needs reconnecting: filled template page with a punched-out "!", above
   everything else.
+- During a meeting (the ongoing timed, not declined event that ends first): the minutes left
+  in it instead of the countdown to the next one, and the page under the band fills from left
+  to right with the elapsed part, in a 28 % tint of the ink. The next meeting still takes over
+  with its orange or red countdown once it is within the lead time, so a back-to-back meeting
+  keeps its alert.
 - During the first minutes of a meeting (from its start to start plus the linger delay, until
-  it is dismissed; joining does not count): red page with the usual countdown to the next
-  meeting, empty when none is left today, with or without a video link. A meeting without a
+  it is dismissed; joining does not count): the same in red, with or without a video link. A meeting without a
   link cannot be dismissed from the menu bar: the page stays red until the delay ends.
 - While a meeting with a link is due, the page is drawn inside the join capsule instead.
 

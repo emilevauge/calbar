@@ -1,7 +1,8 @@
 import Foundation
 
 /// What the menu bar icon shows inside its calendar glyph. It never shows
-/// the date: only the time left before the next meeting of the day, in red
+/// the date: the time left before the next meeting of the day, or during a
+/// meeting the time left in it, with the page filling up as it runs. Red
 /// during the first minutes of a meeting.
 public enum MenuBarBadge: Equatable, Sendable {
     /// How close the next meeting is, from the time left before its start.
@@ -14,16 +15,39 @@ public enum MenuBarBadge: Equatable, Sendable {
         case imminent
     }
 
+    /// The meeting running now: minutes left, rounded up, and the elapsed
+    /// part of it, from 0 to 1.
+    public struct Progress: Equatable, Sendable {
+        public let minutesLeft: Int
+        public let fraction: Double
+
+        public init(minutesLeft: Int, fraction: Double) {
+            self.minutesLeft = minutesLeft
+            self.fraction = fraction
+        }
+
+        public static func of(_ event: CalendarEvent, now: Date) -> Progress {
+            let total = event.end.timeIntervalSince(event.start)
+            let done = total > 0 ? now.timeIntervalSince(event.start) / total : 1
+            return Progress(minutesLeft: MenuBarBadge.minutesLeft(until: event.end, now: now),
+                            fraction: min(max(done, 0), 1))
+        }
+    }
+
     /// Time left at or under which a meeting is imminent.
     public static let imminentThreshold: TimeInterval = 60
 
     /// An account must be reconnected: "!", filled glyph.
     case warning
     /// A meeting started less than `lingerAfterStart` ago and was not
-    /// dismissed ("Dismiss"; joining does not count): red calendar page with
-    /// the usual countdown to the next meeting, empty when none is left
-    /// today. `hasLink` tells whether the started meeting has a video link.
-    case live(hasLink: Bool, nextMinutes: Int?)
+    /// dismissed ("Dismiss"; joining does not count): red calendar page
+    /// filling up with the meeting, and its minutes left; empty for a
+    /// zero-length event. `hasLink` tells whether the started meeting has a
+    /// video link.
+    case live(hasLink: Bool, meeting: Progress?)
+    /// In a meeting past its first minutes: outline page filling up, and
+    /// the minutes left in it.
+    case inMeeting(Progress)
     /// Minutes before the next timed meeting of today, rounded up, with how
     /// close it is.
     case countdown(minutes: Int, urgency: Urgency)
@@ -34,13 +58,22 @@ public enum MenuBarBadge: Equatable, Sendable {
     public var text: String {
         switch self {
         case .warning: return "!"
-        case .countdown(let m, _), .live(_, let m?): return Self.format(m)
+        case .countdown(let m, _): return Self.format(m)
+        case .live(_, let p?), .inMeeting(let p): return Self.format(p.minutesLeft)
         case .live(_, nil), .none: return ""
         }
     }
 
     private static func format(_ minutes: Int) -> String {
         minutes < 60 ? "\(minutes)" : "\(minutes / 60)h"
+    }
+
+    /// Elapsed part of the meeting running now, nil outside a meeting.
+    public var progress: Double? {
+        switch self {
+        case .live(_, let p?), .inMeeting(let p): return p.fraction
+        default: return nil
+        }
     }
 
     /// Urgency of a countdown, nil for `.warning`, `.live` and `.none`.
@@ -55,13 +88,15 @@ public enum MenuBarBadge: Equatable, Sendable {
         switch self {
         case .warning, .live: return true
         case .countdown(_, let urgency): return urgency != .normal
-        case .none: return false
+        case .inMeeting, .none: return false
         }
     }
 
     /// Counts down to `NextMeeting.find`. `due` holds the current alerts
     /// (`AlertPlanner.due`, dismissed ones left out): when one of them has
-    /// started, the badge is `.live` instead of the countdown.
+    /// started, the badge is `.live`. Otherwise, during a meeting
+    /// (`NextMeeting.ongoing`), `.inMeeting`, unless the next meeting is
+    /// within the lead time: its orange or red countdown comes first.
     public static func compute(
         events: [CalendarEvent],
         now: Date,
@@ -72,12 +107,16 @@ public enum MenuBarBadge: Equatable, Sendable {
     ) -> MenuBarBadge {
         if needsAttention { return .warning }
         let next = NextMeeting.find(events: events, now: now, calendar: calendar)
+        let current = NextMeeting.ongoing(events: events, now: now)
         let started = due.filter { $0.start <= now }
         if !started.isEmpty {
             return .live(
                 hasLink: started.contains { $0.meeting != nil },
-                nextMinutes: next.map { minutesLeft(until: $0.start, now: now) }
+                meeting: current.map { Progress.of($0, now: now) }
             )
+        }
+        if let current, next.map({ $0.start.timeIntervalSince(now) > leadTime }) ?? true {
+            return .inMeeting(Progress.of(current, now: now))
         }
         guard let next else { return .none }
         let left = next.start.timeIntervalSince(now)
@@ -93,7 +132,7 @@ public enum MenuBarBadge: Equatable, Sendable {
         return .countdown(minutes: minutesLeft(until: next.start, now: now), urgency: urgency)
     }
 
-    private static func minutesLeft(until start: Date, now: Date) -> Int {
+    static func minutesLeft(until start: Date, now: Date) -> Int {
         Int((start.timeIntervalSince(now) / 60).rounded(.up))
     }
 }

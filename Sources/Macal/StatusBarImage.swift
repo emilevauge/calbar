@@ -8,7 +8,9 @@ import MacalCore
 /// - warning: filled template glyph with "!" punched out.
 /// - soon (join window): orange outline, band and digits.
 /// - imminent (1 min or less): red outline, band and digits.
-/// - live (first minutes of a meeting): red page, countdown to the next one.
+/// - live (first minutes of a meeting): red page filling up left to right
+///   with the meeting, minutes left in it.
+/// - in a meeting: template page filling up the same way, minutes left.
 /// Colored states are not templates. With a joinable meeting the glyph
 /// sits inside the capsule drawn by `StatusItemImage` instead.
 enum StatusBarImage {
@@ -16,7 +18,7 @@ enum StatusBarImage {
         let color: NSColor? = switch badge {
         case .countdown(_, .soon): .systemOrange
         case .countdown(_, .imminent), .live: .systemRed
-        case .countdown(_, .normal), .warning, .none: nil
+        case .countdown(_, .normal), .inMeeting, .warning, .none: nil
         }
         let ink: CalendarGlyph.Ink
         if let color {
@@ -27,7 +29,7 @@ enum StatusBarImage {
             ink = .template
         }
         let image = NSImage(size: NSSize(width: 20, height: 18), flipped: false) { _ in
-            CalendarGlyph.draw(badge.text, in: CalendarGlyph.standardBody, ink: ink)
+            CalendarGlyph.draw(badge.text, in: CalendarGlyph.standardBody, ink: ink, progress: badge.progress)
         }
         image.isTemplate = color == nil
         return image
@@ -49,9 +51,11 @@ enum CalendarGlyph {
     static let standardBody = NSRect(x: 2, y: 1.5, width: 16, height: 14.5)
 
     /// Draws into the current graphics context. `body` sets the scale: the
-    /// radius, band and font follow its height.
+    /// radius, band and font follow its height. `progress`, from 0 to 1,
+    /// fills the page under the band from the left, in a light tint of the
+    /// ink, behind the text.
     @discardableResult
-    static func draw(_ text: String, in body: NSRect, ink: Ink) -> Bool {
+    static func draw(_ text: String, in body: NSRect, ink: Ink, progress: Double? = nil) -> Bool {
         let scale = body.height / standardBody.height
         let outline = NSBezierPath(roundedRect: body, xRadius: 3.2 * scale, yRadius: 3.2 * scale)
         let color: NSColor = switch ink {
@@ -60,6 +64,15 @@ enum CalendarGlyph {
         }
 
         var textArea = body
+        if let progress, progress > 0 {
+            if case .punched = ink {} else {
+                NSGraphicsContext.saveGraphicsState()
+                outline.addClip()
+                color.withAlphaComponent(0.28).setFill()
+                NSRect(x: body.minX, y: body.minY, width: body.width * min(progress, 1), height: body.height).fill()
+                NSGraphicsContext.restoreGraphicsState()
+            }
+        }
         if case .punched = ink {
             color.setFill()
             outline.fill()
