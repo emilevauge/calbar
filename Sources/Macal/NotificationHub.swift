@@ -10,7 +10,7 @@ import UserNotifications
 /// on first use: everything here is then a no-op and `isAvailable` is
 /// false, so callers fall back to AppleScript.
 @MainActor
-final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
+final class NotificationHub: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationHub()
 
     /// userInfo key holding the kind that routes a response.
@@ -20,6 +20,9 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
     typealias Handler = @MainActor (_ action: String, _ info: [String: String]) -> Void
 
     let isAvailable = Bundle.main.bundleIdentifier != nil
+    /// Whether macOS lets Macal show notifications: nil until known, and
+    /// always nil without a bundle id. Refreshed by `refreshAuthorization`.
+    @Published private(set) var authorization: UNAuthorizationStatus?
     private var categories: [String: UNNotificationCategory] = [:]
     private var handlers: [String: Handler] = [:]
     private var started = false
@@ -34,9 +37,33 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
         started = true
         let center = UNUserNotificationCenter.current()
         center.delegate = self
-        center.requestAuthorization(options: [.alert, .sound]) { _, error in
+        requestAuthorization()
+    }
+
+    /// Asks for permission. macOS shows the prompt only while the status
+    /// is not determined; afterwards only System Settings changes it.
+    func requestAuthorization() {
+        guard isAvailable else { return }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
             if let error { NSLog("Macal: notification permission: %@", "\(error)") }
+            Task { @MainActor in NotificationHub.shared.refreshAuthorization() }
         }
+    }
+
+    /// Reads the current permission, which the user may have changed in
+    /// System Settings since the last read.
+    func refreshAuthorization() {
+        guard isAvailable else { return }
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            let status = settings.authorizationStatus
+            Task { @MainActor in NotificationHub.shared.authorization = status }
+        }
+    }
+
+    /// The Notifications pane of System Settings.
+    static func openSystemSettings() {
+        let pane = "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+        if let url = URL(string: pane) { NSWorkspace.shared.open(url) }
     }
 
     /// Routes responses to notifications of `kind` to `handler`, and adds

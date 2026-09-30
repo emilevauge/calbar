@@ -345,7 +345,10 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
   last sign-in error; its footer gives the OAuth client ID, shortened, with "Import…" or
   "Replace…".
 - Alerts: "Alert before" (1 to 60 min, default 10), "Keep after the start" (0 to 30 min, default
-  5), "Notify before a meeting" (on). Footer: "A Join button shows in the menu bar before each
+  5), "Notify before a meeting" (on). While it is on and macOS blocks Macal's notifications, an
+  orange row "Notifications are off in System Settings" with "Open System Settings", which opens
+  the Notifications pane; before the first answer, "Notifications not allowed yet" with
+  "Allow…", which asks again. The permission is read each time the settings open. Footer: "A Join button shows in the menu bar before each
   meeting."
 - Display: "Show declined events" (off).
 - Global shortcut: "Open Macal", default `⌃⌥M`. Recorded by `ShortcutRecorder`: click, type the

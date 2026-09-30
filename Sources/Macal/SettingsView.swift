@@ -5,6 +5,7 @@ import MacalCore
 struct SettingsView: View {
     @ObservedObject private var app = AppDelegate.shared
     @ObservedObject private var accounts = AppDelegate.shared.accounts
+    @ObservedObject private var notifications = NotificationHub.shared
 
     @AppStorage(Prefs.leadMinutesKey) private var leadMinutes = 10
     @AppStorage(Prefs.lingerMinutesKey) private var lingerMinutes = 5
@@ -60,6 +61,9 @@ struct SettingsView: View {
                     valueRow("Keep after the start", "\(lingerMinutes) min")
                 }
                 Toggle("Notify before a meeting", isOn: $notifyBeforeMeetings)
+                if notifyBeforeMeetings {
+                    notificationPermissionRow
+                }
             } header: {
                 Text("Alerts")
             } footer: {
@@ -98,6 +102,8 @@ struct SettingsView: View {
             aboutSection
         }
         .formStyle(.grouped)
+        // The user may have changed it in System Settings meanwhile.
+        .onAppear { notifications.refreshAuthorization() }
         // Bounded height: the grouped Form scrolls, so every calendar and
         // the sections below them stay reachable.
         .frame(width: 380, height: Self.height)
@@ -209,6 +215,37 @@ struct SettingsView: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
+    }
+
+    /// Shown only when macOS would hide Macal's notifications.
+    @ViewBuilder
+    private var notificationPermissionRow: some View {
+        switch notifications.authorization {
+        case .denied?:
+            HStack(spacing: 8) {
+                Label("Notifications are off in System Settings", systemImage: "bell.slash")
+                    .foregroundStyle(.orange)
+                Spacer(minLength: 8)
+                Button("Open System Settings") {
+                    NotificationHub.openSystemSettings()
+                }
+                .controlSize(.small)
+            }
+            .font(.callout)
+        case .notDetermined?:
+            HStack(spacing: 8) {
+                Label("Notifications not allowed yet", systemImage: "bell.badge")
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Button("Allow…") {
+                    notifications.requestAuthorization()
+                }
+                .controlSize(.small)
+            }
+            .font(.callout)
+        default:
+            EmptyView()
+        }
     }
 
     // MARK: about
