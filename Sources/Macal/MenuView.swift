@@ -27,6 +27,7 @@ struct MenuView: View {
 
         VStack(alignment: .leading, spacing: 0) {
             header(agenda, day: day, other: other)
+            Divider()
             content(agenda, day: day, other: other, rows: rows, focusID: focusID)
             Divider()
             footer
@@ -145,6 +146,7 @@ struct MenuView: View {
                             todayList(agenda, rows: rows, focusID: focusID)
                         }
                     }
+                    .padding(.top, 6)
                     .padding(.bottom, 8)
                 }
                 // A new day starts scrolled to the top.

@@ -239,7 +239,7 @@ App (`Sources/Macal`):
 `NSStatusItem` plus `NSPopover` (transient) rather than `MenuBarExtra`, so code can open it (the
 global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt high.
 
-- Header: the title of the day shown, "Tuesday, September 29", 15 pt semibold, with a caption
+- Header, above a separator: the title of the day shown, "Tuesday, September 29", 15 pt semibold, with a caption
   below it: for today, "offline · updated 5 min ago" when offline, otherwise "Today · 3 left"
   or "Today · nothing left"; for another day, "Yesterday" or "Tomorrow" when it applies and the
   number of events ("Tomorrow · 3 events"), nothing for an empty day. On the right, `‹` and `›`

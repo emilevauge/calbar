@@ -82,7 +82,7 @@ struct AllDayStrip: View {
         }
         .padding(.horizontal, 14)
         .padding(.top, 2)
-        .padding(.bottom, 8)
+        .padding(.bottom, 6)
     }
 }
 
