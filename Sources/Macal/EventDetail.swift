@@ -2,12 +2,13 @@ import SwiftUI
 import AppKit
 import MacalCore
 
-/// Expanded part of a row: link, place, people, documents, description,
-/// with a Google Calendar button at the top right.
+/// Expanded part of a row or card: answer, link, place, guests,
+/// documents, description, with a Google Calendar button at the top right.
 struct EventDetail: View {
     let event: CalendarEvent
+    /// Off when the row or card already has a Join button.
+    var showsMeetingLink = true
     @State private var showAllAttendees = false
-    private static let attendeeLimit = 8
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -45,7 +46,7 @@ struct EventDetail: View {
             if event.canRespond {
                 RSVPSection(event: event)
             }
-            if let meeting = event.meeting {
+            if showsMeetingLink, let meeting = event.meeting {
                 line("video") {
                     Button(meeting.provider.displayName) { MeetingOpener.open(meeting) }
                         .buttonStyle(.link)
@@ -97,35 +98,44 @@ struct EventDetail: View {
         }
     }
 
+    /// Initials and a count; a click lists every guest with their answer.
     private var attendees: some View {
         let all = sortedAttendees
-        let visible = showAllAttendees ? all : Array(all.prefix(Self.attendeeLimit))
         let yes = all.filter { $0.response == .accepted }.count
 
-        return VStack(alignment: .leading, spacing: 3) {
-            line("person.2") { Text("\(all.count) guests · \(yes) yes") }
-            ForEach(visible, id: \.person.email) { attendee in
-                HStack(spacing: 6) {
-                    responseIcon(attendee.response)
-                        .frame(width: 14)
-                    Text(attendee.person.displayName)
-                        .lineLimit(1)
-                        .help(attendee.person.email)
-                    if attendee.isOrganizer {
-                        Text("organizer").foregroundStyle(.tertiary)
-                    } else if attendee.isOptional {
-                        Text("optional").foregroundStyle(.tertiary)
-                    }
+        return VStack(alignment: .leading, spacing: 4) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { showAllAttendees.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    AvatarStack(attendees: all)
+                    Text(all.count == 1 ? "1 guest" : "\(all.count) guests · \(yes) yes")
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(showAllAttendees ? 180 : 0))
                 }
-                .padding(.leading, 20)
+                .contentShape(Rectangle())
             }
-            if all.count > Self.attendeeLimit {
-                Button(showAllAttendees ? "Show less" : "Show \(all.count - Self.attendeeLimit) more") {
-                    showAllAttendees.toggle()
+            .buttonStyle(.plain)
+            .help(showAllAttendees ? "Hide guests" : "Show guests")
+
+            if showAllAttendees {
+                ForEach(all, id: \.person.email) { attendee in
+                    HStack(spacing: 6) {
+                        responseIcon(attendee.response)
+                            .frame(width: 14)
+                        Text(attendee.person.displayName)
+                            .lineLimit(1)
+                            .help(attendee.person.email)
+                        if attendee.isOrganizer {
+                            Text("organizer").foregroundStyle(.tertiary)
+                        } else if attendee.isOptional {
+                            Text("optional").foregroundStyle(.tertiary)
+                        }
+                    }
+                    .padding(.leading, 3)
                 }
-                .buttonStyle(.link)
-                .clickable()
-                .padding(.leading, 20)
             }
         }
     }
@@ -146,14 +156,24 @@ struct EventDetail: View {
 
     // MARK: attachments
 
+    /// Documents as chips that open them.
     private var attachments: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        FlowLayout(spacing: 6, lineSpacing: 6) {
             ForEach(event.attachments, id: \.url) { file in
-                line(file.symbolName) {
-                    Link(file.title, destination: file.url)
-                        .clickable()
-                        .lineLimit(1)
+                Link(destination: file.url) {
+                    HStack(spacing: 4) {
+                        Image(systemName: file.symbolName)
+                        Text(file.title)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 8)
+                    .frame(height: 22)
+                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .clickable()
+                .help(file.title)
             }
         }
     }

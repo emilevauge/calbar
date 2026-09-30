@@ -239,36 +239,48 @@ App (`Sources/Macal`):
 `NSStatusItem` plus `NSPopover` (transient) rather than `MenuBarExtra`, so code can open it (the
 global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt high.
 
-- Header: `‹` and `›` icon buttons (28 x 24 pt, tooltips "Previous day" and "Next day") around
-  the title of the day shown, "Tuesday, September 29". The title has a fixed width, the width
-  of "Wednesday, September 30", the widest date of the year, so the chevrons do not move. On
-  another day a click on the title goes back to today ("Back to today"). On the right: for
-  today, "offline · updated 5 min ago" when offline, otherwise the number of events left
-  ("3 left"); for another day, "Yesterday" or "Tomorrow" when it applies and the number of
-  events ("Tomorrow · 3 events"), nothing for an empty day. The popover goes back to today
-  every time it closes.
-- Today: all-day events as a compact strip of colored titles, then ongoing and upcoming timed
-  events, then an "Ended" section with past events dimmed. The ongoing meeting, or else the
-  next one, stays expanded and cannot be collapsed. Once the timed events are over: "Nothing
-  left today" and the first event of tomorrow ("Tomorrow 09:00 · Standup").
+- Header: the title of the day shown, "Tuesday, September 29", 15 pt semibold, with a caption
+  below it: for today, "offline · updated 5 min ago" when offline, otherwise "Today · 3 left"
+  or "Today · nothing left"; for another day, "Yesterday" or "Tomorrow" when it applies and the
+  number of events ("Tomorrow · 3 events"), nothing for an empty day. On the right, `‹` and `›`
+  icon buttons (28 x 24 pt, tooltips "Previous day" and "Next day") grouped on a light
+  background. On another day a click on the title goes back to today ("Back to today"). The
+  popover goes back to today every time it closes.
+- Today: all-day events as colored chips (wrapping to several lines if needed), then ongoing
+  and upcoming timed events, then "N ended earlier", folded, which unfolds the past events
+  dimmed below it. The ongoing meeting, or else the next one, is drawn as a card and cannot be
+  collapsed. Once the timed events are over: "Nothing left today" and the first event of
+  tomorrow ("Tomorrow 09:00 · Standup"). Between two events at least 30 minutes apart, a
+  separator gives the free time ("2 h free"), measured from the latest end above it, so an
+  event nested in a longer one opens no gap. The ended section folds again when the popover
+  closes.
 - Other days: today and tomorrow come from the regular refresh. Any other day is fetched on
   demand (one day window, every enabled calendar of every account, same parallel fetch and 401
   handling), kept in memory for 5 minutes, and marked stale by every regular refresh, so also
   when a calendar is toggled. A stale day keeps its events on screen while it is fetched again.
   "Loading…" during the first fetch, "Could not load this day" with "Retry" after a failure.
-  The listing has the all-day strip then every timed event in order: no "Ended" section, nothing
-  dimmed, no row kept expanded, the time range without relative time, no camera button for an
-  event already over. An event across midnight shows on both days; a multi-day all-day event
-  shows on each day. The icon, the capsule, the notifications and the hover card stay on today.
-- Collapsed row: calendar color dot, title, time range ("10:30-11:00"), relative time on today
-  ("in 12 min", "now · 18 min left", "ended"), "· declined" for a declined event shown, guest
-  and attachment counts, and a camera button on the right when there is a video link. The
-  ongoing event is highlighted.
-- Expanded row (click, one at a time): video provider, location (opens Maps, or the URL when the
-  location is one), organizer, guests with their answer ("5 guests · 3 yes", folded after 8
-  with "Show 3 more"), Drive attachments with a type icon, the description as plain text with
-  clickable links, and a Google Calendar button that opens the event pinned to its account.
-  For an invitation, a "Going?" line comes first (see "Answering invitations").
+  The listing has the all-day chips then every timed event in order with the free time
+  separators: no card, no ended section, nothing dimmed, the duration instead of the relative
+  time, no join button for an event already over. An event across midnight shows on both days;
+  a multi-day all-day event shows on each day. The icon, the capsule, the notifications and the
+  hover card stay on today.
+- Card: "NOW" in red for an ongoing meeting, the time range and the time left ("35 min left")
+  or the relative time ("in 12 min"), the title on up to 3 lines, and a "Join" button on the
+  right when there is a video link. An ongoing meeting has a progress bar in the calendar color.
+  The details follow. Light fill and border in the calendar color, accent border when selected.
+- Row: start and end times in a 38 pt column, a 3.5 pt bar in the calendar color, the title and
+  a caption line. The bar is dashed while the invitation waits for an answer, faded for a
+  declined event, whose title is struck through. Caption: "Needs reply" in orange, "Declined",
+  the relative time on today ("in 12 min", "now · 18 min left", "ended") or the duration on
+  other days, then in the collapsed row the guest and attachment counts and the location
+  unless it is a URL. A discreet camera button on the right joins the video call.
+- Details (card, or a row expanded by a click, one at a time): the "Going?" line for an
+  invitation (see "Answering invitations"), the video provider when there is no Join button,
+  location (opens Maps, or the URL when the location is one), organizer, guests as up to 5
+  initials in colored circles with "5 guests · 3 yes" (a click lists each guest with their
+  answer), Drive attachments as chips with a type icon, the description as plain text with
+  clickable links, and a Google Calendar button at the top right that opens the event pinned to
+  its account. Initials colors come from the email, so a person keeps the same color.
 - Keyboard: `↑` `↓` move the selection, `←` `→` change the day, `↵` expands, `⌘↵` joins, `esc`
   closes. `⌘R` refreshes, `⌘,` opens the settings, `⌘Q` quits.
 - Empty states: "Macal needs a Google OAuth client" (see above), or "No Google account connected"

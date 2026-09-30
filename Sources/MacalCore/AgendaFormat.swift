@@ -9,6 +9,12 @@ public enum AgendaFormat {
         return wait < 60 ? "now" : "in \(duration(wait))"
     }
 
+    /// "35 min left" for an ongoing event, `relative` otherwise.
+    public static func remaining(_ e: CalendarEvent, now: Date) -> String {
+        if now >= e.start && now < e.end { return "\(duration(e.end.timeIntervalSince(now))) left" }
+        return relative(e, now: now)
+    }
+
     /// Rounded up to the minute, so "in 1 min" never shows for a meeting
     /// that already started.
     public static func duration(_ interval: TimeInterval) -> String {

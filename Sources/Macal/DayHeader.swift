@@ -1,8 +1,8 @@
 import SwiftUI
 import MacalCore
 
-/// Top bar of the popover: previous day, day title, next day, and a
-/// caption on the right.
+/// Top bar of the popover: the day title with a caption below it, and the
+/// previous and next day buttons grouped on the right.
 struct DayHeader<Info: View>: View {
     let day: Date
     let isToday: Bool
@@ -11,32 +11,33 @@ struct DayHeader<Info: View>: View {
     @ViewBuilder let info: () -> Info
 
     var body: some View {
-        HStack(spacing: 0) {
-            IconButton("chevron.left", tooltip: "Previous day") { onChange(-1) }
-            title
-            IconButton("chevron.right", tooltip: "Next day") { onChange(1) }
-            Spacer(minLength: 8)
-            info()
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-                .lineLimit(1)
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                title
+                info()
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            HStack(spacing: 0) {
+                IconButton("chevron.left", tooltip: "Previous day") { onChange(-1) }
+                IconButton("chevron.right", tooltip: "Next day") { onChange(1) }
+            }
+            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 12)
-        .padding(.vertical, 4)
+        .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.vertical, 10)
     }
 
-    /// Fixed width, sized on the widest date, so the chevrons stay put
-    /// while clicking through days. Clicking it goes back to today.
+    /// Clicking the title of another day goes back to today.
     @ViewBuilder
     private var title: some View {
-        let label = ZStack {
-            Text(DayHeaderText.widest).hidden()
-            Text(DayHeaderText.title(day))
-        }
-        .font(.headline)
-        .lineLimit(1)
+        let label = Text(DayHeaderText.title(day))
+            .font(.system(size: 15, weight: .semibold))
+            .lineLimit(1)
         if isToday {
             label
         } else {
@@ -64,7 +65,4 @@ enum DayHeaderText {
     static func title(_ date: Date) -> String {
         date.formatted(.dateTime.weekday(.wide).month(.wide).day().locale(Locale(identifier: "en_US")))
     }
-
-    /// Widest title of the year in the headline font, measured over every day.
-    static let widest = "Wednesday, September 30"
 }

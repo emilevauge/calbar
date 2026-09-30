@@ -115,7 +115,7 @@ struct SettingsView: View {
             Button {
                 run { await app.removeAccount(account.email) }
             } label: {
-                Image(systemName: "minus.circle")
+                Image(systemName: "trash")
             }
             .buttonStyle(.plain)
             .help("Remove this account")

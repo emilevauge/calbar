@@ -13,6 +13,8 @@ struct MenuView: View {
     @State private var selectedIndex = 0
     /// Day shown, in days from today. Back to 0 whenever the popover closes.
     @State private var dayOffset = 0
+    /// Today's ended events, folded by default. Folded again on close.
+    @State private var showEnded = false
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -20,12 +22,11 @@ struct MenuView: View {
         let day = DayWindow.day(offset: dayOffset, from: store.now, calendar: .current)
         // Today keeps its own presentation; other days come from the store.
         let other: DayContent? = dayOffset == 0 ? nil : store.events(for: day)
-        let rows = Self.rows(agenda, other)
+        let rows = Self.rows(agenda, other, showEnded: showEnded)
         let focusID = other == nil ? Self.focusID(agenda, now: store.now) : nil
 
         VStack(alignment: .leading, spacing: 0) {
             header(agenda, day: day, other: other)
-            Divider()
             content(agenda, day: day, other: other, rows: rows, focusID: focusID)
             Divider()
             footer
@@ -71,6 +72,7 @@ struct MenuView: View {
         }
         .onChange(of: app.popoverCloseCount) {
             showToday()
+            showEnded = false
         }
         .onChange(of: store.requestedEventID) {
             applyRequestedEvent()
@@ -86,8 +88,10 @@ struct MenuView: View {
             } else if store.isOffline, let last = store.lastFetch {
                 Label("offline · updated \(AgendaFormat.duration(store.now.timeIntervalSince(last))) ago",
                       systemImage: "wifi.slash")
-            } else if !agenda.current.isEmpty {
-                Text(agenda.current.count == 1 ? "1 left" : "\(agenda.current.count) left")
+            } else if store.isLoading {
+                Text("Today")
+            } else {
+                Text(agenda.current.isEmpty ? "Today · nothing left" : "Today · \(agenda.current.count) left")
             }
         }
     }
@@ -95,9 +99,9 @@ struct MenuView: View {
     // MARK: content
 
     /// Rows reachable with the arrow keys, in display order.
-    static func rows(_ agenda: DayAgenda, _ other: DayContent?) -> [CalendarEvent] {
+    static func rows(_ agenda: DayAgenda, _ other: DayContent?, showEnded: Bool) -> [CalendarEvent] {
         switch other {
-        case nil: agenda.current + agenda.past
+        case nil: agenda.current + (showEnded ? agenda.past : [])
         case .loaded(let listing): listing.timed
         case .loading, .failed: []
         }
@@ -134,14 +138,14 @@ struct MenuView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
                         if let other {
                             otherDayList(other, day: day)
                         } else {
                             todayList(agenda, rows: rows, focusID: focusID)
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.bottom, 8)
                 }
                 // A new day starts scrolled to the top.
                 .id(day)
@@ -168,26 +172,68 @@ struct MenuView: View {
         } else if agenda.current.isEmpty {
             endOfDay(agenda.firstTomorrow)
         }
-        ForEach(Array(rows.enumerated()), id: \.element.id) { index, event in
-            if index == agenda.current.count && !agenda.past.isEmpty {
-                sectionHeader("Ended")
+        let gaps = FreeTime.gaps(agenda.current)
+        ForEach(Array(agenda.current.enumerated()), id: \.element.id) { index, event in
+            if let gap = gaps[event.id] {
+                FreeGap(interval: gap)
             }
-            EventRow(
-                event: event,
-                now: store.now,
-                selected: index == selectedIndex,
-                expanded: event.id == focusID || expandedID == event.id,
-                isPast: index >= agenda.current.count,
-                onToggle: {
-                    // The focused meeting stays open; clicking it does nothing.
-                    guard event.id != focusID else { return }
-                    selectedIndex = index
-                    toggle(event, focusID: focusID)
-                },
-                onJoin: { join(event) }
-            )
-            .id(event.id)
+            row(event, index: index, isPast: false, focusID: focusID)
         }
+        // Ended events come after the toggle that unfolds them.
+        if !agenda.past.isEmpty {
+            endedToggle(agenda.past.count)
+            if showEnded {
+                ForEach(Array(agenda.past.enumerated()), id: \.element.id) { offset, event in
+                    row(event, index: agenda.current.count + offset, isPast: true, focusID: focusID)
+                }
+            }
+        }
+    }
+
+    /// `index` is the position in `rows`, for the keyboard selection.
+    private func row(_ event: CalendarEvent, index: Int, isPast: Bool, focusID: String?) -> some View {
+        EventRow(
+            event: event,
+            now: store.now,
+            selected: index == selectedIndex,
+            expanded: event.id == focusID || expandedID == event.id,
+            isPast: isPast,
+            isFocus: event.id == focusID,
+            onToggle: {
+                // The focused meeting stays open; clicking it does nothing.
+                guard event.id != focusID else { return }
+                selectedIndex = index
+                toggle(event, focusID: focusID)
+            },
+            onJoin: { join(event) }
+        )
+        .id(event.id)
+    }
+
+    /// Folds and unfolds today's ended events, below the upcoming ones.
+    private func endedToggle(_ count: Int) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                showEnded.toggle()
+                // The selection may point into the rows just folded.
+                if !showEnded { selectedIndex = min(selectedIndex, max(store.agenda.current.count - 1, 0)) }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .rotationEffect(.degrees(showEnded ? 90 : 0))
+                Text(count == 1 ? "1 ended earlier" : "\(count) ended earlier")
+            }
+            .font(.caption)
+            .foregroundStyle(.tertiary)
+            .padding(.leading, 14 + EventRow.timeColumnWidth + 10)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 2)
     }
 
     private func otherDayList(_ content: DayContent, day: Date) -> some View {
@@ -213,21 +259,8 @@ struct MenuView: View {
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .padding(.vertical, 10)
-    }
-
-    private func sectionHeader(_ label: String) -> some View {
-        HStack(spacing: 6) {
-            Text(label)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .textCase(.uppercase)
-            VStack { Divider() }
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 2)
     }
 
     // MARK: footer
@@ -278,7 +311,9 @@ struct MenuView: View {
         // The requested meeting is today's.
         showToday()
         expandedID = id
-        let rows = Self.rows(store.agenda, nil)
+        // A requested ended event unfolds its section.
+        if store.agenda.past.contains(where: { $0.id == id }) { showEnded = true }
+        let rows = Self.rows(store.agenda, nil, showEnded: showEnded)
         if let index = rows.firstIndex(where: { $0.id == id }) {
             selectedIndex = index
         }

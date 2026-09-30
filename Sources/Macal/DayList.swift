@@ -25,7 +25,7 @@ struct DayList: View {
                 Button("Retry", action: onRetry)
                     .controlSize(.small)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 14)
             .padding(.vertical, 8)
         case .loaded(let listing):
             if !listing.allDay.isEmpty {
@@ -34,10 +34,14 @@ struct DayList: View {
             if listing.timed.isEmpty {
                 Text(listing.isEmpty ? "No events" : "No timed events")
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 14)
                     .padding(.vertical, 10)
             }
+            let gaps = FreeTime.gaps(listing.timed)
             ForEach(Array(listing.timed.enumerated()), id: \.element.id) { index, event in
+                if let gap = gaps[event.id] {
+                    FreeGap(interval: gap)
+                }
                 EventRow(
                     event: event,
                     now: now,
@@ -54,25 +58,50 @@ struct DayList: View {
     }
 }
 
-/// All-day events as a compact list of colored titles, above the timed ones.
+/// All-day events as colored chips, above the timed ones.
 struct AllDayStrip: View {
     let events: [CalendarEvent]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        FlowLayout(spacing: 6, lineSpacing: 6) {
             ForEach(events) { event in
-                HStack(spacing: 6) {
+                let color = Color(hex: event.colorHex)
+                HStack(spacing: 5) {
                     Circle()
-                        .fill(Color(hex: event.colorHex))
-                        .frame(width: 7, height: 7)
+                        .fill(color)
+                        .frame(width: 6, height: 6)
                     Text(event.title)
                         .lineLimit(1)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption.weight(.medium))
+                .padding(.horizontal, 8)
+                .frame(height: 20)
+                .background(color.opacity(0.14), in: Capsule())
+                .help(event.title)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 14)
+        .padding(.top, 2)
+        .padding(.bottom, 8)
+    }
+}
+
+/// "2 h free" between two events far enough apart, lined up with the
+/// color bars of the rows.
+struct FreeGap: View {
+    let interval: TimeInterval
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Color.clear.frame(width: EventRow.timeColumnWidth)
+            VStack { Divider() }.frame(width: 14)
+            Text("\(AgendaFormat.duration(interval)) free")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize()
+            VStack { Divider() }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 1)
     }
 }

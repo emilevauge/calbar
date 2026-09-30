@@ -2,93 +2,247 @@ import SwiftUI
 import AppKit
 import MacalCore
 
+/// One event of the list. The meeting of the moment is a card: title,
+/// progress, a prominent Join button and its details. Every other event is
+/// a timeline row: start and end in a column, a bar in the calendar color
+/// (dashed while the invitation waits for an answer), the title, and a
+/// discreet join button; a click expands its details below.
 struct EventRow: View {
+    static let timeColumnWidth: CGFloat = 38
+
     let event: CalendarEvent
     let now: Date
     let selected: Bool
     let expanded: Bool
     let isPast: Bool
-    /// Off for days other than today: the row shows the time range only,
-    /// without "in 26 h" or the ongoing highlight.
+    /// Off for days other than today: the row shows the duration instead
+    /// of "in 26 h", and nothing is highlighted as ongoing.
     var showsRelative = true
+    /// Drawn as the card, always expanded.
+    var isFocus = false
     let onToggle: () -> Void
     let onJoin: () -> Void
 
+    private var color: Color { Color(hex: event.colorHex) }
     private var isOngoing: Bool { showsRelative && event.start <= now && now < event.end }
     /// Over and not a zero-length reminder still due: nothing to join.
     private var isOver: Bool { now >= event.end && now > event.start }
+    private var canJoin: Bool { event.meeting != nil && !isPast && !isOver }
+    private var awaitsAnswer: Bool { event.canRespond && event.selfResponse == .needsAction }
 
     var body: some View {
+        Group {
+            if isFocus { card } else { row }
+        }
+        .contextMenu { contextMenu }
+    }
+
+    // MARK: card
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 5) {
+                        if isOngoing {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 6, height: 6)
+                            Text("NOW")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.red)
+                        }
+                        Text("\(AgendaFormat.timeRange(event, calendar: .current)) · \(AgendaFormat.remaining(event, now: now))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                    }
+                    Text(event.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                if let meeting = event.meeting, canJoin {
+                    Button(action: onJoin) {
+                        Label("Join", systemImage: "video.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .frame(height: 26)
+                            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Join on \(meeting.provider.displayName)")
+                }
+            }
+            if isOngoing {
+                progress
+            }
+            EventDetail(event: event, showsMeetingLink: !canJoin)
+        }
+        .padding(12)
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+            shape.fill(color.opacity(0.07))
+            shape.strokeBorder(selected ? Color.accentColor.opacity(0.6) : color.opacity(0.22), lineWidth: 1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+    }
+
+    /// Elapsed part of the meeting, in the calendar color.
+    private var progress: some View {
+        let total = event.end.timeIntervalSince(event.start)
+        let done = total > 0 ? min(max(now.timeIntervalSince(event.start) / total, 0), 1) : 1
+        return GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.08))
+                Capsule().fill(color).frame(width: geometry.size.width * done)
+            }
+        }
+        .frame(height: 3)
+    }
+
+    // MARK: row
+
+    private var row: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 8) {
-                CalendarDot(hex: event.colorHex)
-                    .padding(.top, 2)
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(AgendaFormat.clock(event.start, .current))
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(AgendaFormat.clock(event.end, .current))
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.tertiary)
+                }
+                .monospacedDigit()
+                .frame(width: Self.timeColumnWidth, alignment: .trailing)
+
+                bar
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(event.title)
-                        .font(.body.weight(.medium))
+                        .font(.system(size: 13, weight: .medium))
+                        .strikethrough(event.selfResponse == .declined)
                         .lineLimit(expanded ? 3 : 1)
                         .truncationMode(.tail)
-
-                    HStack(spacing: 4) {
-                        Text(AgendaFormat.timeRange(event, calendar: .current))
-                            .monospacedDigit()
-                            .fixedSize()
-                            .layoutPriority(2)
-                        if showsRelative {
-                            Text("·")
-                                .fixedSize()
-                            // Only this text may shrink, so the time range and icons stay visible.
-                            Text(AgendaFormat.relative(event, now: now))
-                                .foregroundStyle(isOngoing ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
-                                .truncationMode(.tail)
-                        }
-                        if event.selfResponse == .declined {
-                            Text("· declined")
-                                .fixedSize()
-                                .layoutPriority(1)
-                        }
-                        if !expanded {
-                            metadata
-                                .fixedSize()
-                                .layoutPriority(1)
-                        }
-                    }
-                    .lineLimit(1)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    meta
                 }
 
                 Spacer(minLength: 0)
 
-                if let meeting = event.meeting, !isPast, !isOver {
+                if let meeting = event.meeting, canJoin {
                     Button(action: onJoin) {
-                        Image(systemName: "video.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 28, height: 20)
-                            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        Image(systemName: "video")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 26, height: 20)
+                            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help("Join on \(meeting.provider.displayName)")
-                    .padding(.top, 2)
+                    .padding(.top, 3)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
             .contentShape(Rectangle())
             .onTapGesture(perform: onToggle)
-            .contextMenu { contextMenu }
 
             if expanded {
-                EventDetail(event: event)
-                    .padding(.leading, 36)
-                    .padding(.trailing, 12)
+                EventDetail(event: event, showsMeetingLink: !canJoin)
+                    .padding(.leading, 14 + Self.timeColumnWidth + 10 + 3.5 + 10)
+                    .padding(.trailing, 14)
                     .padding(.bottom, 10)
             }
         }
-        .background(background)
-        .opacity(isPast ? 0.55 : 1)
+        .background {
+            if selected {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.14))
+                    .padding(.horizontal, 6)
+            }
+        }
+        .opacity(isPast ? 0.5 : 1)
+    }
+
+    /// Solid in the calendar color, dashed while the invitation waits for
+    /// an answer, like an unanswered event in Google Calendar.
+    @ViewBuilder
+    private var bar: some View {
+        let shape = RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+        Group {
+            if awaitsAnswer {
+                shape.strokeBorder(color, style: StrokeStyle(lineWidth: 1.2, dash: [2.5, 2]))
+            } else {
+                shape.fill(color.opacity(event.selfResponse == .declined ? 0.4 : 1))
+            }
+        }
+        .frame(width: 3.5)
+    }
+
+    /// Relative time or duration, then the answer state, guests,
+    /// attachments and place.
+    private var meta: some View {
+        HStack(spacing: 8) {
+            if awaitsAnswer, !isPast {
+                Text("Needs reply")
+                    .foregroundStyle(.orange)
+                    .fixedSize()
+            } else if event.selfResponse == .declined {
+                Text("Declined")
+                    .fixedSize()
+            } else if showsRelative {
+                // Only this text may shrink, so the icons stay visible.
+                Text(AgendaFormat.relative(event, now: now))
+                    .foregroundStyle(isOngoing ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+            } else {
+                Text(AgendaFormat.duration(event.end.timeIntervalSince(event.start)))
+                    .fixedSize()
+            }
+            if !expanded {
+                badges
+            }
+        }
+        .lineLimit(1)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    /// Guests, attachments and place, in the collapsed row only; the
+    /// expanded detail lists them in full.
+    @ViewBuilder
+    private var badges: some View {
+        let attendees = event.attendees
+        let attachments = event.attachments
+        if attendees.count > 1 {
+            let accepted = attendees.filter { $0.response == .accepted }.count
+            badge("person.2", "\(attendees.count)")
+                .fixedSize()
+                .help("\(attendees.count) guests · \(accepted) yes")
+        }
+        if !attachments.isEmpty {
+            badge("paperclip", attachments.count > 1 ? "\(attachments.count)" : nil)
+                .fixedSize()
+                .help(attachments.map(\.title).joined(separator: "\n"))
+        }
+        if let location = event.location, !location.isEmpty, !location.hasPrefix("http") {
+            badge("mappin", location)
+                .truncationMode(.tail)
+        }
+    }
+
+    private func badge(_ symbol: String, _ text: String?) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: symbol)
+            if let text {
+                Text(text).monospacedDigit()
+            }
+        }
     }
 
     /// Right click: answer the invitation, open the event in Google Calendar.
@@ -118,42 +272,6 @@ struct EventRow: View {
         }
     }
 
-    /// Attendee and attachment badges shown in the collapsed row; the expanded detail lists them in full.
-    @ViewBuilder
-    private var metadata: some View {
-        let attendees = event.attendees
-        let attachments = event.attachments
-        if attendees.count > 1 || !attachments.isEmpty {
-            HStack(spacing: 8) {
-                if attendees.count > 1 {
-                    let accepted = attendees.filter { $0.response == .accepted }.count
-                    HStack(spacing: 3) {
-                        Image(systemName: "person.2")
-                        Text("\(attendees.count)")
-                            .monospacedDigit()
-                    }
-                    .help("\(attendees.count) guests · \(accepted) yes")
-                }
-                if !attachments.isEmpty {
-                    HStack(spacing: 3) {
-                        Image(systemName: "paperclip")
-                        if attachments.count > 1 {
-                            Text("\(attachments.count)")
-                                .monospacedDigit()
-                        }
-                    }
-                    .help(attachments.map(\.title).joined(separator: "\n"))
-                }
-            }
-            .padding(.leading, 4)
-        }
-    }
-
-    private var background: Color {
-        if selected { return Color.accentColor.opacity(0.18) }
-        if isOngoing { return Color.accentColor.opacity(0.07) }
-        return .clear
-    }
 }
 
 /// Calendar color dot with a soft halo, same shape as Claudette's status dot.

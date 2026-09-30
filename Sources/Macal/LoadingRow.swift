@@ -11,7 +11,7 @@ struct LoadingRow: View {
             Text("Loading…")
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .padding(.vertical, 10)
     }
 }
