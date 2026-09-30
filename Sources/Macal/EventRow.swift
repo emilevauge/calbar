@@ -29,6 +29,7 @@ struct EventRow: View {
     private var isOver: Bool { now >= event.end && now > event.start }
     private var canJoin: Bool { event.meeting != nil && !isPast && !isOver }
     private var awaitsAnswer: Bool { event.canRespond && event.selfResponse == .needsAction }
+    private var isDeclined: Bool { event.selfResponse == .declined }
 
     var body: some View {
         Group {
@@ -125,7 +126,8 @@ struct EventRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(event.title)
                         .font(.system(size: 13, weight: .medium))
-                        .strikethrough(event.selfResponse == .declined)
+                        .strikethrough(isDeclined)
+                        .foregroundStyle(isDeclined ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
                         .lineLimit(expanded ? 3 : 1)
                         .truncationMode(.tail)
                     meta
@@ -167,19 +169,21 @@ struct EventRow: View {
                     .padding(.horizontal, 6)
             }
         }
-        .opacity(isPast ? 0.5 : 1)
+        .opacity(isPast || isDeclined ? 0.55 : 1)
     }
 
     /// Solid in the calendar color, dashed while the invitation waits for
-    /// an answer, like an unanswered event in Google Calendar.
+    /// an answer, hollow once declined, like Google Calendar.
     @ViewBuilder
     private var bar: some View {
         let shape = RoundedRectangle(cornerRadius: 1.5, style: .continuous)
         Group {
             if awaitsAnswer {
                 shape.strokeBorder(color, style: StrokeStyle(lineWidth: 1.2, dash: [2.5, 2]))
+            } else if isDeclined {
+                shape.strokeBorder(color, lineWidth: 1.2)
             } else {
-                shape.fill(color.opacity(event.selfResponse == .declined ? 0.4 : 1))
+                shape.fill(color)
             }
         }
         .frame(width: 3.5)
@@ -193,9 +197,13 @@ struct EventRow: View {
                 Text("Needs reply")
                     .foregroundStyle(.orange)
                     .fixedSize()
-            } else if event.selfResponse == .declined {
-                Text("Declined")
-                    .fixedSize()
+            } else if isDeclined {
+                HStack(spacing: 3) {
+                    Image(systemName: "xmark.circle")
+                    Text("Declined")
+                }
+                .foregroundStyle(.red)
+                .fixedSize()
             } else if showsRelative {
                 // Only this text may shrink, so the icons stay visible.
                 Text(AgendaFormat.relative(event, now: now))

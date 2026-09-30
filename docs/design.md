@@ -246,7 +246,8 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
   icon buttons (28 x 24 pt, tooltips "Previous day" and "Next day") grouped on a light
   background. On another day a click on the title goes back to today ("Back to today"). The
   popover goes back to today every time it closes.
-- Today: all-day events as colored chips (wrapping to several lines if needed), then ongoing
+- Today: all-day events as small colored chips on one line (those that do not fit fold into a
+  "+N" chip, which unfolds them all on wrapped lines, with a chevron to fold them back), then ongoing
   and upcoming timed events, then "N ended earlier", folded, which unfolds the past events
   dimmed below it. The ongoing meeting, or else the next one, is drawn as a card and cannot be
   collapsed. Once the timed events are over: "Nothing left today" and the first event of
@@ -269,8 +270,10 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
   right when there is a video link. An ongoing meeting has a progress bar in the calendar color.
   The details follow. Light fill and border in the calendar color, accent border when selected.
 - Row: start and end times in a 38 pt column, a 3.5 pt bar in the calendar color, the title and
-  a caption line. The bar is dashed while the invitation waits for an answer, faded for a
-  declined event, whose title is struck through. Caption: "Needs reply" in orange, "Declined",
+  a caption line. The bar is dashed while the invitation waits for an answer. A declined event
+  (shown with "Show declined events") has a hollow bar, its title struck through in the
+  secondary color, the whole row faded, and "Declined" in red with an `xmark.circle` icon.
+  Caption: "Needs reply" in orange, "Declined",
   the relative time on today ("in 12 min", "now · 18 min left", "ended") or the duration on
   other days, then in the collapsed row the guest and attachment counts and the location
   unless it is a URL. A discreet camera button on the right joins the video call.
