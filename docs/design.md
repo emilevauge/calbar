@@ -194,12 +194,15 @@ App (`Sources/Macal`):
 - An account that needs reconnecting: filled template page with a punched-out "!", above
   everything else.
 - During a meeting (the ongoing timed, not declined event that ends first): the minutes left
-  in it instead of the countdown to the next one, and the page under the band fills from left
-  to right with the elapsed part, in a 28 % tint of the ink. The next meeting still takes over
-  with its orange or red countdown once it is within the lead time, so a back-to-back meeting
-  keeps its alert.
-- During the first minutes of a meeting (from its start to start plus the linger delay, until
-  it is dismissed; joining does not count): the same in red, with or without a video link. A meeting without a
+  in it instead of the countdown to the next one, the page under the band filling from left to
+  right with the elapsed part (a 28 % tint of the ink), and a red glow around the page, like an
+  "on air" sign, from the first second to the end. The glow needs color, so this image is not a
+  template: its ink is black or white after the menu bar's appearance, redrawn when it changes.
+  The image is 4 pt wider, for the glow. The next meeting still takes over with its orange or
+  red countdown once it is within the lead time, so a back-to-back meeting keeps its alert.
+- The first minutes of a meeting (from its start to start plus the linger delay, until it is
+  dismissed; joining does not count) look the same; they only keep the join capsule and make it
+  red. A meeting without a
   link cannot be dismissed from the menu bar: the page stays red until the delay ends.
 - While a meeting with a link is due, the page is drawn inside the join capsule instead.
 

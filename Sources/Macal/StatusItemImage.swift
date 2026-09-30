@@ -39,8 +39,8 @@ enum StatusItemImage {
 
     /// `joinZoneWidth` is the width, from the image's left edge, where a
     /// click joins the meeting; 0 for the plain glyph.
-    static func make(badge: MenuBarBadge, join: Join?) -> (image: NSImage, joinZoneWidth: CGFloat) {
-        guard let join else { return (StatusBarImage.make(badge), 0) }
+    static func make(badge: MenuBarBadge, join: Join?, dark: Bool) -> (image: NSImage, joinZoneWidth: CGFloat) {
+        guard let join else { return (StatusBarImage.make(badge, dark: dark), 0) }
         return capsule(join, text: badge.text, progress: badge.progress)
     }
 

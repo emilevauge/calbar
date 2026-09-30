@@ -38,6 +38,8 @@ final class AppDelegate: NSObject, ObservableObject {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var lastRender: Render?
+    /// Redraws when the menu bar turns light or dark (wallpaper, mode).
+    private var appearanceObservation: NSKeyValueObservation?
     /// Width from the image's left edge where a click joins; 0 without capsule.
     private var joinZoneWidth: CGFloat = 0
     private var cancellables = Set<AnyCancellable>()
@@ -114,6 +116,9 @@ final class AppDelegate: NSObject, ObservableObject {
             // No plain toolTip: the hover card replaces it.
             button.setAccessibilityLabel("Macal")
             hoverCard.attach(to: button)
+            appearanceObservation = button.observe(\.effectiveAppearance) { [weak self] _, _ in
+                DispatchQueue.main.async { self?.refreshIndicators() }
+            }
         }
         statusItem = item
         hoverCard.canShow = { [weak self] in self?.popover?.isShown != true }
@@ -161,6 +166,9 @@ final class AppDelegate: NSObject, ObservableObject {
     private struct Render: Equatable {
         let badge: MenuBarBadge
         let join: StatusItemImage.Join?
+        /// The glowing in-meeting page is not a template: its ink follows
+        /// the menu bar.
+        let dark: Bool
     }
 
     private func indicatorState(now: Date) -> (badge: MenuBarBadge, queue: JoinQueue, style: CapsuleStyle?) {
@@ -183,10 +191,12 @@ final class AppDelegate: NSObject, ObservableObject {
         if let event = state.queue.primary, let style = state.style {
             capsule = StatusItemImage.Join(title: event.title, extraCount: state.queue.extraCount, style: style)
         }
-        let render = Render(badge: state.badge, join: capsule)
-        guard render != lastRender, let button = statusItem?.button else { return }
+        guard let button = statusItem?.button else { return }
+        let dark = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let render = Render(badge: state.badge, join: capsule, dark: dark)
+        guard render != lastRender else { return }
         lastRender = render
-        let (image, zone) = StatusItemImage.make(badge: render.badge, join: render.join)
+        let (image, zone) = StatusItemImage.make(badge: render.badge, join: render.join, dark: render.dark)
         button.image = image
         joinZoneWidth = zone
         button.setAccessibilityLabel(capsule.map { "Macal, Join \($0.title)" } ?? "Macal")

@@ -8,17 +8,25 @@ import MacalCore
 /// - warning: filled template glyph with "!" punched out.
 /// - soon (join window): orange outline, band and digits.
 /// - imminent (1 min or less): red outline, band and digits.
-/// - live (first minutes of a meeting): red page filling up left to right
-///   with the meeting, minutes left in it.
-/// - in a meeting: template page filling up the same way, minutes left.
+/// - in a meeting (live or not): page filling up left to right with the
+///   meeting, minutes left in it, and a red glow around it, like an "on
+///   air" sign. The glow needs color, so the page is drawn in the menu bar
+///   ink (black or white) rather than as a template.
 /// Colored states are not templates. With a joinable meeting the glyph
 /// sits inside the capsule drawn by `StatusItemImage` instead.
 enum StatusBarImage {
-    static func make(_ badge: MenuBarBadge) -> NSImage {
+    /// `dark`: the menu bar is dark, for the ink of the glowing page.
+    static func make(_ badge: MenuBarBadge, dark: Bool) -> NSImage {
+        switch badge {
+        case .live, .inMeeting:
+            return onAir(badge, ink: dark ? .white : .black)
+        default:
+            break
+        }
         let color: NSColor? = switch badge {
         case .countdown(_, .soon): .systemOrange
-        case .countdown(_, .imminent), .live: .systemRed
-        case .countdown(_, .normal), .inMeeting, .warning, .none: nil
+        case .countdown(_, .imminent): .systemRed
+        case .countdown(_, .normal), .live, .inMeeting, .warning, .none: nil
         }
         let ink: CalendarGlyph.Ink
         if let color {
@@ -34,6 +42,32 @@ enum StatusBarImage {
         image.isTemplate = color == nil
         return image
     }
+
+    /// Room for the glow on each side of the page.
+    static let glowMargin: CGFloat = 2
+
+    private static func onAir(_ badge: MenuBarBadge, ink: NSColor) -> NSImage {
+        let size = NSSize(width: 20 + 2 * glowMargin, height: 18)
+        let body = CalendarGlyph.standardBody.offsetBy(dx: glowMargin, dy: 0)
+        let image = NSImage(size: size, flipped: false) { _ in
+            NSGraphicsContext.saveGraphicsState()
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.systemRed.withAlphaComponent(0.95)
+            shadow.shadowBlurRadius = 3.2
+            shadow.shadowOffset = .zero
+            shadow.set()
+            let ring = NSBezierPath(roundedRect: body.insetBy(dx: -0.6, dy: -0.6), xRadius: 3.6, yRadius: 3.6)
+            ring.lineWidth = 1.4
+            NSColor.systemRed.setStroke()
+            // Twice: one pass of the shadow is too faint at this size.
+            ring.stroke()
+            ring.stroke()
+            NSGraphicsContext.restoreGraphicsState()
+            return CalendarGlyph.draw(badge.text, in: body, ink: .ink(ink), progress: badge.progress)
+        }
+        image.isTemplate = false
+        return image
+    }
 }
 
 /// Drawing of the calendar page, shared by the plain glyph and the capsule.
@@ -45,6 +79,8 @@ enum CalendarGlyph {
         case punched
         /// Colored outline, band and text, no background.
         case colored(NSColor)
+        /// Like `.template`, in a given color, for a non-template image.
+        case ink(NSColor)
     }
 
     /// Page rectangle in the 20 x 18 pt standalone image.
@@ -60,7 +96,7 @@ enum CalendarGlyph {
         let outline = NSBezierPath(roundedRect: body, xRadius: 3.2 * scale, yRadius: 3.2 * scale)
         let color: NSColor = switch ink {
         case .template, .punched: .black
-        case .colored(let c): c
+        case .colored(let c), .ink(let c): c
         }
 
         var textArea = body
