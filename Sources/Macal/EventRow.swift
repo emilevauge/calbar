@@ -79,7 +79,7 @@ struct EventRow: View {
                 }
             }
             if isOngoing {
-                progress
+                MeetingProgress(event: event, now: now)
             }
             EventDetail(event: event, showsMeetingLink: !canJoin)
         }
@@ -91,19 +91,6 @@ struct EventRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
-    }
-
-    /// Elapsed part of the meeting, in the calendar color.
-    private var progress: some View {
-        let total = event.end.timeIntervalSince(event.start)
-        let done = total > 0 ? min(max(now.timeIntervalSince(event.start) / total, 0), 1) : 1
-        return GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.primary.opacity(0.08))
-                Capsule().fill(color).frame(width: geometry.size.width * done)
-            }
-        }
-        .frame(height: 3)
     }
 
     // MARK: row
@@ -131,6 +118,10 @@ struct EventRow: View {
                         .lineLimit(expanded ? 3 : 1)
                         .truncationMode(.tail)
                     meta
+                    if isOngoing {
+                        MeetingProgress(event: event, now: now)
+                            .padding(.top, 3)
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -280,6 +271,41 @@ struct EventRow: View {
         }
     }
 
+}
+
+/// Elapsed part of an ongoing meeting, like Claudette's context bar:
+/// green, then yellow, orange and red as the end nears.
+struct MeetingProgress: View {
+    let event: CalendarEvent
+    let now: Date
+
+    var body: some View {
+        let total = event.end.timeIntervalSince(event.start)
+        let fraction = total > 0 ? min(max(now.timeIntervalSince(event.start) / total, 0), 1) : 1
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.secondary.opacity(0.35))
+                if fraction > 0 {
+                    Capsule()
+                        .fill(Self.color(for: fraction))
+                        .frame(width: max(2, geometry.size.width * fraction))
+                }
+            }
+        }
+        .frame(height: 3.5)
+        .help("\(AgendaFormat.duration(now.timeIntervalSince(event.start))) of \(AgendaFormat.duration(total)) · \(Int((fraction * 100).rounded()))%")
+        .accessibilityLabel("\(Int((fraction * 100).rounded())) percent elapsed")
+    }
+
+    static func color(for fraction: Double) -> Color {
+        switch fraction {
+        case ..<0.50: Color(red: 0.20, green: 0.78, blue: 0.35)
+        case ..<0.75: Color(red: 0.95, green: 0.75, blue: 0.10)
+        case ..<0.90: Color(red: 1.00, green: 0.58, blue: 0.00)
+        default: Color(red: 0.92, green: 0.26, blue: 0.21)
+        }
+    }
 }
 
 /// Calendar color dot with a soft halo, same shape as Claudette's status dot.

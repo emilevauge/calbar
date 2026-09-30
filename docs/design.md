@@ -267,7 +267,7 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
   hover card stay on today.
 - Card: "NOW" in red for an ongoing meeting, the time range and the time left ("35 min left")
   or the relative time ("in 12 min"), the title on up to 3 lines, and a "Join" button on the
-  right when there is a video link. An ongoing meeting has a progress bar in the calendar color.
+  right when there is a video link. An ongoing meeting has a progress bar (see below).
   The details follow. Light fill and border in the calendar color, accent border when selected.
 - Row: start and end times in a 38 pt column, a 3.5 pt bar in the calendar color, the title and
   a caption line. The bar is dashed while the invitation waits for an answer. A declined event
@@ -277,6 +277,9 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
   the relative time on today ("in 12 min", "now · 18 min left", "ended") or the duration on
   other days, then in the collapsed row the guest and attachment counts and the location
   unless it is a URL. A discreet camera button on the right joins the video call.
+- Progress: every ongoing meeting, card or row, and the "Now:" line of the hover card, has a
+  3.5 pt bar of the elapsed time, colored like Claudette's context bar: green below 50 %, yellow
+  below 75 %, orange below 90 %, then red. Tooltip "20 min of 45 min · 44%".
 - Details (card, or a row expanded by a click, one at a time): the "Going?" line for an
   invitation (see "Answering invitations"), the video provider when there is no Join button,
   location (opens Maps, or the URL when the location is one), organizer, guests as up to 5

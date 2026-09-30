@@ -147,16 +147,19 @@ private struct OngoingLine: View {
     let now: Date
 
     var body: some View {
-        HStack(spacing: 0) {
-            Text("Now: \(event.title)")
-                .truncationMode(.tail)
-            Text(" · \(AgendaFormat.duration(event.end.timeIntervalSince(now))) left")
-                .monospacedDigit()
-                .fixedSize()
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 0) {
+                Text("Now: \(event.title)")
+                    .truncationMode(.tail)
+                Text(" · \(AgendaFormat.duration(event.end.timeIntervalSince(now))) left")
+                    .monospacedDigit()
+                    .fixedSize()
+            }
+            .lineLimit(1)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            MeetingProgress(event: event, now: now)
         }
-        .lineLimit(1)
-        .font(.caption)
-        .foregroundStyle(.secondary)
     }
 }
 
