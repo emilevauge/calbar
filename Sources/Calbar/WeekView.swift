@@ -405,7 +405,8 @@ struct WeekView: View {
                 // ⌫ in the open card deletes the event (⌘Z in the panel undoes).
                 .focusable()
                 .focusEffectDisabled()
-                .onKeyPress(keys: [.delete, .deleteForward]) { _ in
+                .onKeyPress { press in
+                    guard MenuView.isDeleteKey(press) else { return .ignored }
                     let store = AppDelegate.shared.store
                     guard store.canDelete(event) else { NSSound.beep(); return .handled }
                     opened = nil

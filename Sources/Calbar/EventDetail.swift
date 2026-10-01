@@ -15,16 +15,19 @@ struct EventDetail: View {
             HStack(alignment: .top, spacing: 6) {
                 lines
                 Spacer(minLength: 0)
-                if let url = event.webURL {
-                    Link(destination: url) {
-                        GoogleCalendarIcon(size: 15)
-                            .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    DeleteButton(event: event)
+                    if let url = event.webURL {
+                        Link(destination: url) {
+                            GoogleCalendarIcon(size: 15)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Open in Google Calendar")
                     }
-                    .buttonStyle(.plain)
-                    .help("Open in Google Calendar")
-                    // Centers the 16 pt icon on the first caption line.
-                    .padding(.vertical, -1.5)
                 }
+                // Centers the 16 pt icons on the first caption line.
+                .padding(.vertical, -1.5)
             }
             // Notes use the full width, below the icon.
             if let notes = event.notes {
@@ -188,6 +191,32 @@ struct EventDetail: View {
         var c = URLComponents(string: "maps://")!
         c.queryItems = [URLQueryItem(name: "q", value: location)]
         if let url = c.url { NSWorkspace.shared.open(url) }
+    }
+}
+
+/// Trash beside the Google Calendar icon, on the user's own events: the
+/// event goes at once, with 10 seconds to undo from the bar above the
+/// footer.
+private struct DeleteButton: View {
+    let event: CalendarEvent
+    @ObservedObject private var store = AppDelegate.shared.store
+    @State private var hovering = false
+
+    var body: some View {
+        if store.canDelete(event) {
+            Button {
+                withAnimation(Motion.resize) { store.delete(event) }
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(hovering ? AnyShapeStyle(Color.red) : AnyShapeStyle(.secondary))
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering = $0 }
+            .help("Delete this event (⌫)")
+        }
     }
 }
 

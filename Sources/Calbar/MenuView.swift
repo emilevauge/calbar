@@ -84,8 +84,10 @@ struct MenuView: View {
             return .handled
         }
         // ⌫ deletes the selected event, ⌘Z brings back the last deleted.
-        .onKeyPress(keys: [.delete, .deleteForward]) { _ in
-            guard !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
+        // macOS sends backspace as DEL (U+007F), which `.delete` (U+0008)
+        // does not match: test the characters.
+        .onKeyPress { press in
+            guard Self.isDeleteKey(press), !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
             let event = rows[selectedIndex]
             guard store.canDelete(event) else { NSSound.beep(); return .handled }
             withAnimation(Motion.resize) { store.delete(event) }
@@ -449,6 +451,12 @@ struct MenuView: View {
         withAnimation(Motion.resize) {
             expandedID = expandedID == event.id ? nil : event.id
         }
+    }
+
+    /// Backspace or forward delete, whatever character macOS sends for it.
+    static func isDeleteKey(_ press: KeyPress) -> Bool {
+        press.key == .delete || press.key == .deleteForward
+            || press.characters == "\u{7F}" || press.characters == "\u{08}" || press.characters == "\u{F728}"
     }
 
     /// Previous or next day, or week in the week view.

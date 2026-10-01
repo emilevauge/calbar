@@ -387,8 +387,10 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   request for Meet), in the user's time zone, then refreshes. Errors show in the editor; a
   missing scope marks the account read only. Calendars stored before the access role was known
   count as writable only when primary, until the next refresh fills it.
-- Deleting: `⌫` deletes the selected row of the list, or the event whose card is open in the
-  grid; the context menu has "Delete Event". Only the user's own events (`isDeletable`: on one of
+- Deleting: a trash button beside the Google Calendar icon of the details (card, expanded row,
+  grid popover), `⌫` on the selected row of the list or in the open card of the grid (tested on
+  the characters: macOS sends backspace as DEL, U+007F, which SwiftUI's `.delete` does not
+  match), or "Delete Event" in the context menu. Only the user's own events (`isDeletable`: on one of
   their calendars, organized by them or without guests) of an account with the write scope;
   otherwise a beep. Deleting someone else's invitation would be declining it, which "Going?"
   does. The event is hidden at once and an "Undo" bar shows above the footer ("Deleted
