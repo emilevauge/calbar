@@ -291,7 +291,8 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   the year outside the current one) over "This week", "Next week" or "Last week", and the day
   picker shows the week of the picked day. The popover widens to 720 pt, animated like any
   resize. A peek always uses the day layout.
-- Week view (`WeekView`, `WeekLayout`): 7 columns from the user's first weekday, headed
+- Week view (`WeekView`, `WeekLayout`): a column per shown day ("Week view days", all 7 by
+  default, sharing the 720 pt), from the user's first weekday, headed
   "Mon 28" with today's date in an accent circle (a click shows that day in the day view), then
   the all-day area and an hour grid of 44 pt per hour, translucent like the rest of the popover.
 - All-day area (`WeekLayout.bars`): all-day events and timed events of 24 hours or more
@@ -405,8 +406,10 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
   setting is off). Footer: "Before each meeting and at its start, the
   panel shows it for a few seconds, and a Join button shows in the menu bar."
 - Display: "Show declined events" (off), "Week view from" (0 to 23, default 09:00) and "Week
-  view until" (1 to 24, default 19:00), footer "The week view shows these hours; scroll for the
-  rest of the day."
+  view until" (1 to 24, default 19:00), "Week view days": one toggle per weekday from the
+  user's first weekday (at least one stays on) with "Mon-Fri" and "All" presets, stored as
+  `Calendar` weekday numbers ("23456"). Footer "The week view shows these days and hours;
+  scroll for the rest of the day."
 - Global shortcut: "Open Calbar", default `⌃⌥M`. Recorded by `ShortcutRecorder`: click, type the
   shortcut, `esc` cancels, `delete` clears. It needs a modifier besides Shift, or a function key.
   `KeyboardShortcuts.Recorder` is not used: its placeholder reads the package's resource bundle

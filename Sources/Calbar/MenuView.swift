@@ -11,6 +11,7 @@ struct MenuView: View {
     @AppStorage(Prefs.viewModeKey) private var viewMode: ViewMode = .day
     @AppStorage(Prefs.weekStartHourKey) private var weekStartHour = 9
     @AppStorage(Prefs.weekEndHourKey) private var weekEndHour = 19
+    @AppStorage(Prefs.weekDaysKey) private var weekDaysSetting = "1234567"
 
     @State private var expandedID: String?
     @State private var selectedIndex = 0
@@ -127,7 +128,7 @@ struct MenuView: View {
     // MARK: week
 
     private func weekDays(_ day: Date) -> [Date] {
-        WeekLayout.days(containing: day, calendar: .current)
+        WeekLayout.days(containing: day, calendar: .current, shown: WeekLayout.weekdays(weekDaysSetting))
     }
 
     private func weekHeader(day: Date) -> some View {

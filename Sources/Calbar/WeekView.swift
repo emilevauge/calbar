@@ -1,7 +1,7 @@
 import SwiftUI
 import CalbarCore
 
-/// The week as an hour grid: a column per day, all-day events on top,
+/// The week as an hour grid: a column per shown day, all-day events on top,
 /// timed events as blocks placed by `WeekLayout`. The hours from
 /// `startHour` to `endHour` fill the visible height; the rest of the day
 /// is a scroll away.
@@ -48,7 +48,7 @@ struct WeekView: View {
         Color(nsColor: .labelColor).opacity(opacity)
     }
 
-    private var columnWidth: CGFloat { (Self.width - Self.gutter - 8) / 7 }
+    private var columnWidth: CGFloat { (Self.width - Self.gutter - 8) / CGFloat(max(days.count, 1)) }
 
     // MARK: headers
 

@@ -12,6 +12,20 @@ public enum WeekLayout {
         return (0..<7).map { calendar.date(byAdding: .day, value: $0, to: first) ?? first }
     }
 
+    /// The days of that week whose weekday (1 = Sunday ... 7 = Saturday,
+    /// as `Calendar`) is in `shown`. All of them when `shown` is empty, so
+    /// the view never goes blank.
+    public static func days(containing date: Date, calendar: Calendar, shown: Set<Int>) -> [Date] {
+        let all = days(containing: date, calendar: calendar)
+        let kept = all.filter { shown.contains(calendar.component(.weekday, from: $0)) }
+        return kept.isEmpty ? all : kept
+    }
+
+    /// Weekdays from a setting such as "23456" (Monday to Friday).
+    public static func weekdays(_ setting: String) -> Set<Int> {
+        Set(setting.compactMap { $0.wholeNumberValue }.filter { (1...7).contains($0) })
+    }
+
     /// "Sep 28 - Oct 4", or "Oct 5 - 11" within one month; the year is
     /// added when the week is not in the current one.
     public static func title(_ days: [Date], now: Date, calendar: Calendar) -> String {

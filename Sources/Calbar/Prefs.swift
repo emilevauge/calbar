@@ -15,6 +15,9 @@ enum Prefs {
     static let weekEndHourKey = "weekEndHour"
     /// "day" or "week".
     static let viewModeKey = "viewMode"
+    /// Weekdays the week view shows, `Calendar` numbers (1 = Sunday):
+    /// "1234567" for all, "23456" for Monday to Friday.
+    static let weekDaysKey = "weekDays"
     /// "yyyy-MM-dd" of the last day the popover opened by itself.
     static let lastDayStartOpenKey = "lastDayStartOpen"
 
@@ -29,6 +32,7 @@ enum Prefs {
             weekStartHourKey: 9,
             weekEndHourKey: 19,
             viewModeKey: "day",
+            weekDaysKey: "1234567",
         ])
     }
 

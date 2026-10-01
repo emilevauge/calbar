@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.showDeclinedKey) private var showDeclined = false
     @AppStorage(Prefs.weekStartHourKey) private var weekStartHour = 9
     @AppStorage(Prefs.weekEndHourKey) private var weekEndHour = 19
+    @AppStorage(Prefs.weekDaysKey) private var weekDays = "1234567"
     @AppStorage(Prefs.notifyBeforeMeetingsKey) private var notifyBeforeMeetings = true
     @AppStorage(Prefs.soundBeforeMeetingsKey) private var soundBeforeMeetings = true
     @AppStorage(Prefs.openPanelAtDayStartKey) private var openPanelAtDayStart = true
@@ -82,10 +83,11 @@ struct SettingsView: View {
                 Stepper(value: $weekEndHour, in: (weekStartHour + 1)...24) {
                     valueRow("Week view until", String(format: "%02d:00", weekEndHour))
                 }
+                weekDaysRow
             } header: {
                 Text("Display")
             } footer: {
-                Text("The week view shows these hours; scroll for the rest of the day.")
+                Text("The week view shows these days and hours; scroll for the rest of the day.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -229,6 +231,56 @@ struct SettingsView: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
+    }
+
+    /// One toggle per weekday, from the user's first weekday, and presets.
+    private var weekDaysRow: some View {
+        let shown = WeekLayout.weekdays(weekDays)
+        var english = Calendar(identifier: .gregorian)
+        english.locale = Locale(identifier: "en_US")
+        let symbols = english.veryShortStandaloneWeekdaySymbols
+        let first = Calendar.current.firstWeekday
+        let order = (0..<7).map { (first - 1 + $0) % 7 + 1 }
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Week view days")
+                Spacer()
+                Button("Mon-Fri") { weekDays = "23456" }
+                    .controlSize(.small)
+                    .disabled(shown == [2, 3, 4, 5, 6])
+                Button("All") { weekDays = "1234567" }
+                    .controlSize(.small)
+                    .disabled(shown.count == 7)
+            }
+            HStack(spacing: 4) {
+                ForEach(order, id: \.self) { weekday in
+                    let on = shown.contains(weekday)
+                    Button {
+                        var next = shown
+                        if on { next.remove(weekday) } else { next.insert(weekday) }
+                        // At least one day stays.
+                        guard !next.isEmpty else { return }
+                        weekDays = next.sorted().map(String.init).joined()
+                    } label: {
+                        Text(symbols[weekday - 1])
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(on ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+                            .frame(width: 26, height: 22)
+                            .background {
+                                let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                if on {
+                                    shape.fill(Color.accentColor)
+                                } else {
+                                    shape.strokeBorder(Color.primary.opacity(0.2), lineWidth: 1)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(english.standaloneWeekdaySymbols[weekday - 1])
+                }
+            }
+        }
     }
 
     /// Shown only when macOS would hide Calbar's notifications, which offer

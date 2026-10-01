@@ -96,4 +96,24 @@ import Testing
         let stacked = WeekLayout.bars(stack, days: days, calendar: calendar)
         #expect(WeekLayout.hidden(stacked, rows: 2, days: 7) == [0, 0, 2, 0, 0, 0, 0])
     }
+
+    @Test func shownWeekdaysOnly() {
+        let workdays = WeekLayout.weekdays("23456")
+        #expect(workdays == [2, 3, 4, 5, 6])
+        let days = WeekLayout.days(containing: at("12:00"), calendar: calendar, shown: workdays)
+        #expect(days.count == 5)
+        #expect(days.first == TestClock.date("2026-09-28T00:00:00+02:00"))
+        #expect(days.last == TestClock.date("2026-10-02T00:00:00+02:00"))
+        #expect(WeekLayout.days(containing: at("12:00"), calendar: calendar, shown: []).count == 7)
+        #expect(WeekLayout.weekdays("9x1") == [1])
+    }
+
+    @Test func barsOverShownDaysOnly() {
+        let days = WeekLayout.days(containing: at("12:00"), calendar: calendar, shown: WeekLayout.weekdays("23456"))
+        let weekend = CalendarEvent.fixture(id: "we", start: TestClock.date("2026-10-03T00:00:00+02:00"), minutes: 2 * 1440, allDay: true)
+        let late = CalendarEvent.fixture(id: "late", start: TestClock.date("2026-10-01T00:00:00+02:00"), minutes: 3 * 1440, allDay: true)
+        let bars = WeekLayout.bars([weekend, late], days: days, calendar: calendar)
+        #expect(bars.map(\.event.id) == ["late"])
+        #expect(bars.first.map { ($0.first, $0.last, $0.continuesAfter) } ?? (0, 0, false) == (3, 4, true))
+    }
 }
