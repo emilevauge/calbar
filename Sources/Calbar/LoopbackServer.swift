@@ -27,10 +27,13 @@ final class LoopbackServer: @unchecked Sendable {
         """
     }
 
-    init(expectedState: String) throws {
+    /// `port`: a fixed one, for providers that match the registered
+    /// redirect port and all (Zoom); any free one otherwise (Google).
+    init(expectedState: String, port: UInt16? = nil) throws {
         self.expectedState = expectedState
         let params = NWParameters.tcp
-        params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
+        params.allowLocalEndpointReuse = true
+        params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: port.flatMap(NWEndpoint.Port.init(rawValue:)) ?? .any)
         listener = try NWListener(using: params)
     }
 

@@ -14,9 +14,12 @@ public struct ZoomClient: Codable, Equatable, Sendable {
     }
 }
 
-/// Zoom sign-in, the same loopback and PKCE flow as Google's. Zoom
-/// matches a registered `http://127.0.0.1` redirect whatever the port.
+/// Zoom sign-in, the same loopback and PKCE flow as Google's, on a fixed
+/// port: Zoom compares the redirect with the registered one, port and all.
 public enum ZoomOAuth {
+    public static let redirectPort: UInt16 = 53682
+    /// What the Zoom app must have as OAuth Redirect URL and Allow List.
+    public static let redirectURI = "http://127.0.0.1:\(redirectPort)"
     public static let authorizeEndpoint = "https://zoom.us/oauth/authorize"
     public static let tokenEndpoint = URL(string: "https://zoom.us/oauth/token")!
 

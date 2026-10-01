@@ -69,7 +69,7 @@ Guest suggestions use the Google People API: enable it in the Cloud project of y
 To add Zoom meetings to the events you create, connect your own Zoom app (Calbar ships without one, as with Google):
 
 1. On [marketplace.zoom.us](https://marketplace.zoom.us), **Develop > Build App > General App**, user-managed.
-2. **OAuth Redirect URL** and **OAuth Allow List**: `http://127.0.0.1` (Zoom accepts any port on it).
+2. **OAuth Redirect URL** and **OAuth Allow List**: `http://127.0.0.1:53682`, exactly (Zoom checks the port).
 3. **Scopes**: add `meeting:write:meeting`.
 4. Copy the **Client ID** (and, if Zoom asks for it, the **Client secret**) from **App Credentials** into *Calbar > Settings > Zoom*, then **Connect Zoom…** and approve in the browser.
 

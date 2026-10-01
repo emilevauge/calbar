@@ -275,7 +275,7 @@ struct SettingsView: View {
         } header: {
             Text("Zoom")
         } footer: {
-            Text("Adds Zoom as a video call when you create an event.")
+            Text("Adds Zoom as a video call when you create an event. In your Zoom app, set the redirect URL and allow list to \(ZoomOAuth.redirectURI).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

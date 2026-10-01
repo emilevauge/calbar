@@ -241,12 +241,6 @@ App (`Sources/Calbar`):
   popover, checked every 150 ms rather than with a tracking area, which would miss the gap
   between them. A click on the icon keeps the peek off until the pointer leaves it.
 
-## Keyboard shortcuts in text fields
-
-Calbar has no menu bar (`LSUIElement`), and text fields get cut, copy, paste, select all and
-undo through the key equivalents of the Edit menu. An Edit menu that is never shown is set as
-`NSApp.mainMenu` at launch; without it `⌘V` does nothing anywhere in Calbar.
-
 ## Popover
 
 `NSStatusItem` plus `NSPopover` (transient) rather than `MenuBarExtra`, so code can open it (the
@@ -378,8 +372,8 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   and the Zoom add-on of Google Calendar runs in its web page, out of reach. So Calbar signs in
   to the user's own Zoom app (Settings > Zoom: Client ID, optional secret sent as Basic auth,
   both saved to the Keychain as they are typed;
-  the same loopback and PKCE flow as Google, Zoom matching a registered `http://127.0.0.1`
-  whatever the port; client and refresh token in the Keychain under `dev.calbar.app.zoom`,
+  the same loopback and PKCE flow as Google, but on the fixed redirect
+  `http://127.0.0.1:53682`, since Zoom compares the port too (error 4700 otherwise); client and refresh token in the Keychain under `dev.calbar.app.zoom`,
   the refresh token replaced on every refresh since Zoom rotates it, a refused one
   disconnecting). On save with Zoom, Calbar first creates a scheduled meeting
   (`POST /users/me/meetings`, scope `meeting:write:meeting`: topic, UTC start, duration, time

@@ -69,11 +69,10 @@ final class ZoomAuth: ObservableObject {
         defer { isSigningIn = false }
         do {
             let state = UUID().uuidString
-            let server = try LoopbackServer(expectedState: state)
+            let server = try LoopbackServer(expectedState: state, port: ZoomOAuth.redirectPort)
             defer { server.stop() }
-            let port = try await server.start()
-            // Zoom matches a registered http://127.0.0.1 whatever the port.
-            let redirectURI = "http://127.0.0.1:\(port)"
+            _ = try await server.start()
+            let redirectURI = ZoomOAuth.redirectURI
             let pkce = PKCE()
             NSWorkspace.shared.open(ZoomOAuth.authorizationURL(client: client, redirectURI: redirectURI,
                                                                pkce: pkce, state: state))
