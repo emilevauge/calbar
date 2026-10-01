@@ -6,9 +6,12 @@ import UserNotifications
 /// `SystemNotifications`: a standard banner when it enters its alert
 /// window, and another when it starts, which replaces the first.
 ///
-/// Inside a .app bundle it goes through `NotificationHub`: clickable, with
-/// a Join action when the meeting has a link, and withdrawn when the alert
-/// window ends or the meeting is dismissed. Without a bundle id (dev binary
+/// Inside a .app bundle it goes through `NotificationHub`: the provider and
+/// time range as subtitle, place, guests and documents in the body, the
+/// provider's badge as thumbnail, and actions: "Join Zoom" and "Copy link"
+/// with a link, "Open in Macal" and "Dismiss". A click joins, or opens the
+/// event without a link. Withdrawn when the alert window ends or the
+/// meeting is dismissed. Without a bundle id (dev binary
 /// from `swift build`) UNUserNotificationCenter crashes, so it falls back
 /// to AppleScript `display notification`: no click, no action.
 @MainActor
@@ -27,8 +30,10 @@ final class MeetingNotifier {
     private var firedAtStart: [String: Date] = [:]
 
     private static let kind = "meeting"
-    private static let categoryID = "meeting"
     private static let joinActionID = "join"
+    private static let copyActionID = "copy"
+    private static let openActionID = "open"
+    private static let dismissActionID = "dismiss"
     private static let keyInfo = "occurrenceKey"
     private static let eventIDInfo = "eventID"
 
@@ -37,17 +42,28 @@ final class MeetingNotifier {
         self.join = join
     }
 
-    /// Registers the Join category and the click handler with the hub.
+    /// One category per provider, so the Join button names it, and one
+    /// for meetings without a link.
+    private static func categoryID(_ provider: MeetingLink.Provider?) -> String {
+        provider.map { "meeting.\($0.rawValue)" } ?? "meeting.nolink"
+    }
+
+    /// Registers the categories and the click handler with the hub.
     func start() {
-        let joinAction = UNNotificationAction(identifier: Self.joinActionID, title: "Join", options: [])
-        let category = UNNotificationCategory(identifier: Self.categoryID, actions: [joinAction],
-                                              intentIdentifiers: [], options: [])
-        hub.register(kind: Self.kind, categories: [category]) { [weak self] action, info in
-            // Body click and Join both join when there is a link; a body
-            // click without a link opens the popover on the event.
-            guard let key = info[Self.keyInfo],
-                  action == UNNotificationDefaultActionIdentifier || action == Self.joinActionID else { return }
-            self?.handle(key: key, eventID: info[Self.eventIDInfo])
+        let open = UNNotificationAction(identifier: Self.openActionID, title: "Open in Macal", options: [])
+        let dismiss = UNNotificationAction(identifier: Self.dismissActionID, title: "Dismiss", options: [])
+        let copy = UNNotificationAction(identifier: Self.copyActionID, title: "Copy link", options: [])
+        var categories = MeetingLink.Provider.allCases.map { provider in
+            let join = UNNotificationAction(identifier: Self.joinActionID,
+                                            title: "Join \(provider.shortName)", options: [])
+            return UNNotificationCategory(identifier: Self.categoryID(provider), actions: [join, copy, open, dismiss],
+                                          intentIdentifiers: [], options: [])
+        }
+        categories.append(UNNotificationCategory(identifier: Self.categoryID(nil), actions: [open, dismiss],
+                                                 intentIdentifiers: [], options: []))
+        hub.register(kind: Self.kind, categories: categories) { [weak self] action, info in
+            guard let key = info[Self.keyInfo] else { return }
+            self?.handle(action: action, key: key, eventID: info[Self.eventIDInfo])
         }
     }
 
@@ -92,17 +108,22 @@ final class MeetingNotifier {
     }
 
     private func post(_ event: CalendarEvent, stage: NotificationPlanner.Stage, now: Date) {
-        let body = NotificationPlanner.body(event, now: now, calendar: .current)
+        let subtitle = NotificationPlanner.subtitle(event, calendar: .current)
+        let body = NotificationPlanner.body(event, now: now)
         guard hub.isAvailable else {
-            notifyViaAppleScript(title: event.title, body: body)
+            notifyViaAppleScript(title: event.title, body: "\(subtitle) · \(body)")
             return
         }
         let content = UNMutableNotificationContent()
         content.title = event.title
+        content.subtitle = subtitle
         content.body = body
         content.sound = .default
         content.interruptionLevel = .active
-        if event.meeting != nil { content.categoryIdentifier = Self.categoryID }
+        content.categoryIdentifier = Self.categoryID(event.meeting?.provider)
+        if let provider = event.meeting?.provider, let badge = ProviderBadge.attachment(provider) {
+            content.attachments = [badge]
+        }
         content.userInfo = [Self.keyInfo: event.occurrenceKey, Self.eventIDInfo: event.id]
         hub.post(kind: Self.kind, id: Self.identifier(event.occurrenceKey, stage), content: content)
     }
@@ -126,12 +147,25 @@ final class MeetingNotifier {
 
     // MARK: clicks
 
-    private func handle(key: String, eventID: String?) {
+    private func handle(action: String, key: String, eventID: String?) {
         let event = store.events.first { $0.occurrenceKey == key }
-        if let event, event.meeting != nil {
-            join.join(event)
-        } else if let id = event?.id ?? eventID {
-            onOpenMacal?(id)
+        let openMacal = { if let id = event?.id ?? eventID { self.onOpenMacal?(id) } }
+        switch action {
+        case UNNotificationDefaultActionIdentifier, Self.joinActionID:
+            // A click without a link opens the event instead.
+            if let event, event.meeting != nil { join.join(event) } else { openMacal() }
+        case Self.copyActionID:
+            guard let url = event?.meeting?.url else { return }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(url.absoluteString, forType: .string)
+        case Self.openActionID:
+            openMacal()
+        case Self.dismissActionID:
+            // The next update withdraws the notifications of this meeting.
+            if let event { join.dismiss(event) }
+            update(now: Date())
+        default:
+            break
         }
     }
 }

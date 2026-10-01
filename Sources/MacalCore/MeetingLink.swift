@@ -2,7 +2,7 @@ import Foundation
 
 /// Video conference link attached to an event.
 public struct MeetingLink: Equatable, Codable, Sendable {
-    public enum Provider: String, Codable, Sendable {
+    public enum Provider: String, Codable, Sendable, CaseIterable {
         case meet, zoom, teams, webex, around, whereby, other
 
         public var displayName: String {
@@ -14,6 +14,15 @@ public struct MeetingLink: Equatable, Codable, Sendable {
             case .around: return "Around"
             case .whereby: return "Whereby"
             case .other: return "Video call"
+            }
+        }
+
+        /// For a button: "Join Meet" reads better than "Join Google Meet".
+        public var shortName: String {
+            switch self {
+            case .meet: return "Meet"
+            case .other: return "call"
+            default: return displayName
             }
         }
 

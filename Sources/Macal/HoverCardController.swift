@@ -54,6 +54,9 @@ final class HoverCardController {
     private weak var button: NSStatusBarButton?
     private var panel: HoverPanel?
     private var host: NSHostingView<HoverCard>?
+    /// Measures the card: the panel's host has no sizing options, so its
+    /// own fittingSize is zero.
+    private var measurer: NSHostingController<HoverCard>?
     private var pending: Task<Void, Never>?
     private var updates: AnyCancellable?
     private var isInside = false
@@ -159,7 +162,11 @@ final class HoverCardController {
     /// glyph.
     private func layout() {
         guard let panel, let host, let button, let window = button.window else { return }
-        let size = host.fittingSize
+        let measurer = self.measurer ?? NSHostingController(rootView: host.rootView)
+        measurer.rootView = host.rootView
+        self.measurer = measurer
+        let fitted = measurer.sizeThatFits(in: CGSize(width: HoverCard.width, height: 10_000))
+        let size = CGSize(width: ceil(fitted.width), height: ceil(fitted.height))
         let icon = window.convertToScreen(button.convert(button.bounds, to: nil))
         let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? icon
         let margin: CGFloat = 8

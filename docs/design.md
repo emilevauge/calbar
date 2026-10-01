@@ -319,9 +319,16 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
   without a link, two notifications per occurrence. The first when the meeting enters its alert
   window, before its start. The second at the start, until the alert window ends (so a Mac woken
   2 min after the start still gets it); it withdraws the first. A moved meeting has a new key
-  and notifies again. Title: the event title. Body: "In 5 min · 15:00-16:00", then "Starting
-  now" (first minute) or "Started 3 min ago", plus " · Zoom" with a link. Default sound, `.active` level. With a link, a "Join" action; a click joins
-  when there is a link, otherwise opens the popover with the event expanded. Withdrawn when the
+  and notifies again. Title: the event title. Subtitle: the provider and the time range ("Zoom ·
+  15:00-16:00"), the range alone without a link. Body: "In 5 min", then "Starting now" (first
+  minute) or "Started 3 min ago", followed by the place unless it is a URL, the guests ("6
+  guests") and the attached documents ("2 docs"). Thumbnail: a badge of the provider drawn in
+  code (its color, a white camera, a "T" for Teams), written to a fresh temporary PNG for each
+  notification since the system moves the file. Default sound, `.active` level. One category
+  per provider, so the actions read "Join Zoom", "Join Meet", "Join call"..., then "Copy link",
+  "Open in Macal" and "Dismiss"; without a link, "Open in Macal" and "Dismiss". A click joins
+  when there is a link, otherwise opens the popover with the event expanded. "Dismiss" works
+  like the capsule's: it withdraws the notifications and hides the join capsule. Withdrawn when the
   meeting is dismissed or its alert window ends. Setting "Notify before a meeting", on by
   default.
 - A dev binary (no bundle id) cannot use `UNUserNotificationCenter`: meeting notifications fall

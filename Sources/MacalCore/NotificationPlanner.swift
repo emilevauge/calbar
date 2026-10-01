@@ -56,11 +56,28 @@ public enum NotificationPlanner {
         min(e.start.addingTimeInterval(policy.lingerAfterStart), e.end)
     }
 
-    /// "In 5 min · 15:00-16:00", plus " · Zoom" when there is a link.
-    /// From the start: "Starting now", then "Started 3 min ago".
-    public static func body(_ e: CalendarEvent, now: Date, calendar: Calendar) -> String {
-        var parts = [when(e, now: now), AgendaFormat.timeRange(e, calendar: calendar)]
-        if let meeting = e.meeting { parts.append(meeting.provider.displayName) }
+    /// "Zoom · 15:00-16:00", or the time range alone without a link.
+    public static func subtitle(_ e: CalendarEvent, calendar: Calendar) -> String {
+        let range = AgendaFormat.timeRange(e, calendar: calendar)
+        guard let meeting = e.meeting else { return range }
+        return "\(meeting.provider.displayName) · \(range)"
+    }
+
+    /// "In 5 min", then from the start "Starting now" or "Started 3 min
+    /// ago"; followed by the place (unless it is a URL), the guests and the
+    /// attached documents: "In 5 min · Room 4 · 6 guests · 2 docs".
+    public static func body(_ e: CalendarEvent, now: Date) -> String {
+        var parts = [when(e, now: now)]
+        if let place = e.location?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !place.isEmpty, !place.lowercased().hasPrefix("http") {
+            parts.append(place)
+        }
+        if e.attendees.count > 1 { parts.append("\(e.attendees.count) guests") }
+        switch e.attachments.count {
+        case 0: break
+        case 1: parts.append("1 doc")
+        case let n: parts.append("\(n) docs")
+        }
         return parts.joined(separator: " · ")
     }
 
