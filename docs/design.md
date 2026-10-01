@@ -1,6 +1,6 @@
-# Macal design
+# Calbar design
 
-Macal is a native macOS menu bar app. It shows the Google Calendar events of the day across
+Calbar is a native macOS menu bar app. It shows the Google Calendar events of the day across
 several Google accounts, and alerts before each meeting with its video link. Its structure comes
 from Claudette (`~/dev/claudette`), a sibling app by the same author on the same stack.
 
@@ -9,7 +9,7 @@ This document describes the current behaviour. The code is the reference when th
 ## Decisions
 
 - Data source: the Google Calendar API, live, through OAuth, with any number of accounts.
-- Alert: the join link is part of the Macal menu bar item (a single `NSStatusItem`), plus a
+- Alert: the join link is part of the Calbar menu bar item (a single `NSStatusItem`), plus a
   standard macOS notification when a meeting enters its alert window, and another when it
   starts.
 - Menu bar: an icon only. It shows the time left before the next meeting of the day, or during
@@ -19,7 +19,7 @@ This document describes the current behaviour. The code is the reference when th
   whatever the system language.
 - Distribution: a DMG on GitHub Releases, signed ad hoc or with a local self-signed identity,
   updated in place by the app. The DMG never contains a Google OAuth client: each user creates
-  their own and imports its JSON file into Macal.
+  their own and imports its JSON file into Calbar.
 
 ## Stack
 
@@ -29,12 +29,12 @@ This document describes the current behaviour. The code is the reference when th
 - One dependency: `KeyboardShortcuts` (sindresorhus), for the global shortcut. Its `Recorder`
   view is not used, see "Settings".
 - No Google SDK: OAuth and REST are written by hand on `URLSession`.
-- Two targets: `MacalCore`, the pure logic, tested with Swift Testing (`MacalCoreTests`), and
-  `Macal`, the app.
+- Two targets: `CalbarCore`, the pure logic, tested with Swift Testing (`CalbarCoreTests`), and
+  `Calbar`, the app.
 
 ## Components
 
-Core (`Sources/MacalCore`), no AppKit:
+Core (`Sources/CalbarCore`), no AppKit:
 
 - `GoogleOAuth`, `OAuthClient`, `PKCE`: authorization URL, callback parsing, token requests and
   responses, email from the `id_token`. Secrets and tokens are redacted from `description`.
@@ -51,7 +51,7 @@ Core (`Sources/MacalCore`), no AppKit:
 - `RSVPPatch`, `JSONValue`: the PATCH body, `{"attendees": [...]}`, built from the attendee list
   Google returned, kept as raw JSON objects, with only the `responseStatus` of the attendee
   flagged `self` changed.
-- `GoogleModels`: wire formats reduced to the fields Macal uses. Cancelled events and
+- `GoogleModels`: wire formats reduced to the fields Calbar uses. Cancelled events and
   "working location" markers are dropped, meeting rooms are removed from the attendees, an
   empty title becomes "(No title)". All-day dates are local midnights. Each event keeps its raw
   Google id (`googleEventID`), derived from the end of the composite id for events cached before
@@ -79,7 +79,7 @@ Core (`Sources/MacalCore`), no AppKit:
   of the latest release, check cooldown and notification deduplication, and the installer
   script of the self-updater.
 
-App (`Sources/Macal`):
+App (`Sources/Calbar`):
 
 - `AppDelegate`: status item, popover, account actions, OAuth client import.
 - `GoogleAuth`, `LoopbackServer`, `Keychain`: browser sign-in and access tokens.
@@ -94,7 +94,7 @@ App (`Sources/Macal`):
 
 ## Google OAuth client
 
-- Macal ships without a client. Until one is configured, the popover shows "Macal needs a Google
+- Calbar ships without a client. Until one is configured, the popover shows "Calbar needs a Google
   OAuth client", a short explanation, an "Import google-oauth.json…" button and a "How to create
   one" link to the README section on GitHub. The settings "Accounts" section has "Import OAuth
   client…" (or "Replace OAuth client…" once one is set), with the client ID shortened as
@@ -102,7 +102,7 @@ App (`Sources/Macal`):
 - The import opens an `NSOpenPanel` limited to JSON files. The file is read with
   `OAuthClient.load(json:)`, which accepts only a "Desktop app" client (`installed` key) with a
   non-empty ID and secret. A valid file is copied, unchanged, to
-  `~/Library/Application Support/Macal/google-oauth.json`, created with permissions 0600 and
+  `~/Library/Application Support/Calbar/google-oauth.json`, created with permissions 0600 and
   swapped in atomically. An invalid file changes nothing and shows an error under the button.
 - The new client is used at once, without a restart: `AppDelegate.auth` (published) and
   `EventStore.auth` get a new `GoogleAuth`, a sign-in in progress is cancelled, and a refresh
@@ -110,10 +110,10 @@ App (`Sources/Macal`):
   account is marked "needs reconnect", since its refresh token belongs to the old client. The
   same client ID keeps the accounts working.
 - Lookup at launch: the imported file first, then `google-oauth.json` in the
-  `Macal_Macal.bundle` next to a dev binary (`Sources/Macal/Resources/google-oauth.json`,
+  `Calbar_Calbar.bundle` next to a dev binary (`Sources/Calbar/Resources/google-oauth.json`,
   git-ignored). The resource bundle is found by hand rather than with `Bundle.module`, whose
   generated accessor aborts the process when the bundle is missing, as in the release app.
-- `make-app.sh` copies no SwiftPM resource bundle into `Macal.app`, and fails if any file named
+- `make-app.sh` copies no SwiftPM resource bundle into `Calbar.app`, and fails if any file named
   `google-oauth*.json` ends up inside the bundle.
 
 ## Sign-in and tokens
@@ -125,16 +125,16 @@ App (`Sources/Macal`):
   token, and `login_hint` when reconnecting an account.
 - Scopes: `openid email https://www.googleapis.com/auth/calendar.readonly
   https://www.googleapis.com/auth/calendar.events`. `calendar.readonly` reads the calendar list,
-  which `calendar.events` does not cover; `calendar.events` lets Macal change an event, and
-  Macal only uses it to answer invitations.
+  which `calendar.events` does not cover; `calendar.events` lets Calbar change an event, and
+  Calbar only uses it to answer invitations.
 - The scopes Google granted (the `scope` field of the token response) are saved with the account
   at sign-in and on every token refresh. An account without `calendar.events` (or the full
-  `calendar` scope) is read-only: signed in before Macal asked for it, or with the box unticked
+  `calendar` scope) is read-only: signed in before Calbar asked for it, or with the box unticked
   on the consent screen.
-- The browser page after the redirect says "Macal is connected." or "Sign-in refused.". The
+- The browser page after the redirect says "Calbar is connected." or "Sign-in refused.". The
   wait gives up after 5 minutes, and "Cancel" stops it.
 - One refresh token per account in the login keychain (service
-  `dev.macal.app.google-refresh-token`), updated in place so a failed write never loses the
+  `dev.calbar.app.google-refresh-token`), updated in place so a failed write never loses the
   previous token. Access tokens stay in memory with one minute of margin before expiry, and are
   refreshed once after a 401.
 - Removing an account revokes its refresh token and deletes it.
@@ -149,7 +149,7 @@ App (`Sources/Macal`):
   so a new account or a toggled calendar is picked up.
 - Offline means no account got an answer from Google. The previous events stay on screen and
   alerts keep working on them. A failed account or calendar keeps its previous events.
-- Today's and tomorrow's events are cached in `~/Library/Application Support/Macal/events.json`
+- Today's and tomorrow's events are cached in `~/Library/Application Support/Calbar/events.json`
   and shown at launch before the first refresh. An account never fetched yet shows "Loading…"
   instead of an empty day.
 - New calendars start disabled, except each account's primary calendar. The user turns the
@@ -220,11 +220,11 @@ App (`Sources/Macal`):
   native URL exists and the app is installed. Left click on the calendar page toggles the
   popover. The capsule stays until the linger delay ends, so the link is still there to rejoin.
 - Right click or control-click: a menu with, for each due meeting, its title and time range,
-  "Join", one item per attachment, "Dismiss"; then "Open Macal", which opens the popover with
+  "Join", one item per attachment, "Dismiss"; then "Open Calbar", which opens the popover with
   the meeting expanded. Without a due meeting, a right click toggles the popover.
 - Only "Dismiss" removes a meeting from the capsule and the red page. Dismissed meetings are kept
   in memory per occurrence: a relaunch during the window shows them again.
-- Accessibility label: "Macal", or "Macal, Join <title>" while a meeting is due.
+- Accessibility label: "Calbar", or "Calbar, Join <title>" while a meeting is due.
 
 ## Hover
 
@@ -233,7 +233,7 @@ App (`Sources/Macal`):
   whole day". The meeting is the one the join capsule is about, else the ongoing one, else the
   next of today; once the day is over, "Nothing left today" and the first event of tomorrow. A
   red "An account needs to be reconnected" line comes first when needed.
-- A peek does not activate Macal, so the keyboard stays with the current app. A click on the
+- A peek does not activate Calbar, so the keyboard stays with the current app. A click on the
   icon, or on the card outside its buttons, expands it to the whole day with an animation and
   gives it the keyboard. It closes 0.4 s after the pointer has left both the icon and the
   popover, checked every 150 ms rather than with a tracking area, which would miss the gap
@@ -242,7 +242,7 @@ App (`Sources/Macal`):
 ## Popover
 
 `NSStatusItem` plus `NSPopover` (transient) rather than `MenuBarExtra`, so code can open it (the
-global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt high.
+global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt high.
 - Size and motion: the popover fits its content. `PopoverHost` holds a plain hosting view in a
   container without constraints and, on each layout pass, sets the popover's `contentSize` to
   the view's intrinsic size inside an `NSAnimationContext` of 0.25 s ease-in-out. Every change
@@ -305,7 +305,7 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
   its account. Initials colors come from the email, so a person keeps the same color.
 - Keyboard: `↑` `↓` move the selection, `←` `→` change the day, `↵` expands, `⌘↵` joins, `esc`
   closes. `⌘R` refreshes, `⌘,` opens the settings, `⌘Q` quits.
-- Empty states: "Macal needs a Google OAuth client" (see above), or "No Google account connected"
+- Empty states: "Calbar needs a Google OAuth client" (see above), or "No Google account connected"
   with a "Connect a Google account" button.
 - Footer: refresh, Google Calendar home (pinned to the first account), settings, quit.
 - Day start: at the first activity of the day (launch, wake, screen unlock, return to the
@@ -322,7 +322,7 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
 - `NotificationHub` is the only `UNUserNotificationCenter` delegate. It asks for `[.alert, .sound]`
   at launch, keeps one registry of categories, and routes each response to the handler of the
   notification's kind (`meeting` or `update`, stored in the userInfo). Banners also show while
-  Macal is the active app.
+  Calbar is the active app.
 - Meetings (`MeetingPeeker`, `NotificationPlanner`): no system notification. For timed, not
   declined events, with or without a link, the popover opens in peek mode on the meeting
   twice per occurrence: when it enters its alert window, before its start, and at the start,
@@ -340,21 +340,21 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
 
 ## Updates
 
-- `UpdateChecker` asks `https://api.github.com/repos/emilevauge/macal/releases/latest` at launch,
+- `UpdateChecker` asks `https://api.github.com/repos/emilevauge/calbar/releases/latest` at launch,
   then every 24 hours and on wake, at most once per 24 hours (a check that did not reach GitHub
   does not count). Only in a .app bundle: a dev binary has no version to compare.
 - The tag ("v0.2.0" or "0.2.0") is compared with `CFBundleShortVersionString` component by
-  component, a pre-release suffix ignored. A newer version posts "Macal 0.2.0 is available" once
+  component, a pre-release suffix ignored. A newer version posts "Calbar 0.2.0 is available" once
   per version, with an "Update" action and a "Release notes" action. A click on the body opens
   the release page.
-- "Update" (from the notification or from the settings) runs `SelfUpdater` with the `Macal.dmg`
+- "Update" (from the notification or from the settings) runs `SelfUpdater` with the `Calbar.dmg`
   asset (https only). It refuses a dev binary, an app running translocated from the DMG or
   Downloads, and a folder it cannot write to. It downloads the DMG, writes the helper script of
   `SelfUpdateScript` in a temporary folder, starts it detached with zsh and quits. The script
-  waits for Macal to exit (10 s at most), mounts the DMG read-only, checks that it holds a
-  `Macal.app` with its executable, moves the installed app to a backup, copies the new one, puts
+  waits for Calbar to exit (10 s at most), mounts the DMG read-only, checks that it holds a
+  `Calbar.app` with its executable, moves the installed app to a backup, copies the new one, puts
   the backup back if the copy fails, removes the quarantine flag, detaches the DMG, relaunches
-  Macal and deletes its folder. Failures show as a notification, or under the button in the
+  Calbar and deletes its folder. Failures show as a notification, or under the button in the
   settings. A release without a DMG opens the release page instead.
 
 ## Settings
@@ -374,19 +374,19 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
   setting is off). Footer: "Before each meeting and at its start, the
   panel shows it for a few seconds, and a Join button shows in the menu bar."
 - Display: "Show declined events" (off).
-- Global shortcut: "Open Macal", default `⌃⌥M`. Recorded by `ShortcutRecorder`: click, type the
+- Global shortcut: "Open Calbar", default `⌃⌥M`. Recorded by `ShortcutRecorder`: click, type the
   shortcut, `esc` cancels, `delete` clears. It needs a modifier besides Shift, or a function key.
   `KeyboardShortcuts.Recorder` is not used: its placeholder reads the package's resource bundle
   through `Bundle.module`, which aborts the released app on any Mac other than the build one.
-- Startup: "Launch at login" (a user LaunchAgent `dev.macal.app` pointing at the running
-  executable, repointed at launch when the recorded binary is gone or when Macal runs from
+- Startup: "Launch at login" (a user LaunchAgent `dev.calbar.app` pointing at the running
+  executable, repointed at launch when the recorded binary is gone or when Calbar runs from
   `/Applications`), "Open the panel at the start of the day" (on).
 - About, always last: version, "Check for updates" with "Up to date", "0.2.0 is available" or an
-  error, "Update to 0.2.0 now" and "Release notes" when newer; when macOS blocks Macal's
+  error, "Update to 0.2.0 now" and "Release notes" when newer; when macOS blocks Calbar's
   notifications, an orange "Update notifications are off" with "Open System Settings" (the
   Notifications pane), or before the first answer "Notifications not allowed yet" with
   "Allow…", read each time the settings open; license MIT, source link
-  github.com/emilevauge/macal, "© 2026 Emile Vauge".
+  github.com/emilevauge/calbar, "© 2026 Emile Vauge".
 
 ## Errors
 
@@ -399,13 +399,34 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
 - No network: the cache stays on screen with "offline · updated N min ago"; alerts continue.
 - An API error on one calendar keeps the other calendars, and that calendar's previous events.
 
+## Renamed from Macal
+
+The app was Macal up to 0.2.9 (bundle id `dev.macal.app`, repository `emilevauge/macal`, now
+`emilevauge/calbar`; GitHub redirects the old API URLs). `LegacyMacal`:
+- Transition: Macal's updater fetches the release asset `Macal.dmg`, requires an executable
+  `Macal.app/Contents/MacOS/Macal`, and installs it in place of `Macal.app`. `make-app.sh`
+  therefore also builds `Macal.dmg`: Calbar as `Macal.app`, with a `Macal` symlink to the
+  `Calbar` executable, signed again. Every release carries it, for Macs that skip versions.
+- Relocation: launched from a bundle named `Macal.app`, Calbar copies itself to a sibling
+  `Calbar.app`, starts it once this process has quit (one second later, quarantine flag
+  removed), and exits before the single-instance check.
+- Migration, once (`migratedFromMacal`), before any store reads its data: quit a running
+  Macal; copy every key of Macal's defaults domain not set yet, the global shortcut under its
+  new name; copy each account's refresh token from the `dev.macal.app.google-refresh-token`
+  Keychain service (macOS asks once per item); copy `google-oauth.json` (0600) and
+  `events.json` from `Application Support/Macal`; replace a Macal LaunchAgent with Calbar's.
+  Macal's data is left in place, so going back still works.
+- Cleanup, at each launch: a `Macal.app` next to Calbar, Macal itself or the transition copy,
+  goes to the Trash.
+- Notification permission is per bundle id: macOS asks again, for update notifications.
+
 ## Packaging
 
-`make-app.sh` builds in release, assembles `Macal.app` (bundle id `dev.macal.app`, version
-0.1.0, build 1, `LSUIElement`, icon rendered by `Macal --generate-icon` then `sips` and
+`make-app.sh` builds in release, assembles `Calbar.app` (bundle id `dev.calbar.app`, version
+0.1.0, build 1, `LSUIElement`, icon rendered by `Calbar --generate-icon` then `sips` and
 `iconutil`), checks that no OAuth client file is inside, signs with the identity in
-`MACAL_SIGN_IDENTITY` (default "Claudette Dev") or ad hoc when it is missing, registers the app
-with LaunchServices, and builds `Macal.dmg` (volume "Macal", with an `Applications` link).
+`CALBAR_SIGN_IDENTITY` (default "Claudette Dev") or ad hoc when it is missing, registers the app
+with LaunchServices, and builds `Calbar.dmg` (volume "Calbar", with an `Applications` link).
 `--install` also copies the app to `/Applications`.
 
 A single instance runs at a time: a copy started while another with the same bundle id runs
@@ -413,7 +434,7 @@ exits at once.
 
 ## Tests
 
-`MacalCoreTests`, Swift Testing, covering the core: OAuth URLs, callbacks and token parsing,
+`CalbarCoreTests`, Swift Testing, covering the core: OAuth URLs, callbacks and token parsing,
 OAuth client file lookup and masking, Calendar API pagination and encoding, the RSVP request
 (method, URL, body with unknown attendee fields kept, scope errors), granted scopes, Google models,
 merging and deduplication, refresh merging, link extraction, HTML text, day windows and

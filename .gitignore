@@ -3,9 +3,9 @@
 Package.resolved
 DerivedData/
 *.xcodeproj
-Macal.app/
+Calbar.app/
 .DS_Store
-Macal.app.zip
+Calbar.app.zip
 *.dmg
 .claude/settings.local.json
-Sources/Macal/Resources/google-oauth.json
+Sources/Calbar/Resources/google-oauth.json

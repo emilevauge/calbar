@@ -2,34 +2,34 @@
 import PackageDescription
 
 let package = Package(
-    name: "Macal",
+    name: "Calbar",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Macal", targets: ["Macal"])
+        .executable(name: "Calbar", targets: ["Calbar"])
     ],
     dependencies: [
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts.git", from: "2.0.0")
     ],
     targets: [
         .target(
-            name: "MacalCore",
-            path: "Sources/MacalCore"
+            name: "CalbarCore",
+            path: "Sources/CalbarCore"
         ),
         .executableTarget(
-            name: "Macal",
+            name: "Calbar",
             dependencies: [
-                "MacalCore",
+                "CalbarCore",
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts")
             ],
-            path: "Sources/Macal",
+            path: "Sources/Calbar",
             resources: [
                 .process("Resources")
             ]
         ),
         .testTarget(
-            name: "MacalCoreTests",
-            dependencies: ["MacalCore"],
-            path: "Tests/MacalCoreTests"
+            name: "CalbarCoreTests",
+            dependencies: ["CalbarCore"],
+            path: "Tests/CalbarCoreTests"
         )
     ]
 )
