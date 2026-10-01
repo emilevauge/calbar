@@ -41,6 +41,9 @@ struct EventEditor: View {
     @ObservedObject var contacts: ContactBook
     @ObservedObject var zoom: ZoomAuth
     let onDone: () -> Void
+    /// In place of an event's card or row, at its width, rather than in
+    /// a popover of its own.
+    let embedded: Bool
 
     @State private var title = ""
     @State private var start: Date
@@ -63,24 +66,32 @@ struct EventEditor: View {
     @State private var chosenCalendar: String?
     @State private var chosenConference: String?
     @FocusState private var titleFocused: Bool
+    /// `esc` with changes: asks before throwing them away.
+    @State private var confirmingDiscard = false
+    /// The fields as the editor opened, to tell whether anything changed.
+    @State private var initialFields = ""
 
     /// A new event from `start` to `end`.
     init(start: Date, end: Date, composer: EventComposer, onDone: @escaping () -> Void) {
-        self.init(mode: .create, start: start, end: end, composer: composer, onDone: onDone)
+        self.init(mode: .create, start: start, end: end, composer: composer, onDone: onDone, embedded: false)
     }
 
     /// Changes `event`, or prepares a copy of it.
-    init(_ mode: Mode, composer: EventComposer, onDone: @escaping () -> Void) {
+    init(_ mode: Mode, composer: EventComposer, embedded: Bool = false, onDone: @escaping () -> Void) {
         switch mode {
-        case .create: self.init(mode: mode, start: Date(), end: Date().addingTimeInterval(1800), composer: composer, onDone: onDone)
+        case .create:
+            self.init(mode: mode, start: Date(), end: Date().addingTimeInterval(1800), composer: composer,
+                      onDone: onDone, embedded: embedded)
         case .edit(let event), .duplicate(let event):
-            self.init(mode: mode, start: event.start, end: event.end, composer: composer, onDone: onDone, from: event)
+            self.init(mode: mode, start: event.start, end: event.end, composer: composer, onDone: onDone,
+                      embedded: embedded, from: event)
         }
     }
 
     private init(mode: Mode, start: Date, end: Date, composer: EventComposer, onDone: @escaping () -> Void,
-                 from event: CalendarEvent? = nil) {
+                 embedded: Bool, from event: CalendarEvent? = nil) {
         self.mode = mode
+        self.embedded = embedded
         self.composer = composer
         self.contacts = composer.contacts
         self.zoom = composer.zoom
@@ -135,12 +146,21 @@ struct EventEditor: View {
                 card(color)
             }
         }
-        .frame(width: 360)
-        .padding(.vertical, 6)
+        .frame(width: embedded ? nil : 360)
+        .padding(.vertical, embedded ? 0 : 6)
         .onAppear {
             contacts.prepare()
+            initialFields = fields
             titleFocused = true
         }
+        // `esc` closes only after asking when something was typed: the
+        // popover would otherwise go, and the event with it.
+        .onKeyPress(.escape) {
+            cancel()
+            return .handled
+        }
+        .onExitCommand(perform: cancel)
+        .onChange(of: AppDelegate.shared.store.editorCancelCount) { cancel() }
     }
 
     // MARK: parts
@@ -318,6 +338,17 @@ struct EventEditor: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.leading, 20)
             }
+            if confirmingDiscard {
+                HStack(spacing: 6) {
+                    Text(original == nil ? "Discard this event?" : "Discard your changes?")
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 0)
+                    Button("Keep Editing") { withAnimation(Motion.resize) { confirmingDiscard = false } }
+                    Button("Discard", role: .destructive, action: onDone)
+                }
+                .controlSize(.small)
+                .padding(.leading, 20)
+            }
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -331,6 +362,24 @@ struct EventEditor: View {
                 .frame(width: 14)
             content()
             Spacer(minLength: 0)
+        }
+    }
+
+    /// Every field the user can change, as one string.
+    private var fields: String {
+        [title, "\(start.timeIntervalSince1970)", "\(end.timeIntervalSince1970)", location, notes,
+         guests.map(\.email).joined(separator: ","), repeatRule.rawValue, chosenConference ?? "", chosenCalendar ?? "",
+         scope.rawValue].joined(separator: "\u{1F}")
+    }
+
+    /// `esc`: closes when nothing changed or on a second `esc`, otherwise
+    /// asks first.
+    private func cancel() {
+        guard !busy else { return }
+        if fields == initialFields || confirmingDiscard {
+            onDone()
+        } else {
+            withAnimation(Motion.resize) { confirmingDiscard = true }
         }
     }
 

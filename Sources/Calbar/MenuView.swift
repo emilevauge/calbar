@@ -66,20 +66,24 @@ struct MenuView: View {
         .focusEffectDisabled()
         .focused($focused)
         .onKeyPress(.downArrow) {
+            guard store.editRequest == nil else { return .ignored }
             selectedIndex = min(selectedIndex + 1, max(rows.count - 1, 0))
             return .handled
         }
         .onKeyPress(.upArrow) {
+            guard store.editRequest == nil else { return .ignored }
             selectedIndex = max(selectedIndex - 1, 0)
             return .handled
         }
         // Up and down move the selection; left and right change the day,
         // or the week in the week view.
         .onKeyPress(.leftArrow) {
+            guard store.editRequest == nil else { return .ignored }
             step(-1)
             return .handled
         }
         .onKeyPress(.rightArrow) {
+            guard store.editRequest == nil else { return .ignored }
             step(1)
             return .handled
         }
@@ -87,7 +91,7 @@ struct MenuView: View {
         // macOS sends backspace as DEL (U+007F), which `.delete` (U+0008)
         // does not match: test the characters.
         .onKeyPress { press in
-            guard Self.isDeleteKey(press), !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
+            guard Self.isDeleteKey(press), store.editRequest == nil, !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
             let event = rows[selectedIndex]
             guard store.canDelete(event) else { NSSound.beep(); return .handled }
             withAnimation(Motion.resize) { store.deleteFromKey(event) }
@@ -100,6 +104,11 @@ struct MenuView: View {
             return .handled
         }
         .onKeyPress(.escape) {
+            // An editor in the panel asks before closing.
+            if store.editRequest != nil {
+                store.cancelEditing()
+                return .handled
+            }
             if store.askingDeleteScope != nil {
                 withAnimation(Motion.resize) { store.askingDeleteScope = nil }
                 return .handled
@@ -108,7 +117,7 @@ struct MenuView: View {
             return .handled
         }
         .onKeyPress(keys: [.return]) { press in
-            guard !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
+            guard store.editRequest == nil, !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
             let event = rows[selectedIndex]
             if press.modifiers.contains(.command) {
                 join(event)

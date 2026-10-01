@@ -205,12 +205,12 @@ private struct EventActions: View {
     var body: some View {
         if store.canEdit(event) {
             ActionIcon(symbol: "pencil", help: "Edit this event") {
-                store.editRequest = .init(eventID: event.id, duplicate: false)
+                store.edit(event)
             }
         }
         if !AppDelegate.shared.accounts.writableCalendars.isEmpty {
             ActionIcon(symbol: "plus.square.on.square", help: "Duplicate this event") {
-                store.editRequest = .init(eventID: event.id, duplicate: true)
+                store.duplicate(event)
             }
         }
         if store.canDelete(event) {

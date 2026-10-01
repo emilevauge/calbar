@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import CalbarCore
 
 /// Events of today and tomorrow for every enabled calendar. Polls Google
@@ -492,6 +493,23 @@ final class EventStore: ObservableObject {
         let duplicate: Bool
     }
     @Published var editRequest: EditRequest?
+    /// Bumped by `esc` in the panel while an editor sits in it: the
+    /// editor asks before closing.
+    @Published private(set) var editorCancelCount = 0
+
+    func cancelEditing() { editorCancelCount += 1 }
+
+    func edit(_ event: CalendarEvent) {
+        withAnimation(Motion.resize) { editRequest = .init(eventID: event.id, duplicate: false) }
+    }
+
+    func duplicate(_ event: CalendarEvent) {
+        editRequest = .init(eventID: event.id, duplicate: true)
+    }
+
+    func endEditing() {
+        withAnimation(Motion.resize) { editRequest = nil }
+    }
     static let undoDelay: Duration = .seconds(10)
 
     private func isBeingDeleted(_ event: CalendarEvent) -> Bool {
@@ -659,6 +677,7 @@ final class EventStore: ObservableObject {
 
     /// Declined events answered while the popover was open leave the list.
     func popoverDidClose() {
+        editRequest = nil
         recentlyAnswered = recentlyAnswered.intersection(pendingAnswers)
     }
 

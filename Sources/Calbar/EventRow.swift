@@ -35,19 +35,21 @@ struct EventRow: View {
 
     var body: some View {
         Group {
-            if isFocus { card } else { row }
+            // Editing happens in place of the card or row; a copy is a
+            // new event, in a popover beside it.
+            if let request = store.editRequest, request.eventID == event.id, !request.duplicate {
+                EventEditor(.edit(event), composer: AppDelegate.shared.composer, embedded: true,
+                            onDone: store.endEditing)
+            } else if isFocus {
+                card.contextMenu { contextMenu }
+            } else {
+                row.contextMenu { contextMenu }
+            }
         }
-        .contextMenu { contextMenu }
-        // The editor of this event or of its copy, asked from its details
-        // or its context menu.
-        .popover(isPresented: Binding(get: { store.editRequest?.eventID == event.id }, set: { shown in
+        .popover(isPresented: Binding(get: { store.editRequest == .init(eventID: event.id, duplicate: true) }, set: { shown in
             if !shown, store.editRequest?.eventID == event.id { store.editRequest = nil }
         }), arrowEdge: .leading) {
-            if let request = store.editRequest {
-                EventEditor(request.duplicate ? .duplicate(event) : .edit(event),
-                            composer: AppDelegate.shared.composer,
-                            onDone: { store.editRequest = nil })
-            }
+            EventEditor(.duplicate(event), composer: AppDelegate.shared.composer, onDone: { store.editRequest = nil })
         }
     }
 
@@ -283,10 +285,10 @@ struct EventRow: View {
         }
         Divider()
         if store.canEdit(event) {
-            Button("Edit Event…") { store.editRequest = .init(eventID: event.id, duplicate: false) }
+            Button("Edit Event…") { store.edit(event) }
         }
         if !AppDelegate.shared.accounts.writableCalendars.isEmpty {
-            Button("Duplicate Event…") { store.editRequest = .init(eventID: event.id, duplicate: true) }
+            Button("Duplicate Event…") { store.duplicate(event) }
         }
         if store.canDelete(event) {
             if event.isRecurring {

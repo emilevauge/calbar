@@ -394,7 +394,11 @@ struct WeekView: View {
         .buttonStyle(.plain)
         .foregroundStyle(Self.ink(past || declined ? 0.55 : 1))
         .help("\(event.title)\n\(AgendaFormat.timeRange(event, calendar: .current))")
-        .popover(isPresented: Binding(get: { opened == event.id }, set: { if !$0 { opened = nil } }),
+        .popover(isPresented: Binding(get: { opened == event.id }, set: { shown in
+            guard !shown else { return }
+            opened = nil
+            if AppDelegate.shared.store.editRequest?.eventID == event.id { AppDelegate.shared.store.editRequest = nil }
+        }),
                  arrowEdge: .trailing) {
             EventRow(event: event, now: now, selected: false, expanded: true, isPast: past,
                      showsRelative: Calendar.current.isDateInToday(event.start), isFocus: true,
@@ -405,8 +409,8 @@ struct WeekView: View {
                 .focusable()
                 .focusEffectDisabled()
                 .onKeyPress { press in
-                    guard MenuView.isDeleteKey(press) else { return .ignored }
                     let store = AppDelegate.shared.store
+                    guard MenuView.isDeleteKey(press), store.editRequest == nil else { return .ignored }
                     guard store.canDelete(event) else { NSSound.beep(); return .handled }
                     opened = nil
                     withAnimation(Motion.resize) { store.deleteFromKey(event) }

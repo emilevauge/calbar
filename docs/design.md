@@ -354,12 +354,15 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   used is remembered), "Google Meet" (remembered, on by default), the repetition
   (`RepeatRule`: does not repeat, daily, every weekday, weekly on the start's day, every 2
   weeks, monthly on the nth weekday or on the day, "the last" for a fifth weekday, annually;
-  one `RRULE:` line, no end), guests, location, description. `↵` saves; `esc` or a click
-  outside closes it.
+  one `RRULE:` line, no end), guests, location, description. `↵` saves. `esc` closes it when
+  nothing changed; otherwise "Discard this event?" (or "your changes") with Keep Editing and
+  Discard, a second `esc` discarding. A click outside closes it.
 - Editing and duplicating (`EventEditor.Mode`): the pencil and the copy icon beside the trash
   in the details, or "Edit Event…" and "Duplicate Event…" in the context menu, set
-  `EventStore.editRequest`; the `EventRow` of that event opens the editor in a popover on
-  itself. Edit is offered on the same events as delete. The editor is filled from the event:
+  `EventStore.editRequest`; the `EventRow` of that event shows the editor in place of its card
+  or row (in the panel, or in the grid's popover, which stays open), and the editor of a copy
+  in a popover on itself. While an editor is in the panel, its arrow, `⌫` and `↵` shortcuts
+  stand aside. Edit is offered on the same events as delete. The editor is filled from the event:
   title, times (an all-day event shows its day alone, "All day, 3 days"), guests but the
   user, location, the description as plain text. Editing keeps the calendar (no move) and an
   existing video link; a recurring occurrence gets "This event | All events" instead of the
