@@ -338,7 +338,11 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   ghost block that follows the pointer, labelled "10:00-11:30", from the quarter hour under the
   press to the quarter hour past the pointer (`NewEvent.range`, 15 min at least, within the
   day); a plain click makes it 30 minutes. On release the editor opens in a popover on the
-  ghost, as an event's card opens on its block, so the main popover stays open. It is laid out
+  ghost, as an event's card opens on its block, so the main popover stays open. Blocks and the
+  ghost are placed with padding, not `offset`, which moves the drawing but not the frame a
+  popover anchors on. A new selection replaces the one being edited; the editor opens once a
+  popover still closing (0.35 s) is gone, since SwiftUI drops a presentation made during that
+  animation. It is laid out
   as that card, in the same tinted box: day, start and end times with the duration where the
   card has its time range, each a small chip that opens a popover. The day opens the same
   month calendar as the header (`DayPicker`); a time opens a scrolling list of quarter hours

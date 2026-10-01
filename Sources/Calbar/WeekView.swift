@@ -27,6 +27,9 @@ struct WeekView: View {
     /// The slot of a new event while it is dragged out, then while its
     /// editor is open (`editing`).
     @State private var draft: Draft?
+    /// When the last editor popover closed: presenting the next one during
+    /// its closing animation would be dropped.
+    @State private var editorClosedAt = Date.distantPast
 
     struct Draft {
         let day: Date
@@ -244,19 +247,29 @@ struct WeekView: View {
                 .gesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .local)
                         .onChanged { value in
-                            guard composer != nil, draft?.editing != true else { return }
+                            // A new selection replaces one being edited.
+                            guard composer != nil else { return }
                             let r = NewEvent.range(from: value.startLocation.y / minuteHeight,
                                                    to: value.location.y / minuteHeight,
                                                    dragThreshold: 8 / minuteHeight)
                             draft = Draft(day: day, start: r.start, end: r.end, editing: false)
                         }
                         .onEnded { value in
-                            guard let composer, draft?.editing != true else { return }
+                            guard let composer else { return }
                             let r = NewEvent.range(from: value.startLocation.y / minuteHeight,
                                                    to: value.location.y / minuteHeight,
                                                    dragThreshold: 8 / minuteHeight)
                             composer.contacts.prepare()
-                            draft = Draft(day: day, start: r.start, end: r.end, editing: true)
+                            let selection = Draft(day: day, start: r.start, end: r.end, editing: false)
+                            draft = selection
+                            // Wait out a popover still closing (this click may
+                            // have closed it), then open the editor.
+                            let wait = max(0.05, 0.35 - Date().timeIntervalSince(editorClosedAt))
+                            DispatchQueue.main.asyncAfter(deadline: .now() + wait) {
+                                guard let current = draft, current.day == selection.day,
+                                      current.start == selection.start, current.end == selection.end else { return }
+                                draft = Draft(day: day, start: r.start, end: r.end, editing: true)
+                            }
                         }
                 )
             if case .loading = content {
@@ -269,7 +282,10 @@ struct WeekView: View {
                 // 1 pt inset all round: back-to-back blocks get a gap.
                 block(p, height: max(CGFloat(p.endMinute - p.startMinute) * minuteHeight - 2, 14))
                     .frame(width: width - 2)
-                    .offset(x: 1 + CGFloat(p.lane) * width, y: CGFloat(p.startMinute) * minuteHeight + 1)
+                    // Padding, not offset: an offset moves the drawing but
+                    // not the frame a popover anchors on.
+                    .padding(.leading, 1 + CGFloat(p.lane) * width)
+                    .padding(.top, CGFloat(p.startMinute) * minuteHeight + 1)
             }
             if today {
                 nowLine(day, minuteHeight: minuteHeight)
@@ -296,16 +312,21 @@ struct WeekView: View {
                     .padding(.top, 2)
             }
             .frame(width: columnWidth - 3, height: max(CGFloat(draft.end - draft.start) * minuteHeight - 2, 10))
-            .offset(x: 1, y: CGFloat(draft.start) * minuteHeight + 1)
             .allowsHitTesting(false)
             // The editor, in a popover on the slot like an event's card.
-            .popover(isPresented: Binding(get: { self.draft?.editing == true }, set: { if !$0 { self.draft = nil } }),
-                     arrowEdge: .trailing) {
+            .popover(isPresented: Binding(get: { self.draft?.editing == true }, set: { shown in
+                guard !shown else { return }
+                self.draft = nil
+                editorClosedAt = Date()
+            }), arrowEdge: .trailing) {
                 if let composer {
                     EventEditor(start: start, end: end, calendars: composer.calendars, contacts: composer.contacts,
                                 onCreate: composer.create, onDone: { self.draft = nil })
                 }
             }
+            // After the popover, so it anchors on the slot itself.
+            .padding(.leading, 1)
+            .padding(.top, CGFloat(draft.start) * minuteHeight + 1)
     }
 
     /// Red line at the current time, with a dot on the left.
