@@ -112,9 +112,10 @@ public struct CalendarAPI: Sendable {
     }
 
     /// Adds an event, with a Google Meet link when `NewEvent.addMeet`.
-    /// `sendUpdates=all` would invite guests; there are none yet.
+    /// `sendUpdates=all` emails the invitation to the guests.
     public func insert(token: String, event: NewEvent) async throws {
         var query: [URLQueryItem] = []
+        if !event.guests.isEmpty { query.append(URLQueryItem(name: "sendUpdates", value: "all")) }
         if event.addMeet { query.append(URLQueryItem(name: "conferenceDataVersion", value: "1")) }
         _ = try await send("POST", "/calendars/\(FormEncoding.escape(event.calendarID))/events",
                            query: query, body: try event.body(), token: token)

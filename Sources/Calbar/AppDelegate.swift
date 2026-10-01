@@ -35,6 +35,8 @@ final class AppDelegate: NSObject, ObservableObject {
     @Published private(set) var isPeeking = false
     /// Closes the peeking popover once the pointer has left it and the icon.
     private var peekWatch: Task<Void, Never>?
+    /// The "New Event" window.
+    private let editor = EventEditorWindow()
 
     private var signInTask: Task<Void, Never>?
     /// Tells a finished sign-in whether a newer one replaced it.
@@ -297,6 +299,13 @@ final class AppDelegate: NSObject, ObservableObject {
 
     func closePopover() {
         popover?.performClose(nil)
+    }
+
+    /// Opens the "New Event" window on a slot selected on the hour grid.
+    func compose(start: Date, end: Date) {
+        editor.show(start: start, end: end, calendars: accounts.writableCalendars) { [store] event, email in
+            try await store.create(event, in: email)
+        }
     }
 
     /// The meeting a timed peek was opened on; nil for a hover peek.

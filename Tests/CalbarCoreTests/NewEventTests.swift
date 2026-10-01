@@ -55,4 +55,21 @@ import Testing
         #expect(NewEvent.range(from: 600, to: 612) == (600, 615))
         #expect(NewEvent.range(from: 1400, to: 1500) == (1395, 1440))
     }
+
+    @Test func detailsInTheBody() throws {
+        let e = NewEvent(title: "Review", start: start, end: start.addingTimeInterval(1800), calendarID: "c",
+                         addMeet: false, location: " Room 4 ", notes: "Agenda", guests: ["a@example.com"])
+        let j = try json(e)
+        #expect(j["location"] as? String == "Room 4")
+        #expect(j["description"] as? String == "Agenda")
+        #expect((j["attendees"] as? [[String: String]])?.first?["email"] == "a@example.com")
+        let bare = try json(NewEvent(title: "x", start: start, end: start, calendarID: "c", addMeet: false, location: "  "))
+        #expect(bare["location"] == nil && bare["description"] == nil && bare["attendees"] == nil)
+    }
+
+    @Test func guestsFromText() {
+        #expect(NewEvent.guests(from: "a@example.com, B <b@example.org>; c@x.io\nnot-an-email a@example.com")
+            == ["a@example.com", "b@example.org", "c@x.io"])
+        #expect(NewEvent.guests(from: "").isEmpty)
+    }
 }

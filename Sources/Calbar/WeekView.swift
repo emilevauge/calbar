@@ -19,15 +19,14 @@ struct WeekView: View {
     static let width: CGFloat = 720
     /// 720 pt for the week; the popover's width for one day.
     var width: CGFloat = Self.width
-    /// Calendars a click on an empty slot can add an event to, and how.
-    /// No creation without `onCreate`.
-    var calendars: [WritableCalendar] = []
-    var onCreate: ((NewEvent, String) async throws -> Void)?
+    /// Opens the editor on a slot selected on the grid. No creation
+    /// without it.
+    var onCompose: ((Date, Date) -> Void)?
     static let gutter: CGFloat = 40
     static let hourHeight: CGFloat = 44
     @State private var opened: String?
-    /// The slot of a new event, while it is dragged out and once the form
-    /// is open (`editing`).
+    /// The slot of a new event while it is dragged out, and while its
+    /// editor opens (`editing`).
     @State private var draft: Draft?
 
     struct Draft {
@@ -246,18 +245,22 @@ struct WeekView: View {
                 .gesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .local)
                         .onChanged { value in
-                            guard onCreate != nil, draft?.editing != true else { return }
+                            guard onCompose != nil else { return }
                             let r = NewEvent.range(from: value.startLocation.y / minuteHeight,
                                                    to: value.location.y / minuteHeight,
                                                    dragThreshold: 8 / minuteHeight)
                             draft = Draft(day: day, start: r.start, end: r.end, editing: false)
                         }
                         .onEnded { value in
-                            guard onCreate != nil, draft?.editing != true else { return }
+                            guard let onCompose else { return }
                             let r = NewEvent.range(from: value.startLocation.y / minuteHeight,
                                                    to: value.location.y / minuteHeight,
                                                    dragThreshold: 8 / minuteHeight)
                             draft = Draft(day: day, start: r.start, end: r.end, editing: true)
+                            onCompose(day.addingTimeInterval(TimeInterval(r.start * 60)),
+                                      day.addingTimeInterval(TimeInterval(r.end * 60)))
+                            // The ghost fades once the editor window is up.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { draft = nil }
                         }
                 )
             if case .loading = content {
@@ -298,13 +301,7 @@ struct WeekView: View {
             }
             .frame(width: columnWidth - 3, height: max(CGFloat(draft.end - draft.start) * minuteHeight - 2, 10))
             .offset(x: 1, y: CGFloat(draft.start) * minuteHeight + 1)
-            .allowsHitTesting(draft.editing)
-            .popover(isPresented: Binding(get: { self.draft?.editing == true }, set: { if !$0 { self.draft = nil } }),
-                     arrowEdge: .trailing) {
-                NewEventForm(start: start, end: end, calendars: calendars,
-                             onCreate: { event, email in try await onCreate?(event, email) },
-                             onDone: { self.draft = nil })
-            }
+            .allowsHitTesting(false)
     }
 
     /// Red line at the current time, with a dot on the left.

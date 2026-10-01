@@ -7,17 +7,35 @@ public struct NewEvent: Equatable, Sendable {
     public var end: Date
     public var calendarID: String
     public var addMeet: Bool
+    public var location: String
+    public var notes: String
+    /// Guest emails; Google sends them the invitation.
+    public var guests: [String]
     /// IANA name, so Google shows the times in the user's zone.
     public var timeZone: String
 
     public init(title: String, start: Date, end: Date, calendarID: String, addMeet: Bool,
+                location: String = "", notes: String = "", guests: [String] = [],
                 timeZone: String = TimeZone.current.identifier) {
         self.title = title
         self.start = start
         self.end = end
         self.calendarID = calendarID
         self.addMeet = addMeet
+        self.location = location
+        self.notes = notes
+        self.guests = guests
         self.timeZone = timeZone
+    }
+
+    /// Emails in free text, separated by commas, semicolons, spaces or
+    /// new lines; "Name <email>" keeps the email. Duplicates dropped.
+    public static func guests(from text: String) -> [String] {
+        var seen = Set<String>()
+        return text
+            .split(whereSeparator: { ",; \n\t".contains($0) })
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "<>\"'()")) }
+            .filter { $0.contains("@") && $0.contains(".") && seen.insert($0.lowercased()).inserted }
     }
 
     /// "(No title)" for a blank title, like Google Calendar.
@@ -34,6 +52,11 @@ public struct NewEvent: Equatable, Sendable {
             "start": ["dateTime": GoogleDate.rfc3339(start), "timeZone": timeZone],
             "end": ["dateTime": GoogleDate.rfc3339(end), "timeZone": timeZone],
         ]
+        let place = location.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !place.isEmpty { json["location"] = place }
+        let text = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty { json["description"] = text }
+        if !guests.isEmpty { json["attendees"] = guests.map { ["email": $0] } }
         if addMeet {
             json["conferenceData"] = ["createRequest": [
                 "requestId": requestID,

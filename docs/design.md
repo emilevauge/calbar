@@ -333,19 +333,22 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
 - Progress: every ongoing meeting, card or row, has a
   3.5 pt bar of the elapsed time, colored like Claudette's context bar: green below 50 %, yellow
   below 75 %, orange below 90 %, then red. Tooltip "20 min of 45 min · 44%".
-- Creating an event (`NewEventForm`, `NewEvent`): in the week view or the day grid, pressing on
-  an empty slot (outside the blocks) and dragging, up or down, marks out a ghost block that
-  follows the pointer, labelled "10:00-11:30", from the quarter hour under the press to the
-  quarter hour past the pointer (`NewEvent.range`, 15 min at least, within the day); a plain
-  click makes it 30 minutes. On release a form opens in a popover: title ("New event"
-  placeholder, focused, "(No title)" when left blank), the day ("Wed, Sep 30"), start and end
-  times with the duration beside them (moving the start keeps the duration), the calendar (the writable calendars, `accessRole` owner or writer,
-  of the accounts with the write scope, grouped by account, primary first; the last one used
-  is remembered), and "Add a Google Meet link" (remembered, on by default). `↵` creates, `esc`
-  cancels. Calbar posts `events.insert` (with `conferenceDataVersion=1` and a
-  `hangoutsMeet` create request for Meet), in the user's time zone, then refreshes. Errors
-  show in the form; a missing scope marks the account read only. Calendars stored before the
-  access role was known count as writable only when primary, until the next refresh fills it.
+- Creating an event (`EventEditor`, `EventEditorWindow`, `NewEvent`): in the week view or the
+  day grid, pressing on an empty slot (outside the blocks) and dragging, up or down, marks out
+  a ghost block that follows the pointer, labelled "10:00-11:30", from the quarter hour under
+  the press to the quarter hour past the pointer (`NewEvent.range`, 15 min at least, within the
+  day); a plain click makes it 30 minutes. On release a "New Event" window opens (floating,
+  centered, one at a time) with: the title ("Add title", focused, "(No title)" when left
+  blank); the day, start and end times with the duration (moving the start keeps the duration,
+  changing the day moves both); the calendar (the writable calendars, `accessRole` owner or
+  writer, of the accounts with the write scope, grouped by account, primary first; the last
+  one used is remembered); "Add a Google Meet link" (remembered, on by default); guests as
+  emails in free text ("Name <email>" works, duplicates dropped), who get the invitation
+  (`sendUpdates=all`); location; description. `↵` in the title or Save creates, `esc` cancels.
+  Calbar posts `events.insert` (with `conferenceDataVersion=1` and a `hangoutsMeet` create
+  request for Meet), in the user's time zone, then refreshes. Errors show in the window; a
+  missing scope marks the account read only. Calendars stored before the access role was known
+  count as writable only when primary, until the next refresh fills it.
 - Details (card, or a row expanded by a click, one at a time): the "Going?" line for an
   invitation (see "Answering invitations"), the video provider when there is no Join button,
   location (opens Maps, or the URL when the location is one), organizer, guests as up to 5

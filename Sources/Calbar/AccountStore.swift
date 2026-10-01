@@ -108,3 +108,12 @@ final class AccountStore: ObservableObject {
         UserDefaults.standard.set(try? JSONEncoder().encode(accounts), forKey: Self.defaultsKey)
     }
 }
+
+extension AccountStore {
+    /// Calendars of the accounts allowed to write, that accept new events.
+    var writableCalendars: [WritableCalendar] {
+        accounts.filter(\.canReply).flatMap { account in
+            account.calendars.filter(\.isWritable).map { WritableCalendar(email: account.email, calendar: $0) }
+        }
+    }
+}
