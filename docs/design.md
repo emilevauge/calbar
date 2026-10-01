@@ -340,7 +340,10 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   day); a plain click makes it 30 minutes. On release the editor opens in a popover on the
   ghost, as an event's card opens on its block, so the main popover stays open. It is laid out
   as that card, in the same tinted box: day, start and end times with the duration where the
-  card has its time range (moving the start keeps the duration, changing the day moves both),
+  card has its time range, each a small chip that opens a popover. The day opens the same
+  month calendar as the header (`DayPicker`); a time opens a scrolling list of quarter hours
+  (`TimeList`) centered on the current one, the end times with the duration each gives
+  ("15:30 1 h 15 min", up to 24 hours). A new start keeps the duration, a new day both hours;
   the title ("Add title", focused, "(No title)" when left blank), Save where the card has Join,
   then caption lines with an icon: the calendar (the writable calendars, `accessRole` owner or
   writer, of the accounts with the write scope, grouped by account, primary first; the last one

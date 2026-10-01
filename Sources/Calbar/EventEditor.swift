@@ -123,27 +123,41 @@ struct EventEditor: View {
     }
 
     /// Day, start and end, and the duration, in the caption of a card.
+    /// The day opens the same month calendar as the header; each time
+    /// opens a list of quarter hours, as in Google Calendar.
     private var times: some View {
-        HStack(spacing: 4) {
-            DatePicker("Day", selection: dayBinding, displayedComponents: .date)
-                .labelsHidden()
-                .datePickerStyle(.field)
-            DatePicker("Start", selection: $start, displayedComponents: .hourAndMinute)
-                .labelsHidden()
-                .datePickerStyle(.field)
-                // Moving the start keeps the duration.
-                .onChange(of: start) { old, new in end = end.addingTimeInterval(new.timeIntervalSince(old)) }
+        HStack(spacing: 2) {
+            PopoverField(label: DayHeaderText.shortTitle(start), help: "Pick the day") { close in
+                DayPicker(day: start, isToday: Calendar.current.isDateInToday(start), onPick: { day in
+                    dayBinding.wrappedValue = day
+                    close()
+                }, onToday: {
+                    dayBinding.wrappedValue = Date()
+                    close()
+                })
+            }
+            PopoverField(label: AgendaFormat.clock(start, .current), help: "Start time") { close in
+                TimeList(options: TimeList.day(of: start), selection: start, reference: nil) { picked in
+                    let duration = end.timeIntervalSince(start)
+                    start = picked
+                    end = picked.addingTimeInterval(duration)
+                    close()
+                }
+            }
             Text("-")
-            DatePicker("End", selection: $end, in: start.addingTimeInterval(5 * 60)..., displayedComponents: .hourAndMinute)
-                .labelsHidden()
-                .datePickerStyle(.field)
+            PopoverField(label: AgendaFormat.clock(end, .current), help: "End time") { close in
+                TimeList(options: TimeList.after(start), selection: end, reference: start) { picked in
+                    end = picked
+                    close()
+                }
+            }
             Text("· \(AgendaFormat.duration(end.timeIntervalSince(start)))")
                 .fixedSize()
+                .padding(.leading, 2)
         }
         .font(.caption)
         .foregroundStyle(.secondary)
         .monospacedDigit()
-        .controlSize(.small)
     }
 
     private var details: some View {
@@ -392,5 +406,94 @@ private struct GuestField: View {
         }
         text = ""
         highlighted = 0
+    }
+}
+
+/// A caption-sized value that opens its picker in a popover: the day or a
+/// time of the event editor.
+private struct PopoverField<Content: View>: View {
+    let label: String
+    let help: String
+    @ViewBuilder let content: (_ close: @escaping () -> Void) -> Content
+    @State private var open = false
+    @State private var hovering = false
+
+    var body: some View {
+        Button { open.toggle() } label: {
+            Text(label)
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 5)
+                .frame(height: 18)
+                .background(Color.primary.opacity(open || hovering ? 0.1 : 0.05),
+                            in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            content { open = false }
+        }
+    }
+}
+
+/// Quarter hours in a scrolling list, opened on the current choice. With
+/// a `reference` (the start), each end time shows the duration it gives.
+struct TimeList: View {
+    let options: [Date]
+    let selection: Date
+    let reference: Date?
+    let onPick: (Date) -> Void
+
+    /// Every quarter hour of `date`'s day.
+    static func day(of date: Date) -> [Date] {
+        let start = Calendar.current.startOfDay(for: date)
+        return (0..<96).map { start.addingTimeInterval(TimeInterval($0 * 900)) }
+    }
+
+    /// From a quarter hour after `start` to 24 hours later.
+    static func after(_ start: Date) -> [Date] {
+        (1...96).map { start.addingTimeInterval(TimeInterval($0 * 900)) }
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(options, id: \.self) { option in
+                        row(option).id(option)
+                    }
+                }
+                .padding(4)
+            }
+            .frame(width: reference == nil ? 90 : 160, height: 220)
+            .onAppear {
+                let target = options.min { abs($0.timeIntervalSince(selection)) < abs($1.timeIntervalSince(selection)) }
+                if let target { proxy.scrollTo(target, anchor: .center) }
+            }
+        }
+    }
+
+    private func row(_ option: Date) -> some View {
+        let selected = abs(option.timeIntervalSince(selection)) < 60
+        return Button { onPick(option) } label: {
+            HStack(spacing: 6) {
+                Text(AgendaFormat.clock(option, .current))
+                    .fontWeight(selected ? .semibold : .regular)
+                if let reference {
+                    Text(AgendaFormat.duration(option.timeIntervalSince(reference)))
+                        .foregroundStyle(selected ? AnyShapeStyle(.white.opacity(0.85)) : AnyShapeStyle(.secondary))
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 12))
+            .monospacedDigit()
+            .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(selected ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
