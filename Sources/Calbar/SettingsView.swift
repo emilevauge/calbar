@@ -252,7 +252,7 @@ struct SettingsView: View {
             } else {
                 TextField("Client ID", text: $zoomClientID)
                     .onChange(of: zoomClientID) { _, id in zoom.save(clientID: id, clientSecret: zoomSecret) }
-                SecureField("Client secret (optional)", text: $zoomSecret)
+                SecureField("Client secret", text: $zoomSecret)
                     .onChange(of: zoomSecret) { _, secret in zoom.save(clientID: zoomClientID, clientSecret: secret) }
                 HStack {
                     if zoom.isSigningIn {
@@ -265,7 +265,8 @@ struct SettingsView: View {
                             .font(.caption)
                         Spacer()
                         Button("Connect Zoom…") { zoom.connect(clientID: zoomClientID, clientSecret: zoomSecret) }
-                            .disabled(zoomClientID.trimmingCharacters(in: .whitespaces).isEmpty)
+                            .disabled(zoomClientID.trimmingCharacters(in: .whitespaces).isEmpty
+                                      || zoomSecret.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 }
             }

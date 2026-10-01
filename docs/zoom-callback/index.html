@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calbar · Zoom</title>
+<meta name="referrer" content="no-referrer">
+<style>
+  body { font: 15px -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; margin-top: 20vh; color: #333; }
+  @media (prefers-color-scheme: dark) { body { background: #1e1e1e; color: #ddd; } }
+</style>
+</head>
+<body>
+<h2>Back to Calbar…</h2>
+<p id="note">If nothing happens, check that Calbar is running.</p>
+<script>
+  // Zoom only redirects to an https page; this one hands the code and
+  // state to Calbar's local listener, and only there.
+  (function () {
+    var q = window.location.search;
+    if (!/[?&](code|error)=/.test(q)) {
+      document.getElementById("note").textContent = "This page is used by Calbar to connect Zoom.";
+      return;
+    }
+    window.location.replace("http://127.0.0.1:53682/" + q);
+  })();
+</script>
+</body>
+</html>

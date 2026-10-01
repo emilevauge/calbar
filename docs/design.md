@@ -370,10 +370,13 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
 - Video call (`ZoomAuth`, `ZoomOAuth`, `ZoomAPI`): "No video call", "Google Meet" or, once Zoom
   is connected, "Zoom", remembered (`newEventConference`). Google's API only creates Meet links,
   and the Zoom add-on of Google Calendar runs in its web page, out of reach. So Calbar signs in
-  to the user's own Zoom app (Settings > Zoom: Client ID, optional secret sent as Basic auth,
-  both saved to the Keychain as they are typed;
-  the same loopback and PKCE flow as Google, but on the fixed redirect
-  `http://127.0.0.1:53682`, since Zoom compares the port too (error 4700 otherwise); client and refresh token in the Keychain under `dev.calbar.app.zoom`,
+  to the user's own Zoom app (Settings > Zoom: Client ID and secret, sent as Basic auth, both
+  saved to the Keychain as they are typed). Zoom redirects only to https (a loopback address
+  only for PKCE public apps, error 4700 otherwise), so the redirect is
+  `https://emilevauge.github.io/calbar/zoom-callback/`, a static GitHub Pages page
+  (`docs/zoom-callback/`) that forwards the query, code and state, to Calbar's listener on
+  `http://127.0.0.1:53682` and nowhere else; the state is checked there as for Google, with
+  PKCE as well. Client and refresh token in the Keychain under `dev.calbar.app.zoom`,
   the refresh token replaced on every refresh since Zoom rotates it, a refused one
   disconnecting). On save with Zoom, Calbar first creates a scheduled meeting
   (`POST /users/me/meetings`, scope `meeting:write:meeting`: topic, UTC start, duration, time

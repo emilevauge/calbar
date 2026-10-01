@@ -14,12 +14,15 @@ public struct ZoomClient: Codable, Equatable, Sendable {
     }
 }
 
-/// Zoom sign-in, the same loopback and PKCE flow as Google's, on a fixed
-/// port: Zoom compares the redirect with the registered one, port and all.
+/// Zoom sign-in. Zoom only redirects to https (a loopback address only
+/// for PKCE public apps), so the redirect is a static page of the
+/// project's site that forwards the code to Calbar's listener on a fixed
+/// local port. The code exchange then needs the app's secret.
 public enum ZoomOAuth {
+    /// Port of the local listener the callback page forwards to.
     public static let redirectPort: UInt16 = 53682
     /// What the Zoom app must have as OAuth Redirect URL and Allow List.
-    public static let redirectURI = "http://127.0.0.1:\(redirectPort)"
+    public static let redirectURI = "https://emilevauge.github.io/calbar/zoom-callback/"
     public static let authorizeEndpoint = "https://zoom.us/oauth/authorize"
     public static let tokenEndpoint = URL(string: "https://zoom.us/oauth/token")!
 
