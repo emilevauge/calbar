@@ -5,7 +5,9 @@ import Security
 /// to the file-based login keychain (no `kSecUseDataProtectionKeychain`),
 /// which works for an unsigned SwiftPM binary without entitlements.
 enum Keychain {
-    private static let service = "dev.calbar.app.google-refresh-token"
+    static let service = "dev.calbar.app.google-refresh-token"
+    /// Zoom's client and refresh token.
+    static let zoomService = "dev.calbar.app.zoom"
 
     struct Failure: Error {
         let status: OSStatus
@@ -13,15 +15,15 @@ enum Keychain {
 
     /// Updates the item in place, or adds it when missing, so a failed
     /// write never loses the previous token.
-    static func save(_ secret: String, account: String) throws {
+    static func save(_ secret: String, account: String, service: String = Keychain.service) throws {
         let data = Data(secret.utf8)
-        let status = SecItemUpdate(query(account) as CFDictionary,
+        let status = SecItemUpdate(query(account, service: service) as CFDictionary,
                                    [kSecValueData as String: data] as CFDictionary)
         switch status {
         case errSecSuccess:
             return
         case errSecItemNotFound:
-            var item = query(account)
+            var item = query(account, service: service)
             item[kSecValueData as String] = data
             let added = SecItemAdd(item as CFDictionary, nil)
             guard added == errSecSuccess else { throw Failure(status: added) }
@@ -32,8 +34,8 @@ enum Keychain {
 
     /// `nil` when no token is stored. Throws on any other Keychain error
     /// (locked keychain, access denied), which is not a revoked token.
-    static func read(account: String) throws -> String? {
-        var q = query(account)
+    static func read(account: String, service: String = Keychain.service) throws -> String? {
+        var q = query(account, service: service)
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
@@ -49,11 +51,11 @@ enum Keychain {
         }
     }
 
-    static func delete(account: String) {
-        SecItemDelete(query(account) as CFDictionary)
+    static func delete(account: String, service: String = Keychain.service) {
+        SecItemDelete(query(account, service: service) as CFDictionary)
     }
 
-    private static func query(_ account: String) -> [String: Any] {
+    private static func query(_ account: String, service: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

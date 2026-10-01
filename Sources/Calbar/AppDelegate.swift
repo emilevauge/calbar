@@ -37,6 +37,8 @@ final class AppDelegate: NSObject, ObservableObject {
     private var peekWatch: Task<Void, Never>?
     /// Guest suggestions for the editor.
     let contacts: ContactBook
+    /// Zoom meetings for new events.
+    let zoom = ZoomAuth()
 
     private var signInTask: Task<Void, Never>?
     /// Tells a finished sign-in whether a newer one replaced it.
@@ -305,7 +307,7 @@ final class AppDelegate: NSObject, ObservableObject {
     /// For the hour grid: the calendars new events may go to, guest
     /// suggestions, and creating.
     var composer: EventComposer {
-        EventComposer(calendars: accounts.writableCalendars, contacts: contacts) { [store] event, email in
+        EventComposer(calendars: accounts.writableCalendars, contacts: contacts, zoom: zoom) { [store] event, email in
             try await store.create(event, in: email)
         }
     }

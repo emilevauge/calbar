@@ -6,6 +6,9 @@ struct SettingsView: View {
     @ObservedObject private var app = AppDelegate.shared
     @ObservedObject private var accounts = AppDelegate.shared.accounts
     @ObservedObject private var notifications = NotificationHub.shared
+    @ObservedObject private var zoom = AppDelegate.shared.zoom
+    @State private var zoomClientID = ""
+    @State private var zoomSecret = ""
 
     @AppStorage(Prefs.leadMinutesKey) private var leadMinutes = 10
     @AppStorage(Prefs.lingerMinutesKey) private var lingerMinutes = 5
@@ -56,6 +59,8 @@ struct SettingsView: View {
             } footer: {
                 oauthClientFooter
             }
+
+            zoomSection
 
             Section {
                 Stepper(value: $leadMinutes, in: 1...60) {
@@ -231,6 +236,50 @@ struct SettingsView: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
+    }
+
+    /// Zoom meetings for new events: the user's own Zoom app, then a
+    /// sign-in, like the Google OAuth client.
+    private var zoomSection: some View {
+        Section {
+            if zoom.isConnected {
+                HStack {
+                    Label("Connected", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Spacer()
+                    Button("Disconnect") { zoom.disconnect() }
+                }
+            } else {
+                TextField("Client ID", text: $zoomClientID)
+                SecureField("Client secret (optional)", text: $zoomSecret)
+                HStack {
+                    if zoom.isSigningIn {
+                        ProgressView().controlSize(.small)
+                        Text("Waiting for Zoom…").foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Cancel") { zoom.cancelSignIn() }
+                    } else {
+                        Link("How to create a Zoom app", destination: URL(string: "https://github.com/emilevauge/calbar#zoom")!)
+                            .font(.caption)
+                        Spacer()
+                        Button("Connect Zoom…") { zoom.connect(clientID: zoomClientID, clientSecret: zoomSecret) }
+                            .disabled(zoomClientID.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+            }
+            if let error = zoom.error {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+        } header: {
+            Text("Zoom")
+        } footer: {
+            Text("Adds Zoom as a video call when you create an event.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onAppear {
+            if zoomClientID.isEmpty { zoomClientID = zoom.client?.clientID ?? "" }
+        }
     }
 
     /// One toggle per weekday, from the user's first weekday, and presets.

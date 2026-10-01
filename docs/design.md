@@ -367,6 +367,18 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   or `↵` adds a typed email, `⌫` in the empty field removes the last chip. The user's own
   addresses and Google resource calendars are left out. Guests get the invitation
   (`sendUpdates=all`). The People API must be enabled in the OAuth client's Cloud project.
+- Video call (`ZoomAuth`, `ZoomOAuth`, `ZoomAPI`): "No video call", "Google Meet" or, once Zoom
+  is connected, "Zoom", remembered (`newEventConference`). Google's API only creates Meet links,
+  and the Zoom add-on of Google Calendar runs in its web page, out of reach. So Calbar signs in
+  to the user's own Zoom app (Settings > Zoom: Client ID, optional secret sent as Basic auth;
+  the same loopback and PKCE flow as Google, Zoom matching a registered `http://127.0.0.1`
+  whatever the port; client and refresh token in the Keychain under `dev.calbar.app.zoom`,
+  the refresh token replaced on every refresh since Zoom rotates it, a refused one
+  disconnecting). On save with Zoom, Calbar first creates a scheduled meeting
+  (`POST /users/me/meetings`, scope `meeting:write:meeting`: topic, UTC start, duration, time
+  zone, the description as agenda), then puts its link in the event's location when empty
+  and, as Zoom's add-on does, "Join Zoom Meeting", the link, the meeting ID and passcode on top
+  of the description, where Calbar's join detection and Google Calendar find it.
 - Calbar posts `events.insert` (with `conferenceDataVersion=1` and a `hangoutsMeet` create
   request for Meet), in the user's time zone, then refreshes. Errors show in the editor; a
   missing scope marks the account read only. Calendars stored before the access role was known

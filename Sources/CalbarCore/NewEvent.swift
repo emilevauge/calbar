@@ -11,6 +11,9 @@ public struct NewEvent: Equatable, Sendable {
     public var notes: String
     /// Guest emails; Google sends them the invitation.
     public var guests: [String]
+    /// A Zoom meeting created for this event: its link goes to the
+    /// location when that is empty, and on top of the description.
+    public var zoom: ZoomMeeting?
     /// IANA name, so Google shows the times in the user's zone.
     public var timeZone: String
 
@@ -52,9 +55,13 @@ public struct NewEvent: Equatable, Sendable {
             "start": ["dateTime": GoogleDate.rfc3339(start), "timeZone": timeZone],
             "end": ["dateTime": GoogleDate.rfc3339(end), "timeZone": timeZone],
         ]
-        let place = location.trimmingCharacters(in: .whitespacesAndNewlines)
+        var place = location.trimmingCharacters(in: .whitespacesAndNewlines)
+        var text = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let zoom {
+            if place.isEmpty { place = zoom.joinURL.absoluteString }
+            text = text.isEmpty ? zoom.description : zoom.description + "\n\n" + text
+        }
         if !place.isEmpty { json["location"] = place }
-        let text = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.isEmpty { json["description"] = text }
         if !guests.isEmpty { json["attendees"] = guests.map { ["email": $0] } }
         if addMeet {

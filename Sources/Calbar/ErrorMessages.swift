@@ -81,3 +81,17 @@ func describeCreate(_ error: Error) -> String {
         return "Could not create the event."
     }
 }
+
+/// Message in the editor when the Zoom meeting cannot be made.
+func describeZoom(_ error: Error) -> String {
+    switch error {
+    case ZoomAuth.Failure.notConnected:
+        return "Connect Zoom in Settings to add a Zoom meeting."
+    case APIError.http(let status, _):
+        return "Zoom refused to create the meeting (\(status))."
+    case is URLError:
+        return describe(error)
+    default:
+        return "Could not create the Zoom meeting."
+    }
+}

@@ -17,6 +17,7 @@ struct WritableCalendar: Identifiable, Hashable {
 struct EventComposer {
     let calendars: [WritableCalendar]
     let contacts: ContactBook
+    let zoom: ZoomAuth
     let create: (NewEvent, String) async throws -> Void
 }
 
@@ -28,6 +29,7 @@ struct EventComposer {
 struct EventEditor: View {
     let calendars: [WritableCalendar]
     @ObservedObject var contacts: ContactBook
+    @ObservedObject var zoom: ZoomAuth
     let onCreate: (NewEvent, String) async throws -> Void
     let onDone: () -> Void
 
@@ -40,13 +42,15 @@ struct EventEditor: View {
     @State private var busy = false
     @State private var error: String?
     @AppStorage("newEventCalendar") private var calendarID = ""
-    @AppStorage("newEventMeet") private var addMeet = true
+    /// "none", "meet" or "zoom", remembered.
+    @AppStorage("newEventConference") private var conference = "meet"
     @FocusState private var titleFocused: Bool
 
-    init(start: Date, end: Date, calendars: [WritableCalendar], contacts: ContactBook,
+    init(start: Date, end: Date, calendars: [WritableCalendar], contacts: ContactBook, zoom: ZoomAuth,
          onCreate: @escaping (NewEvent, String) async throws -> Void, onDone: @escaping () -> Void) {
         self.calendars = calendars
         self.contacts = contacts
+        self.zoom = zoom
         self.onCreate = onCreate
         self.onDone = onDone
         _start = State(initialValue: start)
@@ -178,9 +182,16 @@ struct EventEditor: View {
                 .fixedSize()
             }
             line("video") {
-                Toggle("Google Meet", isOn: $addMeet)
-                    .toggleStyle(.checkbox)
-                    .controlSize(.small)
+                Picker("Conference", selection: Binding(get: { effectiveConference }, set: { conference = $0 })) {
+                    Text("No video call").tag("none")
+                    Text("Google Meet").tag("meet")
+                    if zoom.isConnected {
+                        Text("Zoom").tag("zoom")
+                    }
+                }
+                .labelsHidden()
+                .controlSize(.small)
+                .fixedSize()
             }
             line("person.2", alignment: .top) {
                 GuestField(guests: $guests, contacts: contacts)
@@ -224,14 +235,31 @@ struct EventEditor: View {
         })
     }
 
+    /// The remembered choice, Google Meet when Zoom is no longer connected.
+    private var effectiveConference: String {
+        conference == "zoom" && !zoom.isConnected ? "meet" : conference
+    }
+
     private func create() {
         guard !busy, let target = selected else { return }
         busy = true
         error = nil
-        let event = NewEvent(title: title, start: start, end: max(end, start.addingTimeInterval(5 * 60)),
-                             calendarID: target.calendar.id, addMeet: addMeet,
+        let choice = effectiveConference
+        var event = NewEvent(title: title, start: start, end: max(end, start.addingTimeInterval(5 * 60)),
+                             calendarID: target.calendar.id, addMeet: choice == "meet",
                              location: location, notes: notes, guests: guests.map(\.email))
         Task {
+            // The Zoom meeting first: its link goes into the event.
+            if choice == "zoom" {
+                do {
+                    event.zoom = try await zoom.createMeeting(topic: event.summary, start: event.start,
+                                                              end: event.end, agenda: notes)
+                } catch {
+                    busy = false
+                    self.error = describeZoom(error)
+                    return
+                }
+            }
             do {
                 try await onCreate(event, target.email)
                 busy = false

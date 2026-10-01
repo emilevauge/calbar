@@ -321,7 +321,7 @@ struct WeekView: View {
             }), arrowEdge: .trailing) {
                 if let composer {
                     EventEditor(start: start, end: end, calendars: composer.calendars, contacts: composer.contacts,
-                                onCreate: composer.create, onDone: { self.draft = nil })
+                                zoom: composer.zoom, onCreate: composer.create, onDone: { self.draft = nil })
                 }
             }
             // After the popover, so it anchors on the slot itself.
