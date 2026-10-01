@@ -185,68 +185,108 @@ struct EventDetail: View {
 /// occurrences first.
 struct EventActions: View {
     let event: CalendarEvent
+    /// The Join button of a row, last, in the same style.
+    var onJoin: (() -> Void)?
     @ObservedObject private var store = AppDelegate.shared.store
 
     var body: some View {
         HStack(spacing: 2) {
             if store.canEdit(event) {
-                ActionIcon(symbol: "square.and.pencil", help: "Edit this event") { store.edit(event) }
+                ActionIcon(help: "Edit this event", action: { store.edit(event) }) {
+                    Image(systemName: "square.and.pencil")
+                }
             }
             if !AppDelegate.shared.accounts.writableCalendars.isEmpty {
-                ActionIcon(symbol: "plus.square.on.square", help: "Duplicate this event") { store.duplicate(event) }
+                ActionIcon(help: "Duplicate this event", action: { store.duplicate(event) }) {
+                    Image(systemName: "plus.square.on.square")
+                }
             }
             if store.canDelete(event) {
                 if event.isRecurring {
-                    Menu {
+                    ActionIcon(help: "Delete this recurring event (⌫)", hoverColor: .red, menu: {
                         ForEach(RecurrenceScope.allCases, id: \.self) { scope in
                             Button(scope.label) { withAnimation(Motion.resize) { store.delete(event, scope: scope) } }
                         }
-                    } label: {
+                    }) {
                         Image(systemName: "trash")
                     }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-                    .frame(width: 24, height: 22)
-                    .help("Delete this recurring event (⌫)")
                 } else {
-                    ActionIcon(symbol: "trash", help: "Delete this event (⌫)", hoverColor: .red) {
+                    ActionIcon(help: "Delete this event (⌫)", hoverColor: .red, action: {
                         withAnimation(Motion.resize) { store.delete(event) }
+                    }) {
+                        Image(systemName: "trash")
                     }
                 }
             }
             if let url = event.webURL {
-                Link(destination: url) {
-                    GoogleCalendarIcon(size: 14)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 24, height: 22)
-                        .contentShape(Rectangle())
+                ActionIcon(help: "Open in Google Calendar", action: { NSWorkspace.shared.open(url) }) {
+                    GoogleCalendarIcon(size: 13.5)
                 }
-                .buttonStyle(.plain)
-                .help("Open in Google Calendar")
+            }
+            if let onJoin, let meeting = event.meeting {
+                ActionIcon(help: "Join on \(meeting.provider.displayName)", tint: .accentColor, action: onJoin) {
+                    Image(systemName: "video")
+                }
             }
         }
     }
 }
 
-/// A small icon button: secondary, on a light square on hover.
-private struct ActionIcon: View {
-    let symbol: String
+/// One small icon of `EventActions`: 26 by 24, secondary (or `tint`),
+/// on a light rounded square on hover; a button, or a menu with `menu`.
+struct ActionIcon<Glyph: View, Items: View>: View {
     let help: String
     var hoverColor: Color = .primary
-    let action: () -> Void
+    var tint: Color?
+    let action: (() -> Void)?
+    let menu: (() -> Items)?
+    @ViewBuilder let glyph: () -> Glyph
     @State private var hovering = false
 
+    init(help: String, hoverColor: Color = .primary, tint: Color? = nil, action: @escaping () -> Void,
+         @ViewBuilder glyph: @escaping () -> Glyph) where Items == EmptyView {
+        self.help = help
+        self.hoverColor = hoverColor
+        self.tint = tint
+        self.action = action
+        self.menu = nil
+        self.glyph = glyph
+    }
+
+    init(help: String, hoverColor: Color = .primary, tint: Color? = nil,
+         @ViewBuilder menu: @escaping () -> Items, @ViewBuilder glyph: @escaping () -> Glyph) {
+        self.help = help
+        self.hoverColor = hoverColor
+        self.tint = tint
+        self.action = nil
+        self.menu = menu
+        self.glyph = glyph
+    }
+
+    private var face: some View {
+        glyph()
+            .font(.system(size: 13, weight: .regular))
+            .foregroundStyle(hovering ? AnyShapeStyle(hoverColor) : tint.map(AnyShapeStyle.init) ?? AnyShapeStyle(.secondary))
+            .frame(width: 26, height: 24)
+            .background(Color.primary.opacity(hovering ? 0.09 : 0), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .contentShape(Rectangle())
+    }
+
     var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 12.5, weight: .regular))
-                .foregroundStyle(hovering ? AnyShapeStyle(hoverColor) : AnyShapeStyle(.secondary))
-                .frame(width: 24, height: 22)
-                .background(Color.primary.opacity(hovering ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                .contentShape(Rectangle())
+        Group {
+            if let menu {
+                // A plain button style keeps the face as drawn, the same
+                // square as the buttons.
+                Menu(content: menu) { face }
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+            } else if let action {
+                Button(action: action) { face }
+                    .buttonStyle(.plain)
+            }
         }
-        .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(help)
     }

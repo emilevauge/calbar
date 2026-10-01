@@ -145,21 +145,13 @@ struct EventRow: View {
                 Spacer(minLength: 0)
 
                 if expanded {
-                    EventActions(event: event)
-                        .padding(.top, 1)
-                }
-                if let meeting = event.meeting, canJoin {
-                    Button(action: onJoin) {
+                    EventActions(event: event, onJoin: canJoin ? onJoin : nil)
+                        .padding(.top, -2)
+                } else if let meeting = event.meeting, canJoin {
+                    ActionIcon(help: "Join on \(meeting.provider.displayName)", tint: .accentColor, action: onJoin) {
                         Image(systemName: "video")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 26, height: 20)
-                            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .help("Join on \(meeting.provider.displayName)")
-                    .padding(.top, 3)
+                    .padding(.top, -2)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)

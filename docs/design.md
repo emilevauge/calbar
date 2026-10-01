@@ -410,9 +410,11 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   request for Meet), in the user's time zone, then refreshes. Errors show in the editor; a
   missing scope marks the account read only. Calendars stored before the access role was known
   count as writable only when primary, until the next refresh fills it.
-- Event actions (`EventActions`): edit, duplicate, delete and Google Calendar, small icons
-  that get a light square on hover, at the top right: on the card's time line, on the top line
-  of an expanded row, before the Join button.
+- Event actions (`EventActions`): edit, duplicate, delete, Google Calendar and, on a row,
+  Join, each an `ActionIcon`: 26 by 24, 13 pt, secondary (Join in the accent color), a light
+  rounded square on hover (the recurring trash is a menu with the same face). At the top
+  right: on the card's time line, beside its Join button, and on the top line of an expanded
+  row; a collapsed row keeps the Join icon alone.
 - Deleting: the trash of `EventActions` (card, expanded row, grid popover), `⌫` on the selected row of the list or in the open card of the grid (tested on
   the characters: macOS sends backspace as DEL, U+007F, which SwiftUI's `.delete` does not
   match), or "Delete Event" in the context menu. For a recurring event the trash and the context
