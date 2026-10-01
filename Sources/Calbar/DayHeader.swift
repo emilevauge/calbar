@@ -1,11 +1,15 @@
 import SwiftUI
 import CalbarCore
 
-/// Top bar of the popover: the day title with a caption below it, and the
-/// previous and next day buttons grouped on the right.
+/// Top bar of the popover: the day or week title with a caption below it,
+/// and on the right the previous and next buttons around the Day | Week
+/// switch.
 struct DayHeader<Info: View>: View {
     let day: Date
     let isToday: Bool
+    /// The week view's title, "Sep 28 - Oct 4"; nil in the day view.
+    var weekTitle: String? = nil
+    @Binding var mode: ViewMode
     let onChange: (Int) -> Void
     let onToday: () -> Void
     /// A day picked in the calendar opened by a click on the title.
@@ -25,8 +29,9 @@ struct DayHeader<Info: View>: View {
             }
             Spacer(minLength: 0)
             HStack(spacing: 0) {
-                IconButton("chevron.left", tooltip: "Previous day") { onChange(-1) }
-                IconButton("chevron.right", tooltip: "Next day") { onChange(1) }
+                IconButton("chevron.left", tooltip: mode == .week ? "Previous week" : "Previous day") { onChange(-1) }
+                ModeSwitch(mode: $mode)
+                IconButton("chevron.right", tooltip: mode == .week ? "Next week" : "Next day") { onChange(1) }
             }
             .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
@@ -41,7 +46,7 @@ struct DayHeader<Info: View>: View {
             picking.toggle()
         } label: {
             HStack(spacing: 4) {
-                Text(DayHeaderText.title(day))
+                Text(weekTitle ?? DayHeaderText.title(day))
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
@@ -61,6 +66,47 @@ struct DayHeader<Info: View>: View {
                 onToday()
             }
         }
+    }
+}
+
+/// Day or week view, persisted.
+enum ViewMode: String {
+    case day, week
+}
+
+/// "Day | Week", small enough to sit between the arrows.
+private struct ModeSwitch: View {
+    @Binding var mode: ViewMode
+
+    var body: some View {
+        HStack(spacing: 0) {
+            segment("Day", .day)
+            segment("Week", .week)
+        }
+        .padding(2)
+    }
+
+    private func segment(_ label: String, _ value: ViewMode) -> some View {
+        let selected = mode == value
+        return Button {
+            withAnimation(Motion.resize) { mode = value }
+        } label: {
+            Text(label)
+                .font(.caption.weight(selected ? .semibold : .regular))
+                .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                .padding(.horizontal, 8)
+                .frame(height: 20)
+                .background {
+                    if selected {
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                            .shadow(color: .black.opacity(0.12), radius: 0.5, y: 0.5)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(value == .week ? "Show the week" : "Show one day")
     }
 }
 

@@ -10,6 +10,11 @@ enum Prefs {
     static let notifyBeforeMeetingsKey = "notifyBeforeMeetings"
     static let soundBeforeMeetingsKey = "soundBeforeMeetings"
     static let openPanelAtDayStartKey = "openPanelAtDayStart"
+    /// First and last hour the week view shows without scrolling.
+    static let weekStartHourKey = "weekStartHour"
+    static let weekEndHourKey = "weekEndHour"
+    /// "day" or "week".
+    static let viewModeKey = "viewMode"
     /// "yyyy-MM-dd" of the last day the popover opened by itself.
     static let lastDayStartOpenKey = "lastDayStartOpen"
 
@@ -21,6 +26,9 @@ enum Prefs {
             notifyBeforeMeetingsKey: true,
             soundBeforeMeetingsKey: true,
             openPanelAtDayStartKey: true,
+            weekStartHourKey: 9,
+            weekEndHourKey: 19,
+            viewModeKey: "day",
         ])
     }
 

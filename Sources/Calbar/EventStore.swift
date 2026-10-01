@@ -93,6 +93,51 @@ final class EventStore: ObservableObject {
         return entry.failed ? .failed : .loading
     }
 
+    /// Events of each day of a week, for the week view. The days outside
+    /// the regular refresh that need it are fetched together, in one
+    /// request window, rather than one fetch per day.
+    func events(forWeek days: [Date]) -> [DayContent] {
+        let calendar = Calendar.current
+        let regular = DayWindow.interval(for: now, days: 2, calendar: calendar)
+        let missing = days.map { calendar.startOfDay(for: $0) }.filter {
+            !($0 >= regular.start && $0 < regular.end)
+                && dayCache.needsFetch($0, now: Date()) && !pendingDays.contains($0)
+        }
+        if missing.count > 1 { scheduleFetch(days: missing) }
+        return days.map { events(for: $0) }
+    }
+
+    /// One fetch for several days, from the first to the last.
+    private func scheduleFetch(days: [Date]) {
+        guard let auth, let first = days.min(), let last = days.max() else { return }
+        pendingDays.formUnion(days)
+        Task {
+            let calendar = Calendar.current
+            for day in days { dayCache.begin(day) }
+            let span = (calendar.dateComponents([.day], from: first, to: last).day ?? 0) + 1
+            let window = DayWindow.interval(for: first, days: span, calendar: calendar)
+            let started = Date()
+            let result = await fetch(window, auth: auth, label: "week")
+            if result.reachedGoogle || accounts.accounts.isEmpty {
+                let collected = result.collected.filter { accounts.account($0.accountEmail) != nil }
+                for day in days {
+                    let dayWindow = DayWindow.interval(for: day, calendar: calendar)
+                    let previous = dayCache.entry(for: day)?.value ?? []
+                    let merged = RefreshMerge.merge(
+                        collected: collected.filter { DayWindow.contains($0, in: dayWindow) },
+                        previous: previous,
+                        failedAccounts: result.failedAccounts,
+                        failedCalendars: result.failedCalendars)
+                    dayCache.finish(day, value: overlayAnswers(merged, fetchStarted: started), at: Date())
+                }
+            } else {
+                for day in days { dayCache.fail(day) }
+            }
+            pendingDays.subtract(days)
+            NSLog("Calbar: week fetch of %d days done in %.2fs", days.count, Date().timeIntervalSince(started))
+        }
+    }
+
     /// Fetches `day` again after a failure.
     func retry(_ day: Date) {
         scheduleFetch(Calendar.current.startOfDay(for: day))

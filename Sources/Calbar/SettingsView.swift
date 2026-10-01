@@ -10,6 +10,8 @@ struct SettingsView: View {
     @AppStorage(Prefs.leadMinutesKey) private var leadMinutes = 10
     @AppStorage(Prefs.lingerMinutesKey) private var lingerMinutes = 5
     @AppStorage(Prefs.showDeclinedKey) private var showDeclined = false
+    @AppStorage(Prefs.weekStartHourKey) private var weekStartHour = 9
+    @AppStorage(Prefs.weekEndHourKey) private var weekEndHour = 19
     @AppStorage(Prefs.notifyBeforeMeetingsKey) private var notifyBeforeMeetings = true
     @AppStorage(Prefs.soundBeforeMeetingsKey) private var soundBeforeMeetings = true
     @AppStorage(Prefs.openPanelAtDayStartKey) private var openPanelAtDayStart = true
@@ -72,8 +74,20 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Display") {
+            Section {
                 Toggle("Show declined events", isOn: $showDeclined)
+                Stepper(value: $weekStartHour, in: 0...(weekEndHour - 1)) {
+                    valueRow("Week view from", String(format: "%02d:00", weekStartHour))
+                }
+                Stepper(value: $weekEndHour, in: (weekStartHour + 1)...24) {
+                    valueRow("Week view until", String(format: "%02d:00", weekEndHour))
+                }
+            } header: {
+                Text("Display")
+            } footer: {
+                Text("The week view shows these hours; scroll for the rest of the day.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Global shortcut") {

@@ -8,6 +8,9 @@ struct MenuView: View {
     @ObservedObject private var app = AppDelegate.shared
     /// Bound only so the list re-renders when the setting changes.
     @AppStorage(Prefs.showDeclinedKey) private var showDeclined = false
+    @AppStorage(Prefs.viewModeKey) private var viewMode: ViewMode = .day
+    @AppStorage(Prefs.weekStartHourKey) private var weekStartHour = 9
+    @AppStorage(Prefs.weekEndHourKey) private var weekEndHour = 19
 
     @State private var expandedID: String?
     @State private var selectedIndex = 0
@@ -30,29 +33,23 @@ struct MenuView: View {
         let peekID = peeking ? app.peekEvent(now: store.now)?.id : nil
         let focusID = peeking ? peekID : (other == nil ? Self.focusID(agenda, now: store.now) : nil)
 
+        let week = viewMode == .week && !peeking
+
         VStack(alignment: .leading, spacing: 0) {
-            if !peeking {
-                header(agenda, day: day, other: other)
+            if week {
+                weekHeader(day: day)
                 Divider()
-            } else if accounts.needsAttention {
-                Label("An account needs to be reconnected", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.red)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 8)
-            }
-            content(agenda, day: day, other: other, rows: rows, focusID: focusID, peekID: peeking ? .some(peekID) : nil)
-            if peeking {
-                peekHint
-            } else {
+                weekContent(day: day)
                 Divider()
                 footer
+            } else {
+                dayLayout(agenda, day: day, other: other, rows: rows, focusID: focusID, peekID: peekID, peeking: peeking)
             }
         }
         // In a peek, a click anywhere but on the card's buttons expands it.
         .contentShape(Rectangle())
         .gesture(TapGesture().onEnded { app.expandPeek() }, including: peeking ? .all : .subviews)
-        .frame(width: 380)
+        .frame(width: week ? WeekView.width : 380)
         // Pinned to the top: while the popover grows or shrinks around a
         // change of content, the content stays put under the arrow
         // instead of sliding to the middle.
@@ -68,13 +65,14 @@ struct MenuView: View {
             selectedIndex = max(selectedIndex - 1, 0)
             return .handled
         }
-        // Up and down move the selection; left and right change the day.
+        // Up and down move the selection; left and right change the day,
+        // or the week in the week view.
         .onKeyPress(.leftArrow) {
-            changeDay(by: -1)
+            step(-1)
             return .handled
         }
         .onKeyPress(.rightArrow) {
-            changeDay(by: 1)
+            step(1)
             return .handled
         }
         .onKeyPress(.escape) {
@@ -82,7 +80,7 @@ struct MenuView: View {
             return .handled
         }
         .onKeyPress(keys: [.return]) { press in
-            guard rows.indices.contains(selectedIndex) else { return .ignored }
+            guard !week, rows.indices.contains(selectedIndex) else { return .ignored }
             let event = rows[selectedIndex]
             if press.modifiers.contains(.command) {
                 join(event)
@@ -104,6 +102,68 @@ struct MenuView: View {
         }
     }
 
+    @ViewBuilder
+    private func dayLayout(_ agenda: DayAgenda, day: Date, other: DayContent?, rows: [CalendarEvent],
+                           focusID: String?, peekID: String?, peeking: Bool) -> some View {
+        if !peeking {
+            header(agenda, day: day, other: other)
+            Divider()
+        } else if accounts.needsAttention {
+            Label("An account needs to be reconnected", systemImage: "exclamationmark.triangle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.red)
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+        }
+        content(agenda, day: day, other: other, rows: rows, focusID: focusID, peekID: peeking ? .some(peekID) : nil)
+        if peeking {
+            peekHint
+        } else {
+            Divider()
+            footer
+        }
+    }
+
+    // MARK: week
+
+    private func weekDays(_ day: Date) -> [Date] {
+        WeekLayout.days(containing: day, calendar: .current)
+    }
+
+    private func weekHeader(day: Date) -> some View {
+        let days = weekDays(day)
+        let thisWeek = weekDays(store.now).first
+        let weeks = thisWeek.flatMap { start in
+            days.first.map { Calendar.current.dateComponents([.weekOfYear], from: start, to: $0).weekOfYear ?? 0 }
+        } ?? 0
+        let caption: String? = switch weeks {
+        case 0: "This week"
+        case 1: "Next week"
+        case -1: "Last week"
+        default: nil
+        }
+        return DayHeader(day: day, isToday: weeks == 0, weekTitle: WeekLayout.title(days, now: store.now, calendar: .current),
+                         mode: $viewMode, onChange: step, onToday: showToday, onPick: show(day:)) {
+            caption.map(Text.init)
+        }
+    }
+
+    private func weekContent(day: Date) -> some View {
+        let days = weekDays(day)
+        return WeekView(
+            days: days,
+            contents: store.events(forWeek: days),
+            now: store.now,
+            startHour: min(max(weekStartHour, 0), 23),
+            endHour: min(max(weekEndHour, weekStartHour + 1), 24),
+            onShowDay: { picked in
+                withAnimation(Motion.resize) { viewMode = .day }
+                show(day: picked)
+            },
+            onJoin: join
+        )
+    }
+
     // MARK: peek
 
     private var peekHint: some View {
@@ -121,7 +181,7 @@ struct MenuView: View {
     // MARK: header
 
     private func header(_ agenda: DayAgenda, day: Date, other: DayContent?) -> some View {
-        DayHeader(day: day, isToday: other == nil, onChange: changeDay(by:), onToday: showToday, onPick: show(day:)) {
+        DayHeader(day: day, isToday: other == nil, mode: $viewMode, onChange: step, onToday: showToday, onPick: show(day:)) {
             if let other {
                 DayHeader.otherDayInfo(other, offset: dayOffset)
             } else if store.isOffline, let last = store.lastFetch {
@@ -333,6 +393,11 @@ struct MenuView: View {
         withAnimation(Motion.resize) {
             expandedID = expandedID == event.id ? nil : event.id
         }
+    }
+
+    /// Previous or next day, or week in the week view.
+    private func step(_ direction: Int) {
+        changeDay(by: viewMode == .week ? 7 * direction : direction)
     }
 
     private func changeDay(by delta: Int) {

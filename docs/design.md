@@ -286,6 +286,23 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   time, no join button for an event already over. An event across midnight shows on both days;
   a multi-day all-day event shows on each day. The icon, the capsule, the notifications and the
   peek stay on today.
+- Day | Week: a small segmented switch between the header's arrows, persisted (`viewMode`). In
+  the week view the arrows and `←` `→` move by a week, the title reads "Sep 28 - Oct 4" (with
+  the year outside the current one) over "This week", "Next week" or "Last week", and the day
+  picker shows the week of the picked day. The popover widens to 720 pt, animated like any
+  resize. A peek always uses the day layout.
+- Week view (`WeekView`, `WeekLayout`): 7 columns from the user's first weekday, headed
+  "Mon 28" with today's date in an accent circle (a click shows that day in the day view), up
+  to two all-day chips per day then "+N", and an hour grid of 44 pt per hour. The hours from
+  "Week view from" to "Week view until" (9 and 19 by default) fill the visible height; the grid
+  covers the whole day and opens scrolled to the first one. Timed events are blocks in the
+  calendar color with a leading bar, title and start time; events that overlap split their
+  group into lanes, each taking the first free one (back to back is no overlap); an event across
+  midnight is clipped to each day. The same styles as the list: dashed border while an
+  invitation waits, faded and struck through when declined, faded once past. A red line with a
+  dot marks the current time in today's column, tinted lightly. A click on a block opens its
+  card in a popover (Join, RSVP, guests, documents). The week is fetched in one request window
+  for the days the regular refresh does not cover, then kept in the day cache.
 - Card: "NOW" in red for an ongoing meeting, the time range and the time left ("35 min left")
   or the relative time ("in 12 min"), the title on up to 3 lines, and a "Join" button on the
   right when there is a video link. An ongoing meeting has a progress bar (see below).
@@ -378,7 +395,9 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
   5), "Show the panel before a meeting" (on), "Play a sound" (on, disabled when the panel
   setting is off). Footer: "Before each meeting and at its start, the
   panel shows it for a few seconds, and a Join button shows in the menu bar."
-- Display: "Show declined events" (off).
+- Display: "Show declined events" (off), "Week view from" (0 to 23, default 09:00) and "Week
+  view until" (1 to 24, default 19:00), footer "The week view shows these hours; scroll for the
+  rest of the day."
 - Global shortcut: "Open Calbar", default `⌃⌥M`. Recorded by `ShortcutRecorder`: click, type the
   shortcut, `esc` cancels, `delete` clears. It needs a modifier besides Shift, or a function key.
   `KeyboardShortcuts.Recorder` is not used: its placeholder reads the package's resource bundle
