@@ -29,9 +29,9 @@ struct DayHeader<Info: View>: View {
             }
             Spacer(minLength: 0)
             HStack(spacing: 0) {
-                IconButton("chevron.left", tooltip: mode == .week ? "Previous week" : "Previous day") { onChange(-1) }
+                IconButton("chevron.left", tooltip: mode.isDay ? "Previous day" : "Previous week") { onChange(-1) }
                 ModeSwitch(mode: $mode)
-                IconButton("chevron.right", tooltip: mode == .week ? "Next week" : "Next day") { onChange(1) }
+                IconButton("chevron.right", tooltip: mode.isDay ? "Next day" : "Next week") { onChange(1) }
             }
             .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
@@ -46,9 +46,14 @@ struct DayHeader<Info: View>: View {
             picking.toggle()
         } label: {
             HStack(spacing: 4) {
-                Text(weekTitle ?? DayHeaderText.title(day))
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
+                // The short form when the full one does not fit beside the
+                // switch: "Wed, Sep 30".
+                ViewThatFits(in: .horizontal) {
+                    Text(weekTitle ?? DayHeaderText.title(day))
+                    Text(weekTitle ?? DayHeaderText.shortTitle(day))
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .lineLimit(1)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.tertiary)
@@ -69,29 +74,61 @@ struct DayHeader<Info: View>: View {
     }
 }
 
-/// Day or week view, persisted.
+/// Day list, day hour grid, or week, persisted.
 enum ViewMode: String {
-    case day, week
+    case day, dayGrid, week
+
+    var isDay: Bool { self != .week }
 }
 
-/// "Day | Week", small enough to sit between the arrows.
+/// "Day | Week", small enough to sit between the arrows. Clicking Day
+/// while it is selected switches the day between its list and an hour
+/// grid; a small icon tells which.
 private struct ModeSwitch: View {
     @Binding var mode: ViewMode
+    /// The day layout to come back to from the week.
+    @AppStorage("lastDayMode") private var lastDay: ViewMode = .day
 
     var body: some View {
         HStack(spacing: 0) {
-            segment("Day", .day)
-            segment("Week", .week)
+            segment(selected: mode.isDay, help: dayHelp) {
+                HStack(spacing: 3) {
+                    Text("Day")
+                    if mode.isDay {
+                        Image(systemName: mode == .dayGrid ? "calendar.day.timeline.left" : "list.bullet")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                }
+            } action: {
+                let next: ViewMode = switch mode {
+                case .day: .dayGrid
+                case .dayGrid: .day
+                case .week: lastDay
+                }
+                lastDay = next
+                withAnimation(Motion.resize) { mode = next }
+            }
+            segment(selected: mode == .week, help: "Show the week") {
+                Text("Week")
+            } action: {
+                withAnimation(Motion.resize) { mode = .week }
+            }
         }
         .padding(2)
     }
 
-    private func segment(_ label: String, _ value: ViewMode) -> some View {
-        let selected = mode == value
-        return Button {
-            withAnimation(Motion.resize) { mode = value }
-        } label: {
-            Text(label)
+    private var dayHelp: String {
+        switch mode {
+        case .day: "Show the day as an hour grid"
+        case .dayGrid: "Show the day as a list"
+        case .week: "Show one day"
+        }
+    }
+
+    private func segment<Label: View>(selected: Bool, help: String, @ViewBuilder label: () -> Label,
+                                      action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            label()
                 .font(.caption.weight(selected ? .semibold : .regular))
                 .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                 .padding(.horizontal, 8)
@@ -106,7 +143,7 @@ private struct ModeSwitch: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(value == .week ? "Show the week" : "Show one day")
+        .help(help)
     }
 }
 
@@ -266,5 +303,10 @@ enum DayHeaderText {
     /// "Tuesday, September 29", in English whatever the system locale.
     static func title(_ date: Date) -> String {
         date.formatted(.dateTime.weekday(.wide).month(.wide).day().locale(Locale(identifier: "en_US")))
+    }
+
+    /// "Wed, Sep 30".
+    static func shortTitle(_ date: Date) -> String {
+        date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().locale(Locale(identifier: "en_US")))
     }
 }

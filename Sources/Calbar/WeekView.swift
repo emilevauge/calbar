@@ -1,7 +1,7 @@
 import SwiftUI
 import CalbarCore
 
-/// The week as an hour grid: a column per shown day, all-day events on top,
+/// The week, or one day, as an hour grid: a column per shown day, all-day events on top,
 /// timed events as blocks placed by `WeekLayout`. The hours from
 /// `startHour` to `endHour` fill the visible height; the rest of the day
 /// is a scroll away.
@@ -17,6 +17,8 @@ struct WeekView: View {
     let onJoin: (CalendarEvent) -> Void
 
     static let width: CGFloat = 720
+    /// 720 pt for the week; the popover's width for one day.
+    var width: CGFloat = Self.width
     static let gutter: CGFloat = 40
     static let hourHeight: CGFloat = 44
     @State private var opened: String?
@@ -26,7 +28,10 @@ struct WeekView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            dayHeaders
+            // One day already has its title in the popover header.
+            if days.count > 1 {
+                dayHeaders
+            }
             allDayRow(contents)
             Divider()
             ScrollViewReader { proxy in
@@ -38,7 +43,7 @@ struct WeekView: View {
                 .onChange(of: startHour) { _, hour in proxy.scrollTo(hour, anchor: .top) }
             }
         }
-        .frame(width: Self.width)
+        .frame(width: width)
     }
 
     /// Text on the opaque blocks. Not `.secondary`: on the popover's
@@ -48,7 +53,7 @@ struct WeekView: View {
         Color(nsColor: .labelColor).opacity(opacity)
     }
 
-    private var columnWidth: CGFloat { (Self.width - Self.gutter - 8) / CGFloat(max(days.count, 1)) }
+    private var columnWidth: CGFloat { (width - Self.gutter - 8) / CGFloat(max(days.count, 1)) }
 
     // MARK: headers
 

@@ -35,12 +35,19 @@ struct MenuView: View {
         let focusID = peeking ? peekID : (other == nil ? Self.focusID(agenda, now: store.now) : nil)
 
         let week = viewMode == .week && !peeking
+        let dayGrid = viewMode == .dayGrid && !peeking
 
         VStack(alignment: .leading, spacing: 0) {
             if week {
                 weekHeader(day: day)
                 Divider()
                 weekContent(day: day)
+                Divider()
+                footer
+            } else if dayGrid {
+                header(agenda, day: day, other: other)
+                Divider()
+                dayGridContent(day: day)
                 Divider()
                 footer
             } else {
@@ -81,7 +88,7 @@ struct MenuView: View {
             return .handled
         }
         .onKeyPress(keys: [.return]) { press in
-            guard !week, rows.indices.contains(selectedIndex) else { return .ignored }
+            guard !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
             let event = rows[selectedIndex]
             if press.modifiers.contains(.command) {
                 join(event)
@@ -147,6 +154,20 @@ struct MenuView: View {
                          mode: $viewMode, onChange: step, onToday: showToday, onPick: show(day:)) {
             caption.map(Text.init)
         }
+    }
+
+    /// The day as a one-column hour grid, at the popover's usual width.
+    private func dayGridContent(day: Date) -> some View {
+        WeekView(
+            days: [Calendar.current.startOfDay(for: day)],
+            contents: [store.events(for: day)],
+            now: store.now,
+            startHour: min(max(weekStartHour, 0), 23),
+            endHour: min(max(weekEndHour, weekStartHour + 1), 24),
+            onShowDay: { _ in withAnimation(Motion.resize) { viewMode = .day } },
+            onJoin: join,
+            width: 380
+        )
     }
 
     private func weekContent(day: Date) -> some View {
@@ -398,7 +419,7 @@ struct MenuView: View {
 
     /// Previous or next day, or week in the week view.
     private func step(_ direction: Int) {
-        changeDay(by: viewMode == .week ? 7 * direction : direction)
+        changeDay(by: viewMode.isDay ? direction : 7 * direction)
     }
 
     private func changeDay(by delta: Int) {

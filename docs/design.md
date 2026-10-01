@@ -286,7 +286,12 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   time, no join button for an event already over. An event across midnight shows on both days;
   a multi-day all-day event shows on each day. The icon, the capsule, the notifications and the
   peek stay on today.
-- Day | Week: a small segmented switch between the header's arrows, persisted (`viewMode`). In
+- Day | Week: a small segmented switch between the header's arrows, persisted (`viewMode`).
+  Clicking Day while it is selected switches the day between its list and a one-column hour
+  grid (`dayGrid`: the week view's grid at 380 pt, without the column header), with a small
+  `list.bullet` or `calendar.day.timeline.left` icon beside "Day"; coming back from the week
+  restores the last day layout. The title falls back to "Wed, Sep 30" when the full one does
+  not fit beside the switch. In
   the week view the arrows and `←` `→` move by a week, the title reads "Sep 28 - Oct 4" (with
   the year outside the current one) over "This week", "Next week" or "Last week", and the day
   picker shows the week of the picked day. The popover widens to 720 pt, animated like any
