@@ -43,6 +43,23 @@ public struct NewEvent: Equatable, Sendable {
         return try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
     }
 
+    /// Start and end minutes of a slot dragged between two points of the
+    /// grid, in either direction: the start down to the quarter hour, the
+    /// end up to it, at least 15 minutes, within the day. A click (no real
+    /// drag) gives `defaultMinutes` from the slot under the pointer.
+    public static func range(from a: Double, to b: Double, step: Int = 15,
+                             dragThreshold: Double = 8, defaultMinutes: Int = 30) -> (start: Int, end: Int) {
+        if abs(b - a) < dragThreshold {
+            let start = slot(minute: a, step: step)
+            return (start, start + defaultMinutes)
+        }
+        let low = min(a, b), high = max(a, b)
+        let start = min(max(Int(low) - Int(low) % step, 0), 24 * 60 - step)
+        let up = Int(high.rounded(.up))
+        let end = min(max(up % step == 0 ? up : up + step - up % step, start + step), 24 * 60)
+        return (start, end)
+    }
+
     /// Minute of the day under the pointer, down to the quarter hour, kept
     /// so that a default 30 minute event ends by midnight.
     public static func slot(minute: Double, step: Int = 15) -> Int {

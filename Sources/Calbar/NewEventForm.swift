@@ -11,8 +11,8 @@ struct WritableCalendar: Identifiable, Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
-/// Form shown over the hour grid after a click on an empty slot: title,
-/// start, duration, calendar, Google Meet link. The last calendar and the
+/// Form shown over the hour grid once a slot is clicked or dragged out:
+/// title, start and end times, calendar, Google Meet link. The last calendar and the
 /// Meet choice are remembered.
 struct NewEventForm: View {
     let calendars: [WritableCalendar]
@@ -21,21 +21,20 @@ struct NewEventForm: View {
 
     @State private var title = ""
     @State private var start: Date
-    @State private var minutes = 30
+    @State private var end: Date
     @State private var busy = false
     @State private var error: String?
     @AppStorage("newEventCalendar") private var calendarID = ""
     @AppStorage("newEventMeet") private var addMeet = true
     @FocusState private var titleFocused: Bool
 
-    static let durations = [15, 30, 45, 60, 90, 120]
-
-    init(start: Date, calendars: [WritableCalendar],
+    init(start: Date, end: Date, calendars: [WritableCalendar],
          onCreate: @escaping (NewEvent, String) async throws -> Void, onDone: @escaping () -> Void) {
         self.calendars = calendars
         self.onCreate = onCreate
         self.onDone = onDone
         _start = State(initialValue: start)
+        _end = State(initialValue: end)
     }
 
     /// The remembered calendar, else the first primary one.
@@ -81,13 +80,17 @@ struct NewEventForm: View {
             DatePicker("Start", selection: $start, displayedComponents: .hourAndMinute)
                 .labelsHidden()
                 .datePickerStyle(.field)
-            Picker("Duration", selection: $minutes) {
-                ForEach(Self.durations, id: \.self) { m in
-                    Text(AgendaFormat.duration(TimeInterval(m * 60))).tag(m)
-                }
-            }
-            .labelsHidden()
-            .fixedSize()
+                // Moving the start keeps the duration.
+                .onChange(of: start) { old, new in end = end.addingTimeInterval(new.timeIntervalSince(old)) }
+            Text("-")
+                .foregroundStyle(.secondary)
+            DatePicker("End", selection: $end, in: start.addingTimeInterval(5 * 60)..., displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .datePickerStyle(.field)
+            Text(AgendaFormat.duration(end.timeIntervalSince(start)))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize()
         }
 
         HStack(spacing: 6) {
@@ -133,7 +136,7 @@ struct NewEventForm: View {
         guard !busy, let target = selected else { return }
         busy = true
         error = nil
-        let event = NewEvent(title: title, start: start, end: start.addingTimeInterval(TimeInterval(minutes * 60)),
+        let event = NewEvent(title: title, start: start, end: max(end, start.addingTimeInterval(5 * 60)),
                              calendarID: target.calendar.id, addMeet: addMeet)
         Task {
             do {

@@ -43,4 +43,16 @@ import Testing
         #expect(CalendarInfo(id: "w", name: "w", colorHex: "#000", isPrimary: false, enabled: true, canWrite: true).isWritable)
         #expect(!CalendarInfo(id: "r", name: "r", colorHex: "#000", isPrimary: true, enabled: true, canWrite: false).isWritable)
     }
+
+    @Test func draggedRange() {
+        // A click: 30 minutes from the quarter hour under the pointer.
+        #expect(NewEvent.range(from: 600 + 7, to: 600 + 9) == (600, 630))
+        // Down from 10:07 to 11:22: 10:00 to 11:30.
+        #expect(NewEvent.range(from: 607, to: 682) == (600, 690))
+        // Upwards works the same.
+        #expect(NewEvent.range(from: 682, to: 607) == (600, 690))
+        // At least a quarter hour, and not past midnight.
+        #expect(NewEvent.range(from: 600, to: 612) == (600, 615))
+        #expect(NewEvent.range(from: 1400, to: 1500) == (1395, 1440))
+    }
 }

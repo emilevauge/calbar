@@ -26,8 +26,16 @@ struct WeekView: View {
     static let gutter: CGFloat = 40
     static let hourHeight: CGFloat = 44
     @State private var opened: String?
-    /// The slot clicked for a new event: its day and start minute.
-    @State private var draft: (day: Date, minute: Int)?
+    /// The slot of a new event, while it is dragged out and once the form
+    /// is open (`editing`).
+    @State private var draft: Draft?
+
+    struct Draft {
+        let day: Date
+        let start: Int
+        let end: Int
+        let editing: Bool
+    }
     /// The all-day row shows every event instead of two per day.
     @State private var allDayUnfolded = false
     @Environment(\.colorScheme) private var scheme
@@ -230,14 +238,28 @@ struct WeekView: View {
         let today = Calendar.current.isDateInToday(day)
         return ZStack(alignment: .topLeading) {
             // Fills the column, so the blocks are offset from its top
-            // rather than from the middle of their own bounds. A click on
-            // it, outside the blocks, starts a new event at that time.
+            // rather than from the middle of their own bounds. Pressing on
+            // it, outside the blocks, and dragging marks out a new event;
+            // a plain click makes it 30 minutes.
             (today ? Color.accentColor.opacity(0.04) : Color.clear)
                 .contentShape(Rectangle())
-                .onTapGesture(coordinateSpace: .local) { location in
-                    guard onCreate != nil else { return }
-                    draft = (day, NewEvent.slot(minute: location.y / minuteHeight))
-                }
+                .gesture(
+                    DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                        .onChanged { value in
+                            guard onCreate != nil, draft?.editing != true else { return }
+                            let r = NewEvent.range(from: value.startLocation.y / minuteHeight,
+                                                   to: value.location.y / minuteHeight,
+                                                   dragThreshold: 8 / minuteHeight)
+                            draft = Draft(day: day, start: r.start, end: r.end, editing: false)
+                        }
+                        .onEnded { value in
+                            guard onCreate != nil, draft?.editing != true else { return }
+                            let r = NewEvent.range(from: value.startLocation.y / minuteHeight,
+                                                   to: value.location.y / minuteHeight,
+                                                   dragThreshold: 8 / minuteHeight)
+                            draft = Draft(day: day, start: r.start, end: r.end, editing: true)
+                        }
+                )
             if case .loading = content {
                 ProgressView().controlSize(.small)
                     .frame(maxWidth: .infinity)
@@ -254,31 +276,34 @@ struct WeekView: View {
                 nowLine(day, minuteHeight: minuteHeight)
             }
             if let draft, Calendar.current.isDate(draft.day, inSameDayAs: day) {
-                ghost(day: day, minute: draft.minute, minuteHeight: minuteHeight)
+                ghost(draft, minuteHeight: minuteHeight)
             }
         }
     }
 
     /// The slot of the event being created, with its form.
-    private func ghost(day: Date, minute: Int, minuteHeight: CGFloat) -> some View {
+    private func ghost(_ draft: Draft, minuteHeight: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
-        let start = day.addingTimeInterval(TimeInterval(minute * 60))
+        let start = draft.day.addingTimeInterval(TimeInterval(draft.start * 60))
+        let end = draft.day.addingTimeInterval(TimeInterval(draft.end * 60))
         return shape.fill(Color.accentColor.opacity(0.25))
             .overlay(shape.strokeBorder(Color.accentColor, lineWidth: 1))
             .overlay(alignment: .topLeading) {
-                Text(AgendaFormat.clock(start, .current))
+                Text("\(AgendaFormat.clock(start, .current))-\(AgendaFormat.clock(end, .current))")
                     .font(.system(size: 9.5, weight: .semibold))
                     .monospacedDigit()
+                    .foregroundStyle(Self.ink(0.85))
                     .padding(.leading, 5)
                     .padding(.top, 2)
             }
-            .frame(width: columnWidth - 3, height: 30 * minuteHeight - 2)
-            .offset(x: 1, y: CGFloat(minute) * minuteHeight + 1)
-            .popover(isPresented: Binding(get: { draft != nil }, set: { if !$0 { draft = nil } }),
+            .frame(width: columnWidth - 3, height: max(CGFloat(draft.end - draft.start) * minuteHeight - 2, 10))
+            .offset(x: 1, y: CGFloat(draft.start) * minuteHeight + 1)
+            .allowsHitTesting(draft.editing)
+            .popover(isPresented: Binding(get: { self.draft?.editing == true }, set: { if !$0 { self.draft = nil } }),
                      arrowEdge: .trailing) {
-                NewEventForm(start: start, calendars: calendars,
+                NewEventForm(start: start, end: end, calendars: calendars,
                              onCreate: { event, email in try await onCreate?(event, email) },
-                             onDone: { draft = nil })
+                             onDone: { self.draft = nil })
             }
     }
 
