@@ -82,6 +82,50 @@ public enum WeekLayout {
     }
 }
 
+extension WeekLayout {
+    /// An all-day event, or a timed one of a day or more, as one bar over
+    /// the days it covers in the week: `first` and `last` are column
+    /// indices, `row` its line in the all-day area.
+    public struct Bar: Equatable, Sendable {
+        public let event: CalendarEvent
+        public let first: Int
+        public let last: Int
+        public let row: Int
+        /// It started before the week, or ends after it.
+        public let continuesBefore: Bool
+        public let continuesAfter: Bool
+    }
+
+    /// Bars for `events` over `days`, each on the first row where it fits:
+    /// longer and earlier bars first, so a trip stays on top.
+    public static func bars(_ events: [CalendarEvent], days: [Date], calendar: Calendar) -> [Bar] {
+        let windows = days.map { DayWindow.interval(for: $0, calendar: calendar) }
+        let spans: [(CalendarEvent, Int, Int)] = events
+            .filter { $0.isAllDay || $0.spansDays }
+            .compactMap { e in
+                let covered = windows.indices.filter { DayWindow.contains(e, in: windows[$0]) }
+                guard let first = covered.first, let last = covered.last else { return nil }
+                return (e, first, last)
+            }
+            .sorted { ($0.1, $1.2 - $1.1, $0.0.id) < ($1.1, $0.2 - $0.1, $1.0.id) }
+        var rows: [[ClosedRange<Int>]] = []
+        return spans.map { e, first, last in
+            let range = first...last
+            let row = rows.firstIndex { taken in !taken.contains { $0.overlaps(range) } } ?? rows.count
+            if row == rows.count { rows.append([]) }
+            rows[row].append(range)
+            return Bar(event: e, first: first, last: last, row: row,
+                       continuesBefore: e.start < (windows.first?.start ?? e.start),
+                       continuesAfter: e.end > (windows.last?.end ?? e.end))
+        }
+    }
+
+    /// Bars past `limit` rows, counted per day, for the "+N" of each day.
+    public static func hidden(_ bars: [Bar], rows limit: Int, days: Int) -> [Int] {
+        (0..<days).map { day in bars.filter { $0.row >= limit && $0.first <= day && day <= $0.last }.count }
+    }
+}
+
 extension CalendarEvent {
     /// A timed event of 24 hours or more, a trip or a conference: the week
     /// view shows it with the all-day events, like Google Calendar.

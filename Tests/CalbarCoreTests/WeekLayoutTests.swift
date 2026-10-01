@@ -72,4 +72,28 @@ import Testing
         #expect(!CalendarEvent.fixture(start: at("09:00"), minutes: 1440, allDay: true).spansDays)
         #expect(WeekLayout.place([trip, night], day: at("12:00"), calendar: calendar).map(\.event.id) == ["n"])
     }
+
+    @Test func multiDayEventsAreOneBar() {
+        let days = WeekLayout.days(containing: at("12:00"), calendar: calendar)
+        let trip = CalendarEvent.fixture(id: "trip", start: TestClock.date("2026-09-28T08:00:00+02:00"), minutes: 3 * 1440)
+        let off = CalendarEvent.fixture(id: "off", start: TestClock.date("2026-09-29T00:00:00+02:00"), minutes: 1440, allDay: true)
+        let weekend = CalendarEvent.fixture(id: "we", start: TestClock.date("2026-10-03T00:00:00+02:00"), minutes: 2 * 1440, allDay: true)
+        let bars = WeekLayout.bars([off, weekend, trip], days: days, calendar: calendar)
+        let byID = Dictionary(uniqueKeysWithValues: bars.map { ($0.event.id, $0) })
+        #expect(byID["trip"].map { ($0.first, $0.last, $0.row) } ?? (0, 0, 0) == (0, 3, 0))
+        #expect(byID["off"].map { ($0.first, $0.last, $0.row) } ?? (0, 0, 0) == (1, 1, 1))
+        #expect(byID["we"].map { ($0.first, $0.last, $0.row) } ?? (0, 0, 0) == (5, 6, 0))
+        #expect(bars.count == 3)
+    }
+
+    @Test func barsClipToTheWeekAndCountHidden() {
+        let days = WeekLayout.days(containing: at("12:00"), calendar: calendar)
+        let long = CalendarEvent.fixture(id: "l", start: TestClock.date("2026-09-20T00:00:00+02:00"), minutes: 20 * 1440, allDay: true)
+        let bars = WeekLayout.bars([long], days: days, calendar: calendar)
+        #expect(bars.first.map { ($0.first, $0.last, $0.continuesBefore, $0.continuesAfter) } ?? (0, 0, false, false)
+            == (0, 6, true, true))
+        let stack = (0..<4).map { CalendarEvent.fixture(id: "s\($0)", start: TestClock.date("2026-09-30T00:00:00+02:00"), minutes: 1440, allDay: true) }
+        let stacked = WeekLayout.bars(stack, days: days, calendar: calendar)
+        #expect(WeekLayout.hidden(stacked, rows: 2, days: 7) == [0, 0, 2, 0, 0, 0, 0])
+    }
 }

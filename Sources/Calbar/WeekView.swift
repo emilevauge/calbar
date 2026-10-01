@@ -33,15 +33,19 @@ struct WeekView: View {
                 ScrollView {
                     grid(contents)
                 }
-                // Opaque: on the translucent popover the light blocks
-                // blended into whatever was behind it.
-                .background(Color(nsColor: .textBackgroundColor).opacity(scheme == .dark ? 0.55 : 0.85))
                 .frame(height: CGFloat(max(endHour - startHour, 1)) * Self.hourHeight)
                 .onAppear { proxy.scrollTo(startHour, anchor: .top) }
                 .onChange(of: startHour) { _, hour in proxy.scrollTo(hour, anchor: .top) }
             }
         }
         .frame(width: Self.width)
+    }
+
+    /// Text on the opaque blocks. Not `.secondary`: on the popover's
+    /// material it is vibrant, blended with what lies behind the panel
+    /// rather than the block, and can vanish.
+    static func ink(_ opacity: Double) -> Color {
+        Color(nsColor: .labelColor).opacity(opacity)
     }
 
     private var columnWidth: CGFloat { (Self.width - Self.gutter - 8) / 7 }
@@ -74,63 +78,102 @@ struct WeekView: View {
         .padding(.top, 4)
     }
 
-    /// All-day events, and timed ones of a day or more: two per day, then
-    /// "+N", which unfolds the whole row.
+    /// All-day events, and timed ones of a day or more, as bars across
+    /// the days they cover: two rows, then a "+N" under each day with
+    /// hidden bars, which unfolds every row (a chevron folds them back).
     private func allDayRow(_ contents: [DayContent]) -> some View {
-        let lists = contents.map { content -> [CalendarEvent] in
+        var seen = Set<String>()
+        let events = contents.flatMap { content -> [CalendarEvent] in
             if case .loaded(let listing) = content { return listing.allDay + listing.timed.filter(\.spansDays) }
             return []
-        }
-        let foldable = lists.contains { $0.count > 2 }
+        }.filter { seen.insert($0.occurrenceKey).inserted }
+        let bars = WeekLayout.bars(events, days: days, calendar: .current)
+        let rowCount = (bars.map(\.row).max() ?? -1) + 1
+        let limit = 2
+        let shownRows = allDayUnfolded ? rowCount : min(rowCount, limit)
+        let hidden = WeekLayout.hidden(bars, rows: limit, days: days.count)
+        let rowHeight: CGFloat = 18
         return Group {
-            if lists.contains(where: { !$0.isEmpty }) {
-                HStack(alignment: .top, spacing: 0) {
-                    Color.clear.frame(width: Self.gutter, height: 1)
-                    ForEach(Array(lists.enumerated()), id: \.offset) { _, events in
-                        VStack(alignment: .leading, spacing: 2) {
-                            ForEach(allDayUnfolded ? events : Array(events.prefix(2))) { event in
-                                allDayChip(event)
-                            }
-                            if events.count > 2 {
-                                Button {
-                                    withAnimation(Motion.resize) { allDayUnfolded.toggle() }
-                                } label: {
-                                    Group {
-                                        if allDayUnfolded {
-                                            Image(systemName: "chevron.up")
-                                                .font(.system(size: 8, weight: .semibold))
-                                        } else {
-                                            Text("+\(events.count - 2)")
-                                        }
-                                    }
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 4)
-                                    .frame(maxWidth: .infinity, minHeight: 14, alignment: .leading)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                                .help(allDayUnfolded ? "Show less" : events.dropFirst(2).map(\.title).joined(separator: "\n"))
+            if !bars.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ZStack(alignment: .topLeading) {
+                        Color.clear.frame(height: CGFloat(shownRows) * rowHeight)
+                        ForEach(bars.filter { $0.row < shownRows }, id: \.event.occurrenceKey) { bar in
+                            allDayBar(bar)
+                                .frame(width: CGFloat(bar.last - bar.first + 1) * columnWidth - 4, height: rowHeight - 2)
+                                .offset(x: Self.gutter + CGFloat(bar.first) * columnWidth + 2,
+                                        y: CGFloat(bar.row) * rowHeight)
+                        }
+                    }
+                    if rowCount > limit {
+                        HStack(spacing: 0) {
+                            Color.clear.frame(width: Self.gutter, height: 1)
+                            ForEach(Array(hidden.enumerated()), id: \.offset) { _, count in
+                                moreButton(count)
+                                    .frame(width: columnWidth, alignment: .leading)
                             }
                         }
-                        .frame(width: columnWidth - 4, alignment: .leading)
-                        .padding(.horizontal, 2)
                     }
                 }
-                .padding(.bottom, foldable ? 2 : 4)
+                .padding(.bottom, 4)
             }
         }
     }
 
-    private func allDayChip(_ event: CalendarEvent) -> some View {
+    /// "+N" under a day while folded, a chevron on every day while unfolded.
+    @ViewBuilder
+    private func moreButton(_ count: Int) -> some View {
+        if allDayUnfolded || count > 0 {
+            Button {
+                withAnimation(Motion.resize) { allDayUnfolded.toggle() }
+            } label: {
+                Group {
+                    if allDayUnfolded {
+                        Image(systemName: "chevron.up").font(.system(size: 8, weight: .semibold))
+                    } else {
+                        Text("+\(count)")
+                    }
+                }
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .frame(minHeight: 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(allDayUnfolded ? "Show less" : "Show all")
+        } else {
+            Color.clear.frame(height: 14)
+        }
+    }
+
+    /// The title, and the start time of a timed event when it starts this
+    /// week: "Trip to Lyon, 08:00".
+    private func allDayBar(_ bar: WeekLayout.Bar) -> some View {
+        let event = bar.event
         let color = Color(hex: event.colorHex)
-        return Text(event.title)
-            .font(.caption2.weight(.medium))
-            .lineLimit(1)
-            .padding(.horizontal, 4)
-            .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
-            .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: 3, style: .continuous))
-            .help(event.title)
+        let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
+        let time = !event.isAllDay && !bar.continuesBefore ? ", \(AgendaFormat.clock(event.start, .current))" : ""
+        return HStack(spacing: 0) {
+            if bar.continuesBefore {
+                Image(systemName: "chevron.left").font(.system(size: 7, weight: .bold)).padding(.trailing, 3)
+            }
+            Text(event.title).fontWeight(.medium)
+            Text(time).foregroundStyle(Self.ink(0.6))
+            Spacer(minLength: 0)
+            if bar.continuesAfter {
+                Image(systemName: "chevron.right").font(.system(size: 7, weight: .bold))
+            }
+        }
+        .font(.caption2)
+        .lineLimit(1)
+        .padding(.horizontal, 5)
+        .background {
+            shape.fill(Color(nsColor: .textBackgroundColor))
+            shape.fill(color.opacity(scheme == .dark ? 0.42 : 0.30))
+            shape.strokeBorder(color.opacity(0.55), lineWidth: 0.5)
+        }
+        .help("\(event.title)\n\(AgendaFormat.timeRange(event, calendar: .current))")
     }
 
     // MARK: grid
@@ -228,24 +271,28 @@ struct WeekView: View {
                     Text(AgendaFormat.clock(event.start, .current))
                         .font(.system(size: 9.5))
                         .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Self.ink(0.6))
                 }
             }
             .padding(.leading, 5)
             .padding(.trailing, 2)
-            .padding(.vertical, 2)
+            // A short meeting has just room for its title.
+            .padding(.vertical, height < 20 ? 0 : 2)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .frame(height: height)
             .background {
-                // Denser than the list's tints, with a hairline in the
-                // calendar color, so neighbors stay apart on the grid.
-                let fill = scheme == .dark ? 0.42 : 0.30
+                // An opaque base under the tint: on the translucent popover
+                // a bare tint mixes with the wallpaper. A hairline in the
+                // calendar color keeps neighbors apart. Past and declined
+                // events get a lighter tint, not transparency.
+                let fill = (scheme == .dark ? 0.42 : 0.30) * (declined ? 0.3 : past ? 0.5 : 1)
+                shape.fill(Color(nsColor: .textBackgroundColor))
                 if awaits {
                     shape.fill(color.opacity(fill * 0.4))
                     shape.strokeBorder(color, style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
                 } else {
-                    shape.fill(color.opacity(declined ? fill * 0.3 : fill))
-                    shape.strokeBorder(color.opacity(0.55), lineWidth: 0.5)
+                    shape.fill(color.opacity(fill))
+                    shape.strokeBorder(color.opacity(past || declined ? 0.35 : 0.55), lineWidth: 0.5)
                 }
             }
             .overlay(alignment: .leading) {
@@ -256,7 +303,7 @@ struct WeekView: View {
             .contentShape(shape)
         }
         .buttonStyle(.plain)
-        .opacity(declined ? 0.55 : past ? 0.7 : 1)
+        .foregroundStyle(Self.ink(past || declined ? 0.55 : 1))
         .help("\(event.title)\n\(AgendaFormat.timeRange(event, calendar: .current))")
         .popover(isPresented: Binding(get: { opened == event.id }, set: { if !$0 { opened = nil } }),
                  arrowEdge: .trailing) {

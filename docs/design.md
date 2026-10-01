@@ -292,17 +292,23 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   picker shows the week of the picked day. The popover widens to 720 pt, animated like any
   resize. A peek always uses the day layout.
 - Week view (`WeekView`, `WeekLayout`): 7 columns from the user's first weekday, headed
-  "Mon 28" with today's date in an accent circle (a click shows that day in the day view), up
-  to two all-day chips per day then "+N", which unfolds the whole row (a chevron folds it), and
-  an hour grid of 44 pt per hour, on an opaque background. Timed events of 24 hours or more
-  (`spansDays`) go with the all-day events, on each day they cover, not in the grid. The hours from
+  "Mon 28" with today's date in an accent circle (a click shows that day in the day view), then
+  the all-day area and an hour grid of 44 pt per hour, translucent like the rest of the popover.
+- All-day area (`WeekLayout.bars`): all-day events and timed events of 24 hours or more
+  (`spansDays`, not in the grid) as one bar across the days they cover, clipped to the week
+  with a chevron on a side that continues, "Trip to Lyon, 08:00" for a timed one starting this
+  week. Longer and earlier bars take the first free row. Two rows, then a "+N" under each day
+  with hidden bars, which unfolds every row; a chevron folds them back. The hours from
   "Week view from" to "Week view until" (9 and 19 by default) fill the visible height; the grid
-  covers the whole day and opens scrolled to the first one. Timed events are blocks in the
-  calendar color (30 % in light mode, 42 % in dark) with a hairline border and a leading bar,
-  1 pt apart, title and start time; events that overlap split their
+  covers the whole day and opens scrolled to the first one. Timed events are opaque blocks (a
+  text background base under the calendar color, 30 % in light mode, 42 % in dark) with a
+  hairline border and a leading bar, 1 pt apart, title and start time. Their text uses the label
+  color at a set opacity, not `.secondary`, which on the popover material is vibrant and can
+  vanish against the block; events that overlap split their
   group into lanes, each taking the first free one (back to back is no overlap); an event across
   midnight is clipped to each day. The same styles as the list: dashed border while an
-  invitation waits, faded and struck through when declined, slightly faded (70 %) once past. A red line with a
+  invitation waits, a lighter tint and grey text once past or declined, struck through when
+  declined. A red line with a
   dot marks the current time in today's column, tinted lightly. A click on a block opens its
   card in a popover (Join, RSVP, guests, documents). The week is fetched in one request window
   for the days the regular refresh does not cover, then kept in the day cache.
