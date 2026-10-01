@@ -8,6 +8,7 @@ enum Prefs {
     static let lingerMinutesKey = "alertLingerMinutes"
     static let showDeclinedKey = "showDeclined"
     static let notifyBeforeMeetingsKey = "notifyBeforeMeetings"
+    static let soundBeforeMeetingsKey = "soundBeforeMeetings"
     static let openPanelAtDayStartKey = "openPanelAtDayStart"
     /// "yyyy-MM-dd" of the last day the popover opened by itself.
     static let lastDayStartOpenKey = "lastDayStartOpen"
@@ -18,6 +19,7 @@ enum Prefs {
             lingerMinutesKey: 5,
             showDeclinedKey: false,
             notifyBeforeMeetingsKey: true,
+            soundBeforeMeetingsKey: true,
             openPanelAtDayStartKey: true,
         ])
     }
@@ -28,6 +30,11 @@ enum Prefs {
 
     static var notifyBeforeMeetings: Bool {
         UserDefaults.standard.bool(forKey: notifyBeforeMeetingsKey)
+    }
+
+    /// A sound when the panel opens by itself before a meeting.
+    static var soundBeforeMeetings: Bool {
+        UserDefaults.standard.bool(forKey: soundBeforeMeetingsKey)
     }
 
     static var openPanelAtDayStart: Bool {

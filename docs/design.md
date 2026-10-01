@@ -331,8 +331,11 @@ global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt h
   hover rule. A peek already showing moves to the newer meeting; the start wins over an alert
   due at the same tick. A stage counts as done only once the peek showed: while the screen is
   locked or the full popover is open, it waits for a later tick within its window. Dismissed
-  meetings are skipped. A moved meeting has a new key and peeks again. Setting "Show the panel
-  before a meeting", on by default.
+  meetings are skipped. A moved meeting has a new key and peeks again. Each timed peek plays the
+  "Glass" system sound. The peek opens after the icon is redrawn, so it anchors on the capsule
+  that appears in the same tick, and the popover is anchored again whenever the icon changes
+  width under it. Settings "Show the panel before a meeting" and "Play a sound", both on by
+  default.
 - System notifications only offer updates (see "Updates").
 
 ## Updates
@@ -367,7 +370,8 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
   last sign-in error; its footer gives the OAuth client ID, shortened, with "Import…" or
   "Replace…".
 - Alerts: "Alert before" (1 to 60 min, default 10), "Keep after the start" (0 to 30 min, default
-  5), "Show the panel before a meeting" (on). Footer: "Before each meeting and at its start, the
+  5), "Show the panel before a meeting" (on), "Play a sound" (on, disabled when the panel
+  setting is off). Footer: "Before each meeting and at its start, the
   panel shows it for a few seconds, and a Join button shows in the menu bar."
 - Display: "Show declined events" (off).
 - Global shortcut: "Open Macal", default `⌃⌥M`. Recorded by `ShortcutRecorder`: click, type the

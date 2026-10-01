@@ -184,7 +184,9 @@ final class AppDelegate: NSObject, ObservableObject {
     }
 
     private func refreshIndicators() {
-        peeker.update(now: store.now)
+        // After the icon: a peek opened in the same tick as the capsule
+        // appears must anchor on the new, wider icon.
+        defer { peeker.update(now: store.now) }
         let state = indicatorState(now: store.now)
         var capsule: StatusItemImage.Join?
         if let event = state.queue.primary, let style = state.style {
@@ -196,9 +198,17 @@ final class AppDelegate: NSObject, ObservableObject {
         guard render != lastRender else { return }
         lastRender = render
         let (image, zone) = StatusItemImage.make(badge: render.badge, join: render.join, dark: render.dark)
+        let widthChanged = button.image?.size.width != image.size.width
         button.image = image
         joinZoneWidth = zone
         button.setAccessibilityLabel(capsule.map { "Macal, Join \($0.title)" } ?? "Macal")
+        // The icon may have changed width under an open popover: anchor it
+        // again once the menu bar has laid the item out.
+        guard widthChanged else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let popover = self?.popover, popover.isShown, let button = self?.statusItem?.button else { return }
+            popover.positioningRect = button.bounds
+        }
     }
 
     // MARK: clicks
@@ -302,6 +312,9 @@ final class AppDelegate: NSObject, ObservableObject {
         guard let popover, let button = statusItem?.button else { return false }
         if popover.isShown && !isPeeking { return false }
         peekTarget = event.occurrenceKey
+        if Prefs.soundBeforeMeetings {
+            NSSound(named: "Glass")?.play()
+        }
         if !popover.isShown {
             isPeeking = true
             present(popover, from: button)

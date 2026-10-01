@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.lingerMinutesKey) private var lingerMinutes = 5
     @AppStorage(Prefs.showDeclinedKey) private var showDeclined = false
     @AppStorage(Prefs.notifyBeforeMeetingsKey) private var notifyBeforeMeetings = true
+    @AppStorage(Prefs.soundBeforeMeetingsKey) private var soundBeforeMeetings = true
     @AppStorage(Prefs.openPanelAtDayStartKey) private var openPanelAtDayStart = true
     @State private var launchAtLogin = LaunchAgent.isEnabled
     @State private var busy = false
@@ -61,6 +62,8 @@ struct SettingsView: View {
                     valueRow("Keep after the start", "\(lingerMinutes) min")
                 }
                 Toggle("Show the panel before a meeting", isOn: $notifyBeforeMeetings)
+                Toggle("Play a sound", isOn: $soundBeforeMeetings)
+                    .disabled(!notifyBeforeMeetings)
             } header: {
                 Text("Alerts")
             } footer: {
