@@ -70,6 +70,7 @@ struct GoogleCalendarList: Decodable {
         let backgroundColor: String?
         let selected: Bool?
         let primary: Bool?
+        let accessRole: String?
     }
     let items: [Entry]
     let nextPageToken: String?
@@ -193,7 +194,8 @@ extension CalendarInfo {
             name: e.summaryOverride ?? e.summary ?? e.id,
             colorHex: e.backgroundColor ?? "#4285f4",
             isPrimary: e.primary == true,
-            enabled: e.primary == true
+            enabled: e.primary == true,
+            canWrite: e.accessRole.map { $0 == "owner" || $0 == "writer" }
         )
     }
 }

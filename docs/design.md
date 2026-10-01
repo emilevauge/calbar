@@ -333,6 +333,17 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
 - Progress: every ongoing meeting, card or row, has a
   3.5 pt bar of the elapsed time, colored like Claudette's context bar: green below 50 %, yellow
   below 75 %, orange below 90 %, then red. Tooltip "20 min of 45 min · 44%".
+- Creating an event (`NewEventForm`, `NewEvent`): in the week view or the day grid, a click on
+  an empty slot (outside the blocks) marks a 30 minute ghost block at that time, down to the
+  quarter hour, and opens a form in a popover: title ("New event" placeholder, focused, "(No
+  title)" when left blank), the day ("Wed, Sep 30") and its start time, a duration (15 min to
+  2 h, 30 min by default), the calendar (the writable calendars, `accessRole` owner or writer,
+  of the accounts with the write scope, grouped by account, primary first; the last one used
+  is remembered), and "Add a Google Meet link" (remembered, on by default). `↵` creates, `esc`
+  cancels. Calbar posts `events.insert` (with `conferenceDataVersion=1` and a
+  `hangoutsMeet` create request for Meet), in the user's time zone, then refreshes. Errors
+  show in the form; a missing scope marks the account read only. Calendars stored before the
+  access role was known count as writable only when primary, until the next refresh fills it.
 - Details (card, or a row expanded by a click, one at a time): the "Going?" line for an
   invitation (see "Answering invitations"), the video provider when there is no Join button,
   location (opens Maps, or the URL when the location is one), organizer, guests as up to 5

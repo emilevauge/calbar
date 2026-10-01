@@ -195,14 +195,21 @@ public struct CalendarInfo: Identifiable, Equatable, Codable, Sendable {
     public let colorHex: String
     public let isPrimary: Bool
     public var enabled: Bool
+    /// The user may add events (`accessRole` owner or writer). Nil for a
+    /// calendar stored before this was known: only the primary counts then.
+    public var canWrite: Bool?
 
-    public init(id: String, name: String, colorHex: String, isPrimary: Bool, enabled: Bool) {
+    public init(id: String, name: String, colorHex: String, isPrimary: Bool, enabled: Bool, canWrite: Bool? = nil) {
         self.id = id
         self.name = name
         self.colorHex = colorHex
         self.isPrimary = isPrimary
         self.enabled = enabled
+        self.canWrite = canWrite
     }
+
+    /// Where a new event can go.
+    public var isWritable: Bool { canWrite ?? isPrimary }
 }
 
 public struct Account: Identifiable, Equatable, Codable, Sendable {

@@ -166,7 +166,9 @@ struct MenuView: View {
             endHour: min(max(weekEndHour, weekStartHour + 1), 24),
             onShowDay: { _ in withAnimation(Motion.resize) { viewMode = .day } },
             onJoin: join,
-            width: 380
+            width: 380,
+            calendars: writableCalendars,
+            onCreate: { event, email in try await store.create(event, in: email) }
         )
     }
 
@@ -182,8 +184,17 @@ struct MenuView: View {
                 withAnimation(Motion.resize) { viewMode = .day }
                 show(day: picked)
             },
-            onJoin: join
+            onJoin: join,
+            calendars: writableCalendars,
+            onCreate: { event, email in try await store.create(event, in: email) }
         )
+    }
+
+    /// Calendars of the accounts allowed to write, that accept new events.
+    private var writableCalendars: [WritableCalendar] {
+        accounts.accounts.filter(\.canReply).flatMap { account in
+            account.calendars.filter(\.isWritable).map { WritableCalendar(email: account.email, calendar: $0) }
+        }
     }
 
     // MARK: peek

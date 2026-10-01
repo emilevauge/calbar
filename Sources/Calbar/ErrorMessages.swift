@@ -65,3 +65,19 @@ func describeReply(_ error: Error) -> String {
         return "Could not send the answer."
     }
 }
+
+/// Message in the new event form when creating fails.
+func describeCreate(_ error: Error) -> String {
+    switch error {
+    case APIError.insufficientScope:
+        return "Reconnect this account in Settings to create events."
+    case APIError.http(403, _):
+        return "Google refused to add the event (403)."
+    case APIError.http(404, _):
+        return "This calendar no longer exists."
+    case is URLError, is APIError, OAuthError.invalidGrant:
+        return describe(error)
+    default:
+        return "Could not create the event."
+    }
+}

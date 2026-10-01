@@ -111,6 +111,15 @@ public struct CalendarAPI: Sendable {
         _ = try await send("PATCH", path, query: [URLQueryItem(name: "sendUpdates", value: "all")], body: body, token: token)
     }
 
+    /// Adds an event, with a Google Meet link when `NewEvent.addMeet`.
+    /// `sendUpdates=all` would invite guests; there are none yet.
+    public func insert(token: String, event: NewEvent) async throws {
+        var query: [URLQueryItem] = []
+        if event.addMeet { query.append(URLQueryItem(name: "conferenceDataVersion", value: "1")) }
+        _ = try await send("POST", "/calendars/\(FormEncoding.escape(event.calendarID))/events",
+                           query: query, body: try event.body(), token: token)
+    }
+
     /// Token of the next page, or `nil` to stop. An empty or repeated token
     /// would otherwise loop forever.
     private static func next(_ token: String?, after previous: String?) -> String? {

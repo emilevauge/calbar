@@ -19,9 +19,15 @@ struct WeekView: View {
     static let width: CGFloat = 720
     /// 720 pt for the week; the popover's width for one day.
     var width: CGFloat = Self.width
+    /// Calendars a click on an empty slot can add an event to, and how.
+    /// No creation without `onCreate`.
+    var calendars: [WritableCalendar] = []
+    var onCreate: ((NewEvent, String) async throws -> Void)?
     static let gutter: CGFloat = 40
     static let hourHeight: CGFloat = 44
     @State private var opened: String?
+    /// The slot clicked for a new event: its day and start minute.
+    @State private var draft: (day: Date, minute: Int)?
     /// The all-day row shows every event instead of two per day.
     @State private var allDayUnfolded = false
     @Environment(\.colorScheme) private var scheme
@@ -224,8 +230,14 @@ struct WeekView: View {
         let today = Calendar.current.isDateInToday(day)
         return ZStack(alignment: .topLeading) {
             // Fills the column, so the blocks are offset from its top
-            // rather than from the middle of their own bounds.
+            // rather than from the middle of their own bounds. A click on
+            // it, outside the blocks, starts a new event at that time.
             (today ? Color.accentColor.opacity(0.04) : Color.clear)
+                .contentShape(Rectangle())
+                .onTapGesture(coordinateSpace: .local) { location in
+                    guard onCreate != nil else { return }
+                    draft = (day, NewEvent.slot(minute: location.y / minuteHeight))
+                }
             if case .loading = content {
                 ProgressView().controlSize(.small)
                     .frame(maxWidth: .infinity)
@@ -241,7 +253,33 @@ struct WeekView: View {
             if today {
                 nowLine(day, minuteHeight: minuteHeight)
             }
+            if let draft, Calendar.current.isDate(draft.day, inSameDayAs: day) {
+                ghost(day: day, minute: draft.minute, minuteHeight: minuteHeight)
+            }
         }
+    }
+
+    /// The slot of the event being created, with its form.
+    private func ghost(day: Date, minute: Int, minuteHeight: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
+        let start = day.addingTimeInterval(TimeInterval(minute * 60))
+        return shape.fill(Color.accentColor.opacity(0.25))
+            .overlay(shape.strokeBorder(Color.accentColor, lineWidth: 1))
+            .overlay(alignment: .topLeading) {
+                Text(AgendaFormat.clock(start, .current))
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .monospacedDigit()
+                    .padding(.leading, 5)
+                    .padding(.top, 2)
+            }
+            .frame(width: columnWidth - 3, height: 30 * minuteHeight - 2)
+            .offset(x: 1, y: CGFloat(minute) * minuteHeight + 1)
+            .popover(isPresented: Binding(get: { draft != nil }, set: { if !$0 { draft = nil } }),
+                     arrowEdge: .trailing) {
+                NewEventForm(start: start, calendars: calendars,
+                             onCreate: { event, email in try await onCreate?(event, email) },
+                             onDone: { draft = nil })
+            }
     }
 
     /// Red line at the current time, with a dot on the left.

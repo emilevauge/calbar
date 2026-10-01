@@ -454,6 +454,26 @@ final class EventStore: ObservableObject {
         }
     }
 
+    /// Creates `event` in one of `email`'s calendars, then refreshes so
+    /// it shows. Throws for the form to show the error.
+    func create(_ event: NewEvent, in email: String) async throws {
+        guard let auth else { throw OAuthError.invalidGrant }
+        NSLog("Calbar: creating an event")
+        do {
+            try await withAccessToken(email, auth: auth) { [api] token in
+                try await api.insert(token: token, event: event)
+            }
+        } catch APIError.insufficientScope {
+            accounts.markReadOnly(email)
+            throw APIError.insufficientScope
+        } catch OAuthError.invalidGrant {
+            accounts.setNeedsReconnect(true, email: email)
+            throw OAuthError.invalidGrant
+        }
+        NSLog("Calbar: event created")
+        await refresh()
+    }
+
     /// Declined events answered while the popover was open leave the list.
     func popoverDidClose() {
         recentlyAnswered = recentlyAnswered.intersection(pendingAnswers)
