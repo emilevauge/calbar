@@ -8,7 +8,10 @@ struct DayHeader<Info: View>: View {
     let isToday: Bool
     let onChange: (Int) -> Void
     let onToday: () -> Void
+    /// A day picked in the calendar opened by a click on the title.
+    let onPick: (Date) -> Void
     @ViewBuilder let info: () -> Info
+    @State private var picking = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -32,21 +35,64 @@ struct DayHeader<Info: View>: View {
         .padding(.vertical, 10)
     }
 
-    /// Clicking the title of another day goes back to today.
-    @ViewBuilder
+    /// A click on the title opens a month calendar to pick any day.
     private var title: some View {
-        let label = Text(DayHeaderText.title(day))
-            .font(.system(size: 15, weight: .semibold))
-            .lineLimit(1)
-        if isToday {
-            label
-        } else {
-            Button(action: onToday) {
-                label.contentShape(Rectangle())
+        Button {
+            picking.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Text(DayHeaderText.title(day))
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.tertiary)
             }
-            .buttonStyle(.plain)
-            .help("Back to today")
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .help("Pick a day")
+        .popover(isPresented: $picking, arrowEdge: .bottom) {
+            DayPicker(day: day, isToday: isToday) { picked in
+                picking = false
+                onPick(picked)
+            } onToday: {
+                picking = false
+                onToday()
+            }
+        }
+    }
+}
+
+/// Month calendar in a popover under the day title.
+private struct DayPicker: View {
+    let day: Date
+    let isToday: Bool
+    let onPick: (Date) -> Void
+    let onToday: () -> Void
+    @State private var selection: Date
+
+    init(day: Date, isToday: Bool, onPick: @escaping (Date) -> Void, onToday: @escaping () -> Void) {
+        self.day = day
+        self.isToday = isToday
+        self.onPick = onPick
+        self.onToday = onToday
+        _selection = State(initialValue: day)
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            DatePicker("Day", selection: $selection, displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .onChange(of: selection) { _, picked in
+                    onPick(picked)
+                }
+            Button("Today", action: onToday)
+                .controlSize(.small)
+                .disabled(isToday)
+        }
+        .padding(10)
     }
 }
 

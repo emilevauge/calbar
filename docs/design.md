@@ -262,8 +262,9 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   or "Today · nothing left"; for another day, "Yesterday" or "Tomorrow" when it applies and the
   number of events ("Tomorrow · 3 events"), nothing for an empty day. On the right, `‹` and `›`
   icon buttons (28 x 24 pt, tooltips "Previous day" and "Next day") grouped on a light
-  background. On another day a click on the title goes back to today ("Back to today"). The
-  popover goes back to today every time it closes.
+  background. A click on the title, which has a small chevron ("Pick a day"), opens a month
+  calendar (graphical `DatePicker`) in a popover: picking a day shows it, "Today" (disabled on
+  today) goes back. The popover goes back to today every time it closes.
 - Today: all-day events as small colored chips on one line (those that do not fit fold into a
   "+N" chip, which unfolds them all on wrapped lines, with a chevron to fold them back), then ongoing
   and upcoming timed events, then "N ended earlier", folded, which unfolds the past events

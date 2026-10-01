@@ -121,7 +121,7 @@ struct MenuView: View {
     // MARK: header
 
     private func header(_ agenda: DayAgenda, day: Date, other: DayContent?) -> some View {
-        DayHeader(day: day, isToday: other == nil, onChange: changeDay(by:), onToday: showToday) {
+        DayHeader(day: day, isToday: other == nil, onChange: changeDay(by:), onToday: showToday, onPick: show(day:)) {
             if let other {
                 DayHeader.otherDayInfo(other, offset: dayOffset)
             } else if store.isOffline, let last = store.lastFetch {
@@ -339,6 +339,14 @@ struct MenuView: View {
         dayOffset += delta
         expandedID = nil
         selectedIndex = 0
+    }
+
+    /// Jumps to the day of `date`, counted in calendar days from today.
+    private func show(day date: Date) {
+        let calendar = Calendar.current
+        let delta = calendar.dateComponents([.day], from: calendar.startOfDay(for: store.now),
+                                            to: calendar.startOfDay(for: date)).day ?? 0
+        changeDay(by: delta - dayOffset)
     }
 
     private func showToday() {
