@@ -159,6 +159,9 @@ struct EventEditor: View {
             }
         }
         .frame(width: embedded ? nil : 380)
+        // Its full height, always: squeezed by a popover that has not
+        // grown yet, the lines would overlap; this way the popover grows.
+        .fixedSize(horizontal: false, vertical: true)
         .onAppear {
             contacts.prepare()
             initialFields = fields
