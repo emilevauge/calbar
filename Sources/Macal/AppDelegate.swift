@@ -20,7 +20,7 @@ final class AppDelegate: NSObject, ObservableObject {
     let store: EventStore
     let join: JoinController
     let notifier: MeetingNotifier
-    let hoverCard: HoverCardController
+    let hoverPeek = HoverPeek()
 
     /// Last sign-in failure, shown in the settings panel.
     @Published var authError: String?
@@ -65,7 +65,6 @@ final class AppDelegate: NSObject, ObservableObject {
         let join = JoinController(store: store)
         self.join = join
         self.notifier = MeetingNotifier(store: store, join: join)
-        self.hoverCard = HoverCardController(store: store, accounts: accounts)
         super.init()
         NotificationCenter.default.addObserver(
             self,
@@ -118,22 +117,15 @@ final class AppDelegate: NSObject, ObservableObject {
             button.target = self
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             button.imagePosition = .imageOnly
-            // No plain toolTip: the hover card replaces it.
+            // No plain toolTip: hovering opens the popover in peek mode.
             button.setAccessibilityLabel("Macal")
-            hoverCard.attach(to: button)
+            hoverPeek.attach(to: button)
             appearanceObservation = button.observe(\.effectiveAppearance) { [weak self] _, _ in
                 DispatchQueue.main.async { self?.refreshIndicators() }
             }
         }
         statusItem = item
-        hoverCard.canShow = { [weak self] in self?.popover?.isShown != true }
-        hoverCard.peek = { [weak self] in self?.peek() ?? false }
-        hoverCard.dueState = { [weak self] now in
-            guard let self else { return nil }
-            let state = self.indicatorState(now: now)
-            guard let primary = state.queue.primary, let style = state.style else { return nil }
-            return (primary, style)
-        }
+        hoverPeek.peek = { [weak self] in self?.peek() }
         refreshIndicators()
     }
 
@@ -210,7 +202,6 @@ final class AppDelegate: NSObject, ObservableObject {
         button.image = image
         joinZoneWidth = zone
         button.setAccessibilityLabel(capsule.map { "Macal, Join \($0.title)" } ?? "Macal")
-        hoverCard.repositionIfVisible()
     }
 
     // MARK: clicks
@@ -237,7 +228,7 @@ final class AppDelegate: NSObject, ObservableObject {
             let x = sender.convert(event.locationInWindow, from: nil).x
                 - (sender.bounds.width - image.size.width) / 2
             if x < joinZoneWidth {
-                hoverCard.dismissForClick()
+                hoverPeek.cancelForClick()
                 join.join(primary)
                 return
             }
@@ -249,7 +240,7 @@ final class AppDelegate: NSObject, ObservableObject {
     /// going to `statusItemClicked(_:)`.
     private func showMenu(_ menu: NSMenu) {
         guard let statusItem else { return }
-        hoverCard.dismissForClick()
+        hoverPeek.cancelForClick()
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
@@ -258,7 +249,7 @@ final class AppDelegate: NSObject, ObservableObject {
     // MARK: popover
 
     @objc func togglePopover(_ sender: Any?) {
-        hoverCard.dismissForClick()
+        hoverPeek.cancelForClick()
         if isPeeking {
             expandPeek()
         } else if popover?.isShown == true {
@@ -271,7 +262,7 @@ final class AppDelegate: NSObject, ObservableObject {
     func showPopover() {
         if isPeeking { return expandPeek() }
         guard let popover, let button = statusItem?.button, !popover.isShown else { return }
-        hoverCard.hide()
+        hoverPeek.cancel()
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
@@ -281,16 +272,19 @@ final class AppDelegate: NSObject, ObservableObject {
         popover?.performClose(nil)
     }
 
-    /// Opens the popover on the current meeting alone, without taking the
-    /// focus from the active app. False when no meeting is running, so the
-    /// hover card shows instead.
-    func peek() -> Bool {
-        guard let popover, let button = statusItem?.button, !popover.isShown,
-              NextMeeting.ongoing(events: store.events, now: store.now) != nil else { return false }
+    /// Opens the popover on one meeting alone (`peekEvent`), without
+    /// taking the focus from the active app.
+    func peek() {
+        guard let popover, let button = statusItem?.button, !popover.isShown else { return }
         isPeeking = true
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         watchPeek()
-        return true
+    }
+
+    /// The meeting a peek shows: the one the join capsule is about, else
+    /// the ongoing one, else the next of today. Nil once the day is over.
+    func peekEvent(now: Date) -> CalendarEvent? {
+        join.queue(now: now).primary ?? NextMeeting.focus(events: store.events, now: now, calendar: .current)
     }
 
     /// Grows the peeking popover to the whole day and gives it the keyboard.

@@ -1,7 +1,7 @@
 import Foundation
 
-/// Fill of the merged menu bar capsule, and of the hover card header band,
-/// while the Join queue has a primary meeting.
+/// Fill of the merged menu bar capsule while the Join queue has a primary
+/// meeting.
 public enum CapsuleStyle: Equatable, Sendable {
     /// Fallback when the badge does not say how close the meeting is.
     case accent
@@ -24,14 +24,5 @@ public enum CapsuleStyle: Equatable, Sendable {
             let left = primary.start.timeIntervalSince(now)
             return left <= MenuBarBadge.imminentThreshold ? .urgent : .soon
         }
-    }
-}
-
-extension AgendaFormat {
-    /// Header of the hover card for a due meeting: "In 4 min",
-    /// "Now", "Now · 16 min left".
-    public static func headline(_ e: CalendarEvent, now: Date) -> String {
-        let text = relative(e, now: now)
-        return text.prefix(1).uppercased() + text.dropFirst()
     }
 }

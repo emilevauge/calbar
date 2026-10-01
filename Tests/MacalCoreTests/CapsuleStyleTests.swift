@@ -30,10 +30,4 @@ import Testing
         #expect(CapsuleStyle.make(badge: .warning, primary: event(inMinutes: -2), now: now) == .urgent)
     }
 
-    @Test func headlineIsCapitalized() {
-        let e = CalendarEvent.fixture(start: now.addingTimeInterval(240), minutes: 30)
-        #expect(AgendaFormat.headline(e, now: now) == "In 4 min")
-        #expect(AgendaFormat.headline(e, now: now.addingTimeInterval(200)) == "Now")
-        #expect(AgendaFormat.headline(e, now: now.addingTimeInterval(240 + 14 * 60)) == "Now · 16 min left")
-    }
 }

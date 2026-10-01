@@ -226,27 +226,18 @@ App (`Sources/Macal`):
   in memory per occurrence: a relaunch during the window shows them again.
 - Accessibility label: "Macal", or "Macal, Join <title>" while a meeting is due.
 
-## Hover card
+## Hover
 
-- During a meeting (`NextMeeting.ongoing`), the hover opens the popover itself instead, in
-  "peek" mode: the meeting's card alone, then "Click for the whole day". It does not activate
-  Macal, so the keyboard stays with the current app. A click on the icon, or on the card outside
-  its buttons, expands it to the whole day with an animation and gives it the keyboard. The
-  peek closes 0.4 s after the pointer has left both the icon and the popover, checked every
-  150 ms rather than with a tracking area, which would miss the gap between them.
-- Otherwise, shown after the pointer rests 0.5 s anywhere on the item, capsule included, in a
-  non-activating panel that ignores the mouse. Hidden on exit, on click, and while the popover
-  is open. Width 300 pt, corner radius 12 pt, `.regularMaterial` background. Aligned on the
-  capsule's left edge, centered under the plain page, kept inside the screen, updated live.
-- With a due meeting: a header band tinted with the capsule color (12 % in light mode, 18 % in
-  dark mode), text in that color: camera and "In 4 min", "Now" or "Now · 16 min left" on the
-  left, the time range on the right. Below: the calendar dot, the title on up to 2 lines, the
-  provider, the location, the number of guests and up to 3 attachments, then
-  "Click: join · right-click: options".
-- Without a due meeting: the next meeting of the day with its time range and relative time, or
-  "Nothing left today".
-- In both cases, a red "An account needs to be reconnected" line when needed, and a
-  "Now: <title> · 16 min left" line for an ongoing meeting other than the capsule's.
+- Resting the pointer 0.5 s anywhere on the item, capsule included, opens the popover itself in
+  "peek" mode, never a separate tooltip panel: one meeting's card alone, then "Click for the
+  whole day". The meeting is the one the join capsule is about, else the ongoing one, else the
+  next of today; once the day is over, "Nothing left today" and the first event of tomorrow. A
+  red "An account needs to be reconnected" line comes first when needed.
+- A peek does not activate Macal, so the keyboard stays with the current app. A click on the
+  icon, or on the card outside its buttons, expands it to the whole day with an animation and
+  gives it the keyboard. It closes 0.4 s after the pointer has left both the icon and the
+  popover, checked every 150 ms rather than with a tracking area, which would miss the gap
+  between them. A click on the icon keeps the peek off until the pointer leaves it.
 
 ## Popover
 
@@ -280,7 +271,7 @@ when it changes, as when a peek expands.
   separators: no card, no ended section, nothing dimmed, the duration instead of the relative
   time, no join button for an event already over. An event across midnight shows on both days;
   a multi-day all-day event shows on each day. The icon, the capsule, the notifications and the
-  hover card stay on today.
+  peek stay on today.
 - Card: "NOW" in red for an ongoing meeting, the time range and the time left ("35 min left")
   or the relative time ("in 12 min"), the title on up to 3 lines, and a "Join" button on the
   right when there is a video link. An ongoing meeting has a progress bar (see below).
@@ -293,7 +284,7 @@ when it changes, as when a peek expands.
   the relative time on today ("in 12 min", "now · 18 min left", "ended") or the duration on
   other days, then in the collapsed row the guest and attachment counts and the location
   unless it is a URL. A discreet camera button on the right joins the video call.
-- Progress: every ongoing meeting, card or row, and the "Now:" line of the hover card, has a
+- Progress: every ongoing meeting, card or row, has a
   3.5 pt bar of the elapsed time, colored like Claudette's context bar: green below 50 %, yellow
   below 75 %, orange below 90 %, then red. Tooltip "20 min of 45 min · 44%".
 - Details (card, or a row expanded by a click, one at a time): the "Going?" line for an
@@ -396,7 +387,7 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
 - A reply refused for lack of scope marks the account read-only: "Reconnect to reply" in the
   expanded row and the context menu.
 - A revoked or expired refresh token marks the account "needs reconnect": "Reconnect" in red in
-  the settings, "!" in the menu bar icon, a red line in the hover card.
+  the settings, "!" in the menu bar icon, a red line in the peek.
 - Sign-in errors show under the account list with a short message ("Access denied in the
   browser.", "No Internet connection.", ...). A cancelled sign-in shows nothing.
 - No network: the cache stays on screen with "offline · updated N min ago"; alerts continue.

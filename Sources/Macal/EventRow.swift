@@ -307,20 +307,3 @@ struct MeetingProgress: View {
         }
     }
 }
-
-/// Calendar color dot with a soft halo, same shape as Claudette's status dot.
-struct CalendarDot: View {
-    let hex: String
-
-    var body: some View {
-        let color = Color(hex: hex)
-        ZStack {
-            Circle()
-                .fill(color.opacity(0.22))
-                .frame(width: 16, height: 16)
-            Circle()
-                .fill(color)
-                .frame(width: 9, height: 9)
-        }
-    }
-}

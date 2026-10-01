@@ -26,8 +26,8 @@ struct MenuView: View {
         let focusID = other == nil ? Self.focusID(agenda, now: store.now) : nil
 
         Group {
-            if app.isPeeking, let current = NextMeeting.ongoing(events: store.events, now: store.now) {
-                peek(current)
+            if app.isPeeking {
+                peek(app.peekEvent(now: store.now), agenda: agenda)
                     .transition(.opacity)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
@@ -90,20 +90,32 @@ struct MenuView: View {
 
     // MARK: peek
 
-    /// On hover during a meeting: its card alone. A click anywhere but on
-    /// its buttons expands the popover to the whole day.
-    private func peek(_ event: CalendarEvent) -> some View {
-        VStack(spacing: 2) {
-            EventRow(
-                event: event,
-                now: store.now,
-                selected: false,
-                expanded: true,
-                isPast: false,
-                isFocus: true,
-                onToggle: {},
-                onJoin: { join(event) }
-            )
+    /// On hover: one meeting's card alone (see `AppDelegate.peekEvent`),
+    /// or the end of the day. A click anywhere but on its buttons expands
+    /// the popover to the whole day.
+    private func peek(_ event: CalendarEvent?, agenda: DayAgenda) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if accounts.needsAttention {
+                Label("An account needs to be reconnected", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 4)
+            }
+            if let event {
+                EventRow(
+                    event: event,
+                    now: store.now,
+                    selected: false,
+                    expanded: true,
+                    isPast: false,
+                    isFocus: true,
+                    onToggle: {},
+                    onJoin: { join(event) }
+                )
+            } else {
+                endOfDay(agenda.firstTomorrow)
+            }
             HStack(spacing: 4) {
                 Text("Click for the whole day")
                 Image(systemName: "chevron.down")
@@ -111,6 +123,7 @@ struct MenuView: View {
             }
             .font(.caption2)
             .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity)
             .padding(.bottom, 8)
         }
         .padding(.top, 6)
