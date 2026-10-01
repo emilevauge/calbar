@@ -293,13 +293,16 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   resize. A peek always uses the day layout.
 - Week view (`WeekView`, `WeekLayout`): 7 columns from the user's first weekday, headed
   "Mon 28" with today's date in an accent circle (a click shows that day in the day view), up
-  to two all-day chips per day then "+N", and an hour grid of 44 pt per hour. The hours from
+  to two all-day chips per day then "+N", which unfolds the whole row (a chevron folds it), and
+  an hour grid of 44 pt per hour, on an opaque background. Timed events of 24 hours or more
+  (`spansDays`) go with the all-day events, on each day they cover, not in the grid. The hours from
   "Week view from" to "Week view until" (9 and 19 by default) fill the visible height; the grid
   covers the whole day and opens scrolled to the first one. Timed events are blocks in the
-  calendar color with a leading bar, title and start time; events that overlap split their
+  calendar color (30 % in light mode, 42 % in dark) with a hairline border and a leading bar,
+  1 pt apart, title and start time; events that overlap split their
   group into lanes, each taking the first free one (back to back is no overlap); an event across
   midnight is clipped to each day. The same styles as the list: dashed border while an
-  invitation waits, faded and struck through when declined, faded once past. A red line with a
+  invitation waits, faded and struck through when declined, slightly faded (70 %) once past. A red line with a
   dot marks the current time in today's column, tinted lightly. A click on a block opens its
   card in a popover (Join, RSVP, guests, documents). The week is fetched in one request window
   for the days the regular refresh does not cover, then kept in the day cache.

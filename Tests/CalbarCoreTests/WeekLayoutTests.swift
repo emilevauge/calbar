@@ -63,4 +63,13 @@ import Testing
         #expect(p.map(\.event.id) == ["n"])
         #expect(p[0].startMinute == 0 && p[0].endMinute == 60)
     }
+
+    @Test func eventsOfADayOrMoreLeaveTheGrid() {
+        let trip = CalendarEvent.fixture(id: "t", start: TestClock.date("2026-09-29T08:00:00+02:00"), minutes: 2 * 1440)
+        let night = CalendarEvent.fixture(id: "n", start: TestClock.date("2026-09-29T22:00:00+02:00"), minutes: 4 * 60)
+        #expect(trip.spansDays)
+        #expect(!night.spansDays)
+        #expect(!CalendarEvent.fixture(start: at("09:00"), minutes: 1440, allDay: true).spansDays)
+        #expect(WeekLayout.place([trip, night], day: at("12:00"), calendar: calendar).map(\.event.id) == ["n"])
+    }
 }

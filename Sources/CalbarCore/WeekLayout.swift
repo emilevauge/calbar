@@ -40,13 +40,14 @@ public enum WeekLayout {
         public let lanes: Int
     }
 
-    /// Timed events of `day`, side by side where they overlap: each group
+    /// Timed events of `day`, except those lasting a day or more, which go
+    /// with the all-day events. Side by side where they overlap: each group
     /// of overlapping events splits the column into as many lanes as it
     /// needs at most, and each event takes the first free lane.
     public static func place(_ events: [CalendarEvent], day: Date, calendar: Calendar) -> [Placement] {
         let window = DayWindow.interval(for: day, calendar: calendar)
         let timed = events
-            .filter { !$0.isAllDay && DayWindow.contains($0, in: window) }
+            .filter { !$0.isAllDay && !$0.spansDays && DayWindow.contains($0, in: window) }
             .map { e -> (CalendarEvent, Int, Int) in
                 let start = max(e.start, window.start)
                 let end = min(max(e.end, e.start), window.end)
@@ -78,5 +79,13 @@ public enum WeekLayout {
         }
         flush()
         return result
+    }
+}
+
+extension CalendarEvent {
+    /// A timed event of 24 hours or more, a trip or a conference: the week
+    /// view shows it with the all-day events, like Google Calendar.
+    public var spansDays: Bool {
+        !isAllDay && end.timeIntervalSince(start) >= 24 * 60 * 60
     }
 }
