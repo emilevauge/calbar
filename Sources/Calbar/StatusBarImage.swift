@@ -12,21 +12,26 @@ import CalbarCore
 ///   meeting, minutes left in it, and a red glow around it, like an "on
 ///   air" sign. The glow needs color, so the page is drawn in the menu bar
 ///   ink (black or white) rather than as a template.
+/// - `onAir`: the glow stays for as long as a meeting runs, also around
+///   the orange or red countdown of the next one, or a warning.
 /// Colored states are not templates. With a joinable meeting the glyph
 /// sits inside the capsule drawn by `StatusItemImage` instead.
 enum StatusBarImage {
     /// `dark`: the menu bar is dark, for the ink of the glowing page.
-    static func make(_ badge: MenuBarBadge, dark: Bool) -> NSImage {
-        switch badge {
-        case .live, .inMeeting:
-            return onAir(badge, ink: dark ? .white : .black)
-        default:
-            break
-        }
+    /// `onAir`: a meeting is running, whatever the badge shows.
+    static func make(_ badge: MenuBarBadge, dark: Bool, onAir: Bool = false) -> NSImage {
         let color: NSColor? = switch badge {
         case .countdown(_, .soon): .systemOrange
         case .countdown(_, .imminent): .systemRed
         case .countdown(_, .normal), .live, .inMeeting, .warning, .none: nil
+        }
+        switch badge {
+        case .live, .inMeeting:
+            return glowing(badge, ink: .ink(dark ? .white : .black))
+        default:
+            if onAir {
+                return glowing(badge, ink: color.map { .colored($0) } ?? .ink(dark ? .white : .black))
+            }
         }
         let ink: CalendarGlyph.Ink
         if let color {
@@ -46,7 +51,7 @@ enum StatusBarImage {
     /// Room for the glow on each side of the page.
     static let glowMargin: CGFloat = 2
 
-    private static func onAir(_ badge: MenuBarBadge, ink: NSColor) -> NSImage {
+    private static func glowing(_ badge: MenuBarBadge, ink: CalendarGlyph.Ink) -> NSImage {
         let size = NSSize(width: 20 + 2 * glowMargin, height: 18)
         let body = CalendarGlyph.standardBody.offsetBy(dx: glowMargin, dy: 0)
         let image = NSImage(size: size, flipped: false) { _ in
@@ -63,7 +68,7 @@ enum StatusBarImage {
             ring.stroke()
             ring.stroke()
             NSGraphicsContext.restoreGraphicsState()
-            return CalendarGlyph.draw(badge.text, in: body, ink: .ink(ink), progress: badge.progress)
+            return CalendarGlyph.draw(badge.text, in: body, ink: ink, progress: badge.progress)
         }
         image.isTemplate = false
         return image

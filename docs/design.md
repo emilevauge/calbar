@@ -199,7 +199,9 @@ App (`Sources/Calbar`):
   "on air" sign, from the first second to the end. The glow needs color, so this image is not a
   template: its ink is black or white after the menu bar's appearance, redrawn when it changes.
   The image is 4 pt wider, for the glow. The next meeting still takes over with its orange or
-  red countdown once it is within the lead time, so a back-to-back meeting keeps its alert.
+  red countdown once it is within the lead time, so a back-to-back meeting keeps its alert; the
+  glow stays around it while the current meeting runs (and around a warning). Not around the
+  join capsule, which already stands out.
 - The first minutes of a meeting (from its start to start plus the linger delay, until it is
   dismissed; joining does not count) look the same; they only keep the join capsule and make it
   red. A meeting without a

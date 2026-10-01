@@ -171,6 +171,9 @@ final class AppDelegate: NSObject, ObservableObject {
         /// The glowing in-meeting page is not a template: its ink follows
         /// the menu bar.
         let dark: Bool
+        /// A meeting is running: the glow stays even when the badge shows
+        /// the next meeting's countdown.
+        let onAir: Bool
     }
 
     private func indicatorState(now: Date) -> (badge: MenuBarBadge, queue: JoinQueue, style: CapsuleStyle?) {
@@ -197,10 +200,11 @@ final class AppDelegate: NSObject, ObservableObject {
         }
         guard let button = statusItem?.button else { return }
         let dark = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        let render = Render(badge: state.badge, join: capsule, dark: dark)
+        let onAir = NextMeeting.ongoing(events: store.events, now: store.now) != nil
+        let render = Render(badge: state.badge, join: capsule, dark: dark, onAir: onAir)
         guard render != lastRender else { return }
         lastRender = render
-        let (image, zone) = StatusItemImage.make(badge: render.badge, join: render.join, dark: render.dark)
+        let (image, zone) = StatusItemImage.make(badge: render.badge, join: render.join, dark: render.dark, onAir: render.onAir)
         let widthChanged = button.image?.size.width != image.size.width
         button.image = image
         joinZoneWidth = zone
