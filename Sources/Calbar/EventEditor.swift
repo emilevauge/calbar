@@ -12,71 +12,18 @@ struct WritableCalendar: Identifiable, Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
-/// Borderless panel that takes the keyboard without activating a window
-/// of its own, so the main popover stays open beside it.
-private final class EditorPanel: NSPanel {
-    init() {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 360, height: 300),
-                   styleMask: [.borderless, .nonactivatingPanel],
-                   backing: .buffered, defer: false)
-        isFloatingPanel = true
-        level = .popUpMenu
-        isReleasedWhenClosed = false
-        isOpaque = false
-        backgroundColor = .clear
-        hasShadow = true
-        hidesOnDeactivate = false
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-    }
-
-    override var canBecomeKey: Bool { true }
+/// What the hour grid needs to create events: where they may go, guest
+/// suggestions, and the call that creates one.
+struct EventComposer {
+    let calendars: [WritableCalendar]
+    let contacts: ContactBook
+    let create: (NewEvent, String) async throws -> Void
 }
 
-/// The editor of a new event, beside the main popover. One at a time.
-@MainActor
-final class EventEditorWindow {
-    private var panel: NSPanel?
-    var onClose: () -> Void = {}
-
-    var isShown: Bool { panel?.isVisible == true }
-
-    /// `beside`: the main popover's window, to sit to its left (or right
-    /// when there is no room).
-    func show(start: Date, end: Date, calendars: [WritableCalendar], contacts: ContactBook,
-              beside anchor: NSWindow?, create: @escaping (NewEvent, String) async throws -> Void) {
-        close()
-        let editor = EventEditor(start: start, end: end, calendars: calendars, contacts: contacts,
-                                 onCreate: create) { [weak self] in self?.close() }
-        let panel = EditorPanel()
-        let host = NSHostingView(rootView: editor)
-        panel.contentView = host
-        let size = host.fittingSize
-        panel.setContentSize(size)
-        if let anchor, let screen = anchor.screen ?? NSScreen.main {
-            let frame = anchor.frame
-            let visible = screen.visibleFrame
-            var x = frame.minX - size.width - 8
-            if x < visible.minX + 8 { x = min(frame.maxX + 8, visible.maxX - size.width - 8) }
-            let y = min(frame.maxY - size.height - 12, visible.maxY - size.height - 8)
-            panel.setFrameOrigin(NSPoint(x: x, y: max(y, visible.minY + 8)))
-        } else {
-            panel.center()
-        }
-        self.panel = panel
-        panel.makeKeyAndOrderFront(nil)
-    }
-
-    func close() {
-        guard let panel else { return }
-        self.panel = nil
-        panel.orderOut(nil)
-        onClose()
-    }
-}
-
-/// The details of a new event, in the look of the event cards: title,
-/// day and times, calendar, Google Meet link, guests with suggestions,
-/// location and description. The last calendar and the Meet choice are
+/// The details of a new event, in a popover on the selected slot, laid
+/// out as the event cards: the times where a card has its time range, the
+/// title, Save where a card has Join, then the lines: calendar, Google
+/// Meet link, guests with suggestions, location and description. The last calendar and the Meet choice are
 /// remembered.
 struct EventEditor: View {
     let calendars: [WritableCalendar]
@@ -115,72 +62,96 @@ struct EventEditor: View {
 
     var body: some View {
         let color = Color(hex: selected?.calendar.colorHex ?? "#4285f4")
-        VStack(alignment: .leading, spacing: 10) {
+        Group {
             if calendars.isEmpty {
                 Text("No calendar to add to. Reconnect your account in Settings to create events.")
-                    .font(.callout)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack {
-                    Spacer()
-                    Button("Close", action: onDone).keyboardShortcut(.cancelAction)
-                }
+                    .padding(12)
             } else {
-                header(color)
-                details
-                footer
+                card(color)
             }
         }
-        .padding(14)
         .frame(width: 360)
-        .background {
-            let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-            shape.fill(.regularMaterial)
-            shape.fill(color.opacity(0.07))
-            shape.strokeBorder(color.opacity(0.25), lineWidth: 1)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.vertical, 6)
         .onAppear { titleFocused = true }
     }
 
     // MARK: parts
 
-    /// "NEW" and the time range, then the title, like a card's header.
-    private func header(_ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 5) {
-                Circle().fill(color).frame(width: 6, height: 6)
-                Text("NEW EVENT")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(color)
+    /// The same box as `EventRow`'s card.
+    private func card(_ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    times
+                    TextField("Add title", text: $title)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 15, weight: .semibold))
+                        .focused($titleFocused)
+                        .onSubmit(create)
+                }
+                Spacer(minLength: 0)
+                Button(action: create) {
+                    Group {
+                        if busy {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Save").font(.system(size: 12, weight: .semibold))
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .frame(height: 26)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
+                .disabled(busy || selected == nil)
             }
-            TextField("Add title", text: $title)
-                .textFieldStyle(.plain)
-                .font(.system(size: 15, weight: .semibold))
-                .focused($titleFocused)
-                .onSubmit(create)
+            details
         }
+        .padding(12)
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+            shape.fill(color.opacity(0.07))
+            shape.strokeBorder(color.opacity(0.22), lineWidth: 1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+    }
+
+    /// Day, start and end, and the duration, in the caption of a card.
+    private var times: some View {
+        HStack(spacing: 4) {
+            DatePicker("Day", selection: dayBinding, displayedComponents: .date)
+                .labelsHidden()
+                .datePickerStyle(.field)
+            DatePicker("Start", selection: $start, displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .datePickerStyle(.field)
+                // Moving the start keeps the duration.
+                .onChange(of: start) { old, new in end = end.addingTimeInterval(new.timeIntervalSince(old)) }
+            Text("-")
+            DatePicker("End", selection: $end, in: start.addingTimeInterval(5 * 60)..., displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .datePickerStyle(.field)
+            Text("· \(AgendaFormat.duration(end.timeIntervalSince(start)))")
+                .fixedSize()
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .monospacedDigit()
+        .controlSize(.small)
     }
 
     private var details: some View {
         VStack(alignment: .leading, spacing: 8) {
-            line("clock") {
-                DatePicker("Day", selection: dayBinding, displayedComponents: .date)
-                    .labelsHidden()
-                    .datePickerStyle(.field)
-                DatePicker("Start", selection: $start, displayedComponents: .hourAndMinute)
-                    .labelsHidden()
-                    .datePickerStyle(.field)
-                    // Moving the start keeps the duration.
-                    .onChange(of: start) { old, new in end = end.addingTimeInterval(new.timeIntervalSince(old)) }
-                Text("-")
-                DatePicker("End", selection: $end, in: start.addingTimeInterval(5 * 60)..., displayedComponents: .hourAndMinute)
-                    .labelsHidden()
-                    .datePickerStyle(.field)
-                Text(AgendaFormat.duration(end.timeIntervalSince(start)))
-                    .fixedSize()
-            }
             line("calendar") {
+                Circle()
+                    .fill(Color(hex: selected?.calendar.colorHex ?? "#888888"))
+                    .frame(width: 7, height: 7)
                 Picker("Calendar", selection: Binding(get: { selected?.id ?? "" }, set: { calendarID = $0 })) {
                     ForEach(Self.byAccount(calendars), id: \.0) { email, list in
                         Section(email) {
@@ -189,11 +160,13 @@ struct EventEditor: View {
                     }
                 }
                 .labelsHidden()
+                .controlSize(.small)
                 .fixedSize()
             }
             line("video") {
-                Toggle("Add a Google Meet link", isOn: $addMeet)
+                Toggle("Google Meet", isOn: $addMeet)
                     .toggleStyle(.checkbox)
+                    .controlSize(.small)
             }
             line("person.2", alignment: .top) {
                 GuestField(guests: $guests, contacts: contacts)
@@ -205,7 +178,7 @@ struct EventEditor: View {
             line("text.alignleft", alignment: .top) {
                 TextField("Add description", text: $notes, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .lineLimit(2...6)
+                    .lineLimit(1...6)
             }
             if let error {
                 Text(error)
@@ -216,24 +189,6 @@ struct EventEditor: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
-    }
-
-    private var footer: some View {
-        HStack(spacing: 8) {
-            if busy { ProgressView().controlSize(.small) }
-            Spacer()
-            Button("Cancel", action: onDone)
-                .keyboardShortcut(.cancelAction)
-                .controlSize(.small)
-            Button(action: create) {
-                Text("Save").font(.system(size: 12, weight: .semibold))
-            }
-            .keyboardShortcut(.defaultAction)
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
-            .disabled(busy || selected == nil)
-        }
-        .padding(.top, 2)
     }
 
     /// An icon and its content, as in the event details.
@@ -290,7 +245,8 @@ struct EventEditor: View {
     }
 }
 
-/// Guests as chips, then a field with suggestions under it: `↑` `↓` move,
+/// Guests as chips, then a field with suggestions under it, from the
+/// people met and Google (contacts, other contacts, directory): `↑` `↓` move,
 /// `↵` or `tab` picks, `,` or `↵` adds a typed email, `⌫` in the empty
 /// field removes the last chip.
 private struct GuestField: View {
@@ -298,10 +254,18 @@ private struct GuestField: View {
     @ObservedObject var contacts: ContactBook
     @State private var text = ""
     @State private var highlighted = 0
+    /// Google matches for `remoteQuery`.
+    @State private var remote: [ContactIndex.Contact] = []
+    @State private var remoteQuery = ""
     @FocusState private var focused: Bool
 
+    /// People met first, then Google matches, one per email, six at most.
     private var suggestions: [ContactIndex.Contact] {
-        contacts.index.search(text, excluding: Set(guests.map(\.email)))
+        let taken = Set(guests.map { $0.email.lowercased() })
+        var seen = taken
+        let local = contacts.index.search(text, excluding: taken)
+        let fromGoogle = remoteQuery == text ? remote : []
+        return Array((local + fromGoogle).filter { seen.insert($0.email.lowercased()).inserted }.prefix(6))
     }
 
     var body: some View {
@@ -317,6 +281,17 @@ private struct GuestField: View {
                 .onChange(of: text) { _, new in
                     highlighted = 0
                     if new.hasSuffix(",") || new.hasSuffix(";") { commitTyped() }
+                }
+                // Google, once the typing pauses.
+                .task(id: text) {
+                    let query = text.trimmingCharacters(in: .whitespaces)
+                    guard query.count >= 2 else { remote = []; return }
+                    try? await Task.sleep(for: .milliseconds(250))
+                    guard !Task.isCancelled else { return }
+                    let found = await contacts.searchGoogle(query)
+                    guard !Task.isCancelled else { return }
+                    remote = found
+                    remoteQuery = text
                 }
                 .onSubmit(pick)
                 .onKeyPress(.downArrow) {
@@ -339,6 +314,11 @@ private struct GuestField: View {
                     guests.removeLast()
                     return .handled
                 }
+            if focused, contacts.needsReconnectForGoogle, text.count >= 2 {
+                Text("Reconnect your account in Settings to search your Google contacts.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
             if focused, !suggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(suggestions.enumerated()), id: \.element.email) { i, contact in

@@ -231,6 +231,9 @@ public struct Account: Identifiable, Equatable, Codable, Sendable {
 
     /// Calbar may answer invitations for this account. An account signed in
     /// when Calbar only asked for read access must reconnect first.
+    /// Google sources of guest suggestions this account was granted.
+    public var contactSources: [PeopleAPI.Source] { PeopleAPI.sources(granted: grantedScopes) }
+
     public var canReply: Bool {
         (grantedScopes ?? []).contains { GoogleOAuth.writeScopes.contains($0) }
     }

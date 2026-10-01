@@ -477,6 +477,35 @@ final class EventStore: ObservableObject {
         return result
     }
 
+    /// People matching `query` in the Google contacts, other contacts and
+    /// directory of every account granted them, searched concurrently.
+    /// A failing source is skipped: suggestions are a bonus. Logs counts
+    /// only.
+    func searchPeople(_ query: String) async -> [ContactIndex.Contact] {
+        guard let auth, !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        let people = PeopleAPI()
+        let targets = accounts.accounts.filter { !$0.needsReconnect && !$0.contactSources.isEmpty }
+        return await withTaskGroup(of: [ContactIndex.Contact].self) { group in
+            for account in targets {
+                group.addTask {
+                    guard let token = try? await auth.accessToken(for: account.email) else { return [] }
+                    var found: [ContactIndex.Contact] = []
+                    for source in account.contactSources {
+                        do {
+                            found += try await people.search(source, query: query, token: token)
+                        } catch {
+                            NSLog("Calbar: a people search source failed: %@", "\(error)".prefix(160).description)
+                        }
+                    }
+                    return found
+                }
+            }
+            var all: [ContactIndex.Contact] = []
+            for await found in group { all += found }
+            return all
+        }
+    }
+
     /// Creates `event` in one of `email`'s calendars, then refreshes so
     /// it shows. Throws for the form to show the error.
     func create(_ event: NewEvent, in email: String) async throws {

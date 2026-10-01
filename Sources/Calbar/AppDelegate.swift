@@ -35,10 +35,8 @@ final class AppDelegate: NSObject, ObservableObject {
     @Published private(set) var isPeeking = false
     /// Closes the peeking popover once the pointer has left it and the icon.
     private var peekWatch: Task<Void, Never>?
-    /// The new event editor, beside the popover.
-    private let editor = EventEditorWindow()
     /// Guest suggestions for the editor.
-    let contacts = ContactBook()
+    let contacts: ContactBook
 
     private var signInTask: Task<Void, Never>?
     /// Tells a finished sign-in whether a newer one replaced it.
@@ -71,6 +69,7 @@ final class AppDelegate: NSObject, ObservableObject {
         let join = JoinController(store: store)
         self.join = join
         self.peeker = MeetingPeeker(store: store, join: join)
+        self.contacts = ContactBook(store: store, accounts: accounts)
         super.init()
         NotificationCenter.default.addObserver(
             self,
@@ -151,8 +150,6 @@ final class AppDelegate: NSObject, ObservableObject {
                 self?.peekWatch?.cancel()
                 self?.isPeeking = false
                 self?.peekTarget = nil
-                // The editor belongs to the popover's grid.
-                self?.editor.close()
                 self?.popoverCloseCount += 1
                 self?.store.popoverDidClose()
             }
@@ -305,18 +302,10 @@ final class AppDelegate: NSObject, ObservableObject {
         popover?.performClose(nil)
     }
 
-    /// Opens the editor on a slot selected on the hour grid, beside the
-    /// popover, which stays open meanwhile: a transient popover would
-    /// close as soon as the editor takes the keyboard.
-    func compose(start: Date, end: Date) {
-        contacts.prepare(store: store, accounts: accounts)
-        popover?.behavior = .applicationDefined
-        editor.onClose = { [weak self] in
-            self?.popover?.behavior = .transient
-            self?.popover?.contentViewController?.view.window?.makeKey()
-        }
-        editor.show(start: start, end: end, calendars: accounts.writableCalendars, contacts: contacts,
-                    beside: popover?.contentViewController?.view.window) { [store] event, email in
+    /// For the hour grid: the calendars new events may go to, guest
+    /// suggestions, and creating.
+    var composer: EventComposer {
+        EventComposer(calendars: accounts.writableCalendars, contacts: contacts) { [store] event, email in
             try await store.create(event, in: email)
         }
     }

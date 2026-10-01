@@ -128,7 +128,10 @@ public enum CallbackKind: Equatable, Sendable {
 public enum GoogleOAuth {
     /// `calendar.readonly` reads the calendar list, which `calendar.events`
     /// does not cover; `calendar.events` lets Calbar answer invitations.
-    public static let scopes = "openid email https://www.googleapis.com/auth/calendar.readonly \(eventsScope)"
+    /// Calendar read and write, and the three read-only People sources
+    /// for guest suggestions.
+    public static let scopes = "openid email https://www.googleapis.com/auth/calendar.readonly \(eventsScope) "
+        + PeopleAPI.scopes.sorted().joined(separator: " ")
     public static let eventsScope = "https://www.googleapis.com/auth/calendar.events"
     /// Scopes that allow changing an event's attendee list.
     public static let writeScopes: Set<String> = [eventsScope, "https://www.googleapis.com/auth/calendar"]

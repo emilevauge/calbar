@@ -333,30 +333,33 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
 - Progress: every ongoing meeting, card or row, has a
   3.5 pt bar of the elapsed time, colored like Claudette's context bar: green below 50 %, yellow
   below 75 %, orange below 90 %, then red. Tooltip "20 min of 45 min · 44%".
-- Creating an event (`EventEditor`, `EventEditorWindow`, `NewEvent`): in the week view or the
-  day grid, pressing on an empty slot (outside the blocks) and dragging, up or down, marks out
-  a ghost block that follows the pointer, labelled "10:00-11:30", from the quarter hour under
-  the press to the quarter hour past the pointer (`NewEvent.range`, 15 min at least, within the
-  day); a plain click makes it 30 minutes. On release the editor opens beside the popover, to
-  its left (to its right without room), in a borderless non-activating panel that takes the
-  keyboard: the popover stays open (its behavior is application-defined until the editor
-  closes), and closing the popover closes the editor. It has the look of a card: a rounded
-  material panel tinted with the calendar color, "NEW EVENT" and the title ("Add title",
-  focused, "(No title)" when left blank), then lines with an icon as in the event details: day,
-  start and end times with the duration (moving the start keeps the duration, changing the day
-  moves both); the calendar (the writable calendars, `accessRole` owner or writer, of the
-  accounts with the write scope, grouped by account, primary first; the last one used is
-  remembered); "Add a Google Meet link" (remembered, on by default); guests; location;
-  description. `↵` in the title or Save creates, `esc` or Cancel closes.
-- Guests: chips with a remove button, then a field. Typing suggests up to six people
-  (`ContactIndex`): a word of the name or the email starting with the text, accents and case
-  ignored, people met more often first. `↑` `↓` move, `↵` or `tab` picks, `,` `;` or `↵` adds a
-  typed email, `⌫` in the empty field removes the last chip. Sources (`ContactBook`): the
-  attendees and organizers of the loaded events at once, then in the background, once per
-  launch and again after six hours, each account's primary calendar from 60 days back to 30
-  ahead, and the Mac's contacts (macOS asks for access the first time,
-  `NSContactsUsageDescription`). The user's own addresses and Google resource calendars are
-  left out. Guests get the invitation (`sendUpdates=all`).
+- Creating an event (`EventEditor`, `EventComposer`, `NewEvent`): in the week view or the day
+  grid, pressing on an empty slot (outside the blocks) and dragging, up or down, marks out a
+  ghost block that follows the pointer, labelled "10:00-11:30", from the quarter hour under the
+  press to the quarter hour past the pointer (`NewEvent.range`, 15 min at least, within the
+  day); a plain click makes it 30 minutes. On release the editor opens in a popover on the
+  ghost, as an event's card opens on its block, so the main popover stays open. It is laid out
+  as that card, in the same tinted box: day, start and end times with the duration where the
+  card has its time range (moving the start keeps the duration, changing the day moves both),
+  the title ("Add title", focused, "(No title)" when left blank), Save where the card has Join,
+  then caption lines with an icon: the calendar (the writable calendars, `accessRole` owner or
+  writer, of the accounts with the write scope, grouped by account, primary first; the last one
+  used is remembered), "Google Meet" (remembered, on by default), guests, location,
+  description. `↵` saves; `esc` or a click outside closes it.
+- Guests: chips with a remove button, then a field. Suggestions, six at most, one per email:
+  first the people met (`ContactIndex`: attendees and organizers of the loaded events, and in
+  the background, once per launch and again after six hours, of each account's primary
+  calendar from 60 days back to 30 ahead; a word of the name or the email starting with the
+  text, accents and case ignored, people met more often first), then Google matches
+  (`PeopleAPI`, 250 ms after the typing pauses, from two letters): the account's contacts
+  (`people:searchContacts`), the people it emailed (`otherContacts:search`) and its Workspace
+  directory (`people:searchDirectoryPeople`), each behind its read-only scope
+  (`contacts.readonly`, `contacts.other.readonly`, `directory.readonly`), searched in every
+  account granted it; a failing source is skipped. Without any of these scopes, "Reconnect your
+  account in Settings to search your Google contacts". `↑` `↓` move, `↵` or `tab` picks, `,` `;`
+  or `↵` adds a typed email, `⌫` in the empty field removes the last chip. The user's own
+  addresses and Google resource calendars are left out. Guests get the invitation
+  (`sendUpdates=all`). The People API must be enabled in the OAuth client's Cloud project.
 - Calbar posts `events.insert` (with `conferenceDataVersion=1` and a `hangoutsMeet` create
   request for Meet), in the user's time zone, then refreshes. Errors show in the editor; a
   missing scope marks the account read only. Calendars stored before the access role was known

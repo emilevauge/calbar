@@ -167,7 +167,7 @@ struct MenuView: View {
             onShowDay: { _ in withAnimation(Motion.resize) { viewMode = .day } },
             onJoin: join,
             width: 380,
-            onCompose: { start, end in app.compose(start: start, end: end) }
+            composer: app.composer
         )
     }
 
@@ -184,7 +184,7 @@ struct MenuView: View {
                 show(day: picked)
             },
             onJoin: join,
-            onCompose: { start, end in app.compose(start: start, end: end) }
+            composer: app.composer
         )
     }
 

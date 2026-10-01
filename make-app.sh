@@ -91,8 +91,6 @@ cat > "$APP/Contents/Info.plist" <<EOF
     <string>NSApplication</string>
     <key>NSHighResolutionCapable</key>
     <true/>
-    <key>NSContactsUsageDescription</key>
-    <string>Calbar suggests guests from your contacts when you create an event.</string>
 </dict>
 </plist>
 EOF
