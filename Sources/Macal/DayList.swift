@@ -112,7 +112,7 @@ struct AllDayStrip: View {
 
     private func moreChip(_ count: Int) -> some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.15)) { unfolded = true }
+            withAnimation(Motion.resize) { unfolded = true }
         } label: {
             Text("+\(count)")
                 .font(Font(Self.font))
@@ -128,7 +128,7 @@ struct AllDayStrip: View {
 
     private var lessChip: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.15)) { unfolded = false }
+            withAnimation(Motion.resize) { unfolded = false }
         } label: {
             Image(systemName: "chevron.up")
                 .font(.system(size: 9, weight: .semibold))

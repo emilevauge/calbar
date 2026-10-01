@@ -105,7 +105,7 @@ struct EventDetail: View {
 
         return VStack(alignment: .leading, spacing: 4) {
             Button {
-                withAnimation(.easeInOut(duration: 0.15)) { showAllAttendees.toggle() }
+                withAnimation(Motion.resize) { showAllAttendees.toggle() }
             } label: {
                 HStack(spacing: 8) {
                     AvatarStack(attendees: all)

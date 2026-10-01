@@ -23,21 +23,35 @@ struct MenuView: View {
         // Today keeps its own presentation; other days come from the store.
         let other: DayContent? = dayOffset == 0 ? nil : store.events(for: day)
         let rows = Self.rows(agenda, other, showEnded: showEnded)
-        let focusID = other == nil ? Self.focusID(agenda, now: store.now) : nil
+        // A peek is this same panel with everything but one meeting's card
+        // hidden: expanding it brings the rest in around the card, which
+        // keeps its identity and slides into place.
+        let peeking = app.isPeeking
+        let peekID = peeking ? app.peekEvent(now: store.now)?.id : nil
+        let focusID = peeking ? peekID : (other == nil ? Self.focusID(agenda, now: store.now) : nil)
 
-        Group {
-            if app.isPeeking {
-                peek(app.peekEvent(now: store.now), agenda: agenda)
+        VStack(alignment: .leading, spacing: 0) {
+            if !peeking {
+                header(agenda, day: day, other: other)
+                Divider()
+            } else if accounts.needsAttention {
+                Label("An account needs to be reconnected", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 8)
+            }
+            content(agenda, day: day, other: other, rows: rows, focusID: focusID, peekID: peeking ? .some(peekID) : nil)
+            if peeking {
+                peekHint
             } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    header(agenda, day: day, other: other)
-                    Divider()
-                    content(agenda, day: day, other: other, rows: rows, focusID: focusID)
-                    Divider()
-                    footer
-                }
+                Divider()
+                footer
             }
         }
+        // In a peek, a click anywhere but on the card's buttons expands it.
+        .contentShape(Rectangle())
+        .gesture(TapGesture().onEnded { app.expandPeek() }, including: peeking ? .all : .subviews)
         .frame(width: 380)
         // Pinned to the top: while the popover grows or shrinks around a
         // change of content, the content stays put under the arrow
@@ -92,45 +106,16 @@ struct MenuView: View {
 
     // MARK: peek
 
-    /// On hover: one meeting's card alone (see `AppDelegate.peekEvent`),
-    /// or the end of the day. A click anywhere but on its buttons expands
-    /// the popover to the whole day.
-    private func peek(_ event: CalendarEvent?, agenda: DayAgenda) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if accounts.needsAttention {
-                Label("An account needs to be reconnected", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.red)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 4)
-            }
-            if let event {
-                EventRow(
-                    event: event,
-                    now: store.now,
-                    selected: false,
-                    expanded: true,
-                    isPast: false,
-                    isFocus: true,
-                    onToggle: {},
-                    onJoin: { join(event) }
-                )
-            } else {
-                endOfDay(agenda.firstTomorrow)
-            }
-            HStack(spacing: 4) {
-                Text("Click for the whole day")
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .semibold))
-            }
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 8)
+    private var peekHint: some View {
+        HStack(spacing: 4) {
+            Text("Click for the whole day")
+            Image(systemName: "chevron.down")
+                .font(.system(size: 8, weight: .semibold))
         }
-        .padding(.top, 6)
-        .contentShape(Rectangle())
-        .onTapGesture { app.expandPeek() }
+        .font(.caption2)
+        .foregroundStyle(.tertiary)
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 8)
     }
 
     // MARK: header
@@ -162,8 +147,11 @@ struct MenuView: View {
     }
 
     @ViewBuilder
+    /// `peekID`: set during a peek, to the meeting shown alone (nil inside
+    /// when there is none).
     private func content(
-        _ agenda: DayAgenda, day: Date, other: DayContent?, rows: [CalendarEvent], focusID: String?
+        _ agenda: DayAgenda, day: Date, other: DayContent?, rows: [CalendarEvent], focusID: String?,
+        peekID: String?? = nil
     ) -> some View {
         if app.auth == nil {
             OAuthClientSetup()
@@ -196,7 +184,7 @@ struct MenuView: View {
                         if let other {
                             otherDayList(other, day: day)
                         } else {
-                            todayList(agenda, rows: rows, focusID: focusID)
+                            todayList(agenda, rows: rows, focusID: focusID, peekID: peekID)
                         }
                     }
                     .padding(.top, 6)
@@ -216,26 +204,30 @@ struct MenuView: View {
     }
 
     @ViewBuilder
-    private func todayList(_ agenda: DayAgenda, rows: [CalendarEvent], focusID: String?) -> some View {
+    private func todayList(_ agenda: DayAgenda, rows: [CalendarEvent], focusID: String?,
+                           peekID: String??) -> some View {
+        let peeking = peekID != nil
         // All-day events stay on top, above "Nothing
         // left today" once the timed ones are over.
-        if !agenda.allDay.isEmpty {
+        if !agenda.allDay.isEmpty && !peeking {
             AllDayStrip(events: agenda.allDay)
         }
         if store.isLoading {
             LoadingRow()
-        } else if agenda.current.isEmpty {
+        } else if agenda.current.isEmpty || peekID == .some(nil) {
             endOfDay(agenda.firstTomorrow)
         }
         let gaps = FreeTime.gaps(agenda.current)
         ForEach(Array(agenda.current.enumerated()), id: \.element.id) { index, event in
-            if let gap = gaps[event.id] {
-                FreeGap(interval: gap)
+            if !peeking || event.id == peekID {
+                if !peeking, let gap = gaps[event.id] {
+                    FreeGap(interval: gap)
+                }
+                row(event, index: index, isPast: false, focusID: focusID)
             }
-            row(event, index: index, isPast: false, focusID: focusID)
         }
         // Ended events come after the toggle that unfolds them.
-        if !agenda.past.isEmpty {
+        if !agenda.past.isEmpty && !peeking {
             endedToggle(agenda.past.count)
             if showEnded {
                 ForEach(Array(agenda.past.enumerated()), id: \.element.id) { offset, event in
@@ -268,7 +260,7 @@ struct MenuView: View {
     /// Folds and unfolds today's ended events, below the upcoming ones.
     private func endedToggle(_ count: Int) -> some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(Motion.resize) {
                 showEnded.toggle()
                 // The selection may point into the rows just folded.
                 if !showEnded { selectedIndex = min(selectedIndex, max(store.agenda.current.count - 1, 0)) }
@@ -338,7 +330,7 @@ struct MenuView: View {
     /// Expands or collapses `event`. The focused meeting cannot be collapsed.
     private func toggle(_ event: CalendarEvent, focusID: String?) {
         guard event.id != focusID else { return }
-        withAnimation(.easeInOut(duration: 0.15)) {
+        withAnimation(Motion.resize) {
             expandedID = expandedID == event.id ? nil : event.id
         }
     }

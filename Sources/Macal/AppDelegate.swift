@@ -130,11 +130,11 @@ final class AppDelegate: NSObject, ObservableObject {
         p.behavior = .transient
         p.animates = true
         p.contentSize = NSSize(width: 380, height: 480)
-        let host = NSHostingController(rootView: MenuView(store: store, accounts: accounts))
-        // The popover follows the content: short lists leave no blank
-        // space, and expanding a peek animates to the full height.
-        host.sizingOptions = .preferredContentSize
+        // Fits the content, and animates with it when it changes size.
+        let host = PopoverHost(rootView: MenuView(store: store, accounts: accounts))
+        host.popover = p
         p.contentViewController = host
+        p.contentSize = host.fittingSize
         popover = p
         // Covers every way it closes: click outside, esc, joining a meeting.
         NotificationCenter.default.addObserver(
@@ -311,9 +311,10 @@ final class AppDelegate: NSObject, ObservableObject {
     func expandPeek() {
         guard isPeeking else { return }
         peekWatch?.cancel()
-        // No SwiftUI animation: the popover animates its own resize, and a
-        // crossfade on top of it made the content jump.
-        isPeeking = false
+        // Same curve as the popover frame, which `PopoverHost` animates.
+        withAnimation(Motion.resize) {
+            isPeeking = false
+        }
         NSApp.activate(ignoringOtherApps: true)
         popover?.contentViewController?.view.window?.makeKey()
     }

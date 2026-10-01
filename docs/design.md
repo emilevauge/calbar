@@ -242,11 +242,18 @@ App (`Sources/Macal`):
 ## Popover
 
 `NSStatusItem` plus `NSPopover` (transient) rather than `MenuBarExtra`, so code can open it (the
-global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt high. The hosting
-controller publishes its preferred content size, so the popover fits its content and animates
-when it changes, as when a peek expands or the guest list unfolds. The content is pinned to the
-top and changes without a SwiftUI transition, so it stays put under the arrow while the popover
-resizes around it.
+global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt high.
+- Size and motion: the popover fits its content. `PopoverHost` holds a plain hosting view in a
+  container without constraints and, on each layout pass, sets the popover's `contentSize` to
+  the view's intrinsic size inside an `NSAnimationContext` of 0.25 s ease-in-out. Every change
+  that resizes the content (peek expanding, a row, the guest list, "ended earlier", the all-day
+  chips) uses `Motion.resize`, the same curve and duration, so the panel and its content move
+  together; the content is pinned to the top. A hosting controller as content, or even as a
+  child, lets SwiftUI resize the popover itself, at once: measured, the frame jumped to its
+  final size in the first 16 ms while the content animated for 250 ms.
+- A peek is the same view with the header, the all-day chips, the other rows, the free time,
+  the ended section and the footer hidden, and the peeked meeting as the card: expanding
+  brings them in around the card, which slides into place.
 
 - Header, above a separator: the title of the day shown, "Tuesday, September 29", 15 pt semibold, with a caption
   below it: for today, "offline · updated 5 min ago" when offline, otherwise "Today · 3 left"
