@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, ObservableObject {
     @Published private(set) var auth: GoogleAuth?
     let store: EventStore
     let join: JoinController
-    let notifier: MeetingNotifier
+    let peeker: MeetingPeeker
     let hoverPeek = HoverPeek()
 
     /// Last sign-in failure, shown in the settings panel.
@@ -64,7 +64,7 @@ final class AppDelegate: NSObject, ObservableObject {
         self.store = store
         let join = JoinController(store: store)
         self.join = join
-        self.notifier = MeetingNotifier(store: store, join: join)
+        self.peeker = MeetingPeeker(store: store, join: join)
         super.init()
         NotificationCenter.default.addObserver(
             self,
@@ -78,12 +78,7 @@ final class AppDelegate: NSObject, ObservableObject {
         NSApp.setActivationPolicy(.accessory)
         AppIcon.install()
         LaunchAgent.syncIfNeeded()
-        notifier.onOpenMacal = { [weak self] id in
-            self?.store.requestedEventID = id
-            self?.showPopover()
-        }
         NotificationHub.shared.start()
-        notifier.start()
         UpdateChecker.startPeriodicCheck()
 
         setupStatusItem()
@@ -93,6 +88,7 @@ final class AppDelegate: NSObject, ObservableObject {
             self?.showPopover()
         }
         join.onChange = { [weak self] in self?.refreshIndicators() }
+        peeker.show = { [weak self] event in self?.peek(on: event, for: MeetingPeeker.duration) ?? false }
         observe()
         store.start()
         let dayStart = DayStartOpener(
@@ -147,6 +143,7 @@ final class AppDelegate: NSObject, ObservableObject {
             MainActor.assumeIsolated {
                 self?.peekWatch?.cancel()
                 self?.isPeeking = false
+                self?.peekTarget = nil
                 self?.popoverCloseCount += 1
                 self?.store.popoverDidClose()
             }
@@ -187,7 +184,7 @@ final class AppDelegate: NSObject, ObservableObject {
     }
 
     private func refreshIndicators() {
-        notifier.update(now: store.now)
+        peeker.update(now: store.now)
         let state = indicatorState(now: store.now)
         var capsule: StatusItemImage.Join?
         if let event = state.queue.primary, let style = state.style {
@@ -272,38 +269,64 @@ final class AppDelegate: NSObject, ObservableObject {
         popover?.performClose(nil)
     }
 
+    /// The meeting a timed peek was opened on; nil for a hover peek.
+    private var peekTarget: String?
+
     /// Opens the popover on one meeting alone (`peekEvent`), without
     /// taking the focus from the active app.
     func peek() {
         guard let popover, let button = statusItem?.button, !popover.isShown else { return }
+        peekTarget = nil
         isPeeking = true
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        watchPeek()
+        watchPeek(until: nil)
     }
 
-    /// The meeting a peek shows: the one the join capsule is about, else
-    /// the ongoing one, else the next of today. Nil once the day is over.
+    /// Opens a peek on `event` that closes by itself after `duration`,
+    /// unless the pointer is on it then. A peek already showing moves to
+    /// `event`. False while the full popover is open.
+    func peek(on event: CalendarEvent, for duration: TimeInterval) -> Bool {
+        guard let popover, let button = statusItem?.button else { return false }
+        if popover.isShown && !isPeeking { return false }
+        peekTarget = event.occurrenceKey
+        if !popover.isShown {
+            isPeeking = true
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
+        watchPeek(until: Date().addingTimeInterval(duration))
+        return true
+    }
+
+    /// The meeting a peek shows: the one it was opened on, else the one the
+    /// join capsule is about, else the ongoing one, else the next of
+    /// today. Nil once the day is over.
     func peekEvent(now: Date) -> CalendarEvent? {
-        join.queue(now: now).primary ?? NextMeeting.focus(events: store.events, now: now, calendar: .current)
+        if let peekTarget, let event = store.events.first(where: { $0.occurrenceKey == peekTarget }) {
+            return event
+        }
+        return join.queue(now: now).primary ?? NextMeeting.focus(events: store.events, now: now, calendar: .current)
     }
 
     /// Grows the peeking popover to the whole day and gives it the keyboard.
     func expandPeek() {
         guard isPeeking else { return }
         peekWatch?.cancel()
-        withAnimation(.easeInOut(duration: 0.25)) {
-            isPeeking = false
-        }
+        // No SwiftUI animation: the popover animates its own resize, and a
+        // crossfade on top of it made the content jump.
+        isPeeking = false
         NSApp.activate(ignoringOtherApps: true)
         popover?.contentViewController?.view.window?.makeKey()
     }
 
     /// Polls the pointer: a tracking area on the popover would miss the
-    /// gap between it and the icon. Closes after 0.4 s outside both.
-    private func watchPeek() {
+    /// gap between it and the icon. A hover peek closes after 0.4 s
+    /// outside both; a timed one (`deadline`) stays until then, and once
+    /// the pointer has been on it, follows the hover rule.
+    private func watchPeek(until deadline: Date?) {
         peekWatch?.cancel()
         peekWatch = Task { [weak self] in
             var outsideSince: Date?
+            var deadline = deadline
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(150))
                 guard let self, self.isPeeking, self.popover?.isShown == true else { return }
@@ -312,6 +335,12 @@ final class AppDelegate: NSObject, ObservableObject {
                               self.popover?.contentViewController?.view.window?.frame].compactMap { $0 }
                 if frames.contains(where: { $0.insetBy(dx: -6, dy: -6).contains(pointer) }) {
                     outsideSince = nil
+                    deadline = nil
+                } else if let until = deadline {
+                    if Date() >= until {
+                        self.closePopover()
+                        return
+                    }
                 } else if let since = outsideSince {
                     if Date().timeIntervalSince(since) > 0.4 {
                         self.closePopover()

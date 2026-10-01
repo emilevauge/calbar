@@ -244,7 +244,9 @@ App (`Sources/Macal`):
 `NSStatusItem` plus `NSPopover` (transient) rather than `MenuBarExtra`, so code can open it (the
 global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt high. The hosting
 controller publishes its preferred content size, so the popover fits its content and animates
-when it changes, as when a peek expands.
+when it changes, as when a peek expands or the guest list unfolds. The content is pinned to the
+top and changes without a SwiftUI transition, so it stays put under the arrow while the popover
+resizes around it.
 
 - Header, above a separator: the title of the day shown, "Tuesday, September 29", 15 pt semibold, with a caption
   below it: for today, "offline · updated 5 min ago" when offline, otherwise "Today · 3 left"
@@ -314,24 +316,17 @@ when it changes, as when a peek expands.
   at launch, keeps one registry of categories, and routes each response to the handler of the
   notification's kind (`meeting` or `update`, stored in the userInfo). Banners also show while
   Macal is the active app.
-- Meetings (`MeetingNotifier`, `NotificationPlanner`): for timed, not declined events, with or
-  without a link, two notifications per occurrence. The first when the meeting enters its alert
-  window, before its start. The second at the start, until the alert window ends (so a Mac woken
-  2 min after the start still gets it); it withdraws the first. A moved meeting has a new key
-  and notifies again. Title: the event title. Subtitle: the provider and the time range ("Zoom ·
-  15:00-16:00"), the range alone without a link. Body: "In 5 min", then "Starting now" (first
-  minute) or "Started 3 min ago", followed by the place unless it is a URL, the guests ("6
-  guests") and the attached documents ("2 docs"). Thumbnail: a badge of the provider drawn in
-  code (its color, a white camera, a "T" for Teams), written to a fresh temporary PNG for each
-  notification since the system moves the file. Default sound, `.active` level. One category
-  per provider, so the actions read "Join Zoom", "Join Meet", "Join call"..., then "Copy link",
-  "Open in Macal" and "Dismiss"; without a link, "Open in Macal" and "Dismiss". A click joins
-  when there is a link, otherwise opens the popover with the event expanded. "Dismiss" works
-  like the capsule's: it withdraws the notifications and hides the join capsule. Withdrawn when the
-  meeting is dismissed or its alert window ends. Setting "Notify before a meeting", on by
-  default.
-- A dev binary (no bundle id) cannot use `UNUserNotificationCenter`: meeting notifications fall
-  back to AppleScript `display notification` with the title "Macal", without click or action.
+- Meetings (`MeetingPeeker`, `NotificationPlanner`): no system notification. For timed, not
+  declined events, with or without a link, the popover opens in peek mode on the meeting
+  twice per occurrence: when it enters its alert window, before its start, and at the start,
+  until the alert window ends (so a Mac woken 2 min after the start still gets it). The peek
+  stays 8 s, then closes by itself, unless the pointer is on it or the icon: then it follows the
+  hover rule. A peek already showing moves to the newer meeting; the start wins over an alert
+  due at the same tick. A stage counts as done only once the peek showed: while the screen is
+  locked or the full popover is open, it waits for a later tick within its window. Dismissed
+  meetings are skipped. A moved meeting has a new key and peeks again. Setting "Show the panel
+  before a meeting", on by default.
+- System notifications only offer updates (see "Updates").
 
 ## Updates
 
@@ -365,11 +360,8 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
   last sign-in error; its footer gives the OAuth client ID, shortened, with "Import…" or
   "Replace…".
 - Alerts: "Alert before" (1 to 60 min, default 10), "Keep after the start" (0 to 30 min, default
-  5), "Notify before a meeting" (on). While it is on and macOS blocks Macal's notifications, an
-  orange row "Notifications are off in System Settings" with "Open System Settings", which opens
-  the Notifications pane; before the first answer, "Notifications not allowed yet" with
-  "Allow…", which asks again. The permission is read each time the settings open. Footer: "A Join button shows in the menu bar before each
-  meeting."
+  5), "Show the panel before a meeting" (on). Footer: "Before each meeting and at its start, the
+  panel shows it for a few seconds, and a Join button shows in the menu bar."
 - Display: "Show declined events" (off).
 - Global shortcut: "Open Macal", default `⌃⌥M`. Recorded by `ShortcutRecorder`: click, type the
   shortcut, `esc` cancels, `delete` clears. It needs a modifier besides Shift, or a function key.
@@ -379,7 +371,10 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
   executable, repointed at launch when the recorded binary is gone or when Macal runs from
   `/Applications`), "Open the panel at the start of the day" (on).
 - About, always last: version, "Check for updates" with "Up to date", "0.2.0 is available" or an
-  error, "Update to 0.2.0 now" and "Release notes" when newer, license MIT, source link
+  error, "Update to 0.2.0 now" and "Release notes" when newer; when macOS blocks Macal's
+  notifications, an orange "Update notifications are off" with "Open System Settings" (the
+  Notifications pane), or before the first answer "Notifications not allowed yet" with
+  "Allow…", read each time the settings open; license MIT, source link
   github.com/emilevauge/macal, "© 2026 Emile Vauge".
 
 ## Errors

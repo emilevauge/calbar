@@ -58,46 +58,6 @@ import Testing
         #expect(NotificationPlanner.windowEnd(short, policy: policy) == now.addingTimeInterval(180))
     }
 
-    @Test func subtitle() {
-        let url = URL(string: "https://zoom.us/j/1")!
-        let withLink = CalendarEvent.fixture(start: TestClock.date("2026-09-29T11:05:00+02:00"), minutes: 60,
-                                             meeting: MeetingLink(url: url, provider: .zoom))
-        #expect(NotificationPlanner.subtitle(withLink, calendar: TestClock.paris) == "Zoom · 11:05-12:05")
-        let noLink = CalendarEvent.fixture(start: TestClock.date("2026-09-29T11:05:00+02:00"), minutes: 60)
-        #expect(NotificationPlanner.subtitle(noLink, calendar: TestClock.paris) == "11:05-12:05")
-    }
-
-    @Test func bodyListsPlaceGuestsAndDocs() {
-        let base = CalendarEvent.fixture(start: TestClock.date("2026-09-29T11:05:00+02:00"))
-        #expect(NotificationPlanner.body(base, now: now) == "In 5 min")
-        let guest = { (n: String) in
-            Attendee(person: Person(email: "\(n)@example.com", name: n), response: .accepted,
-                     isOrganizer: false, isSelf: false, isOptional: false)
-        }
-        let doc = { (t: String) in
-            Attachment(title: t, url: URL(string: "https://docs.google.com/\(t)")!, mimeType: nil, iconURL: nil)
-        }
-        let rich = CalendarEvent(
-            id: "r", iCalUID: "r", accountEmail: "me@example.com", calendarID: "me@example.com",
-            colorHex: "#4285f4", title: "Review", start: base.start, end: base.end, isAllDay: false,
-            location: "Room 4", notes: nil, htmlLink: nil, organizer: nil,
-            attendees: [guest("a"), guest("b"), guest("c")], attachments: [doc("x"), doc("y")],
-            meeting: nil, selfResponse: .accepted)
-        #expect(NotificationPlanner.body(rich, now: now) == "In 5 min · Room 4 · 3 guests · 2 docs")
-    }
-
-    @Test func bodySkipsURLPlaceAndLoneGuest() {
-        let e = CalendarEvent(
-            id: "u", iCalUID: "u", accountEmail: "me@example.com", calendarID: "me@example.com",
-            colorHex: "#4285f4", title: "Call", start: now.addingTimeInterval(300), end: now.addingTimeInterval(1800),
-            isAllDay: false, location: "https://zoom.us/j/1", notes: nil, htmlLink: nil, organizer: nil,
-            attendees: [Attendee(person: Person(email: "me@example.com", name: nil), response: .accepted,
-                                 isOrganizer: true, isSelf: true, isOptional: false)],
-            attachments: [Attachment(title: "Notes", url: URL(string: "https://docs.google.com/n")!, mimeType: nil, iconURL: nil)],
-            meeting: nil, selfResponse: .accepted)
-        #expect(NotificationPlanner.body(e, now: now) == "In 5 min · 1 doc")
-    }
-
     func dueAtStart(_ e: CalendarEvent, at date: Date? = nil, skip: Set<String> = []) -> Bool {
         !NotificationPlanner.dueAtStart([e], now: date ?? now, policy: policy, skip: skip).isEmpty
     }
@@ -116,10 +76,4 @@ import Testing
         #expect(!dueAtStart(event(inMinutes: 0, allDay: true)))
     }
 
-    @Test func startBody() {
-        let e = CalendarEvent.fixture(start: now, minutes: 30)
-        #expect(NotificationPlanner.body(e, now: now) == "Starting now")
-        #expect(NotificationPlanner.body(e, now: now.addingTimeInterval(59)) == "Starting now")
-        #expect(NotificationPlanner.body(e, now: now.addingTimeInterval(190)) == "Started 3 min ago")
-    }
 }

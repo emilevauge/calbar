@@ -28,7 +28,6 @@ struct MenuView: View {
         Group {
             if app.isPeeking {
                 peek(app.peekEvent(now: store.now), agenda: agenda)
-                    .transition(.opacity)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     header(agenda, day: day, other: other)
@@ -37,10 +36,13 @@ struct MenuView: View {
                     Divider()
                     footer
                 }
-                .transition(.opacity)
             }
         }
         .frame(width: 380)
+        // Pinned to the top: while the popover grows or shrinks around a
+        // change of content, the content stays put under the arrow
+        // instead of sliding to the middle.
+        .frame(maxHeight: .infinity, alignment: .top)
         .focusable()
         .focusEffectDisabled()
         .focused($focused)

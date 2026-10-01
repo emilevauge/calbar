@@ -60,14 +60,11 @@ struct SettingsView: View {
                 Stepper(value: $lingerMinutes, in: 0...30) {
                     valueRow("Keep after the start", "\(lingerMinutes) min")
                 }
-                Toggle("Notify before a meeting", isOn: $notifyBeforeMeetings)
-                if notifyBeforeMeetings {
-                    notificationPermissionRow
-                }
+                Toggle("Show the panel before a meeting", isOn: $notifyBeforeMeetings)
             } header: {
                 Text("Alerts")
             } footer: {
-                Text("A Join button shows in the menu bar before each meeting.")
+                Text("Before each meeting and at its start, the panel shows it for a few seconds, and a Join button shows in the menu bar.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -217,13 +214,14 @@ struct SettingsView: View {
         .foregroundStyle(.secondary)
     }
 
-    /// Shown only when macOS would hide Macal's notifications.
+    /// Shown only when macOS would hide Macal's notifications, which offer
+    /// updates.
     @ViewBuilder
     private var notificationPermissionRow: some View {
         switch notifications.authorization {
         case .denied?:
             HStack(spacing: 8) {
-                Label("Notifications are off in System Settings", systemImage: "bell.slash")
+                Label("Update notifications are off", systemImage: "bell.slash")
                     .foregroundStyle(.orange)
                 Spacer(minLength: 8)
                 Button("Open System Settings") {
@@ -297,6 +295,8 @@ struct SettingsView: View {
                         .foregroundStyle(.red)
                 }
             }
+
+            notificationPermissionRow
 
             valueRow("License", "MIT")
             HStack {

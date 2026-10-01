@@ -17,15 +17,6 @@ public struct MeetingLink: Equatable, Codable, Sendable {
             }
         }
 
-        /// For a button: "Join Meet" reads better than "Join Google Meet".
-        public var shortName: String {
-            switch self {
-            case .meet: return "Meet"
-            case .other: return "call"
-            default: return displayName
-            }
-        }
-
         static func forHost(_ host: String) -> Provider {
             let h = host.lowercased()
             if h == "meet.google.com" { return .meet }

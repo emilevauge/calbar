@@ -123,7 +123,7 @@ final class DayStartOpener {
 
     private func shouldOpen() -> Bool {
         // A locked screen hides the popover: the unlock triggers a new check.
-        guard !Self.isScreenLocked(), !isPopoverShown() else { return false }
+        guard !Session.isScreenLocked, !isPopoverShown() else { return false }
         return DayStartPolicy.shouldOpen(
             lastOpenedDay: Prefs.lastDayStartOpen,
             now: Date(),
@@ -132,10 +132,5 @@ final class DayStartOpener {
                 in: DayAgenda.build(from: store.events, now: Date(), calendar: .current)),
             enabled: Prefs.openPanelAtDayStart
         )
-    }
-
-    private static func isScreenLocked() -> Bool {
-        guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else { return false }
-        return session["CGSSessionScreenIsLocked"] as? Bool ?? false
     }
 }
