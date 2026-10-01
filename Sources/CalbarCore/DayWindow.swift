@@ -85,6 +85,9 @@ public struct DayCache<Value> {
         entries[day]
     }
 
+    /// Every value held, in no order.
+    public var values: [Value] { entries.values.compactMap(\.value) }
+
     public func needsFetch(_ day: Date, now: Date) -> Bool {
         guard let entry = entries[day] else { return true }
         if entry.isLoading || entry.failed && entry.generation == generation { return false }

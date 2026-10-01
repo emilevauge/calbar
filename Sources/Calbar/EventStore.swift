@@ -454,6 +454,29 @@ final class EventStore: ObservableObject {
         }
     }
 
+    /// Events loaded so far, today's window and the cached days.
+    var loadedEvents: [CalendarEvent] { rawEvents + dayCache.values.flatMap { $0 } }
+
+    /// Each account's primary calendar from 60 days back to 30 ahead, for
+    /// guest suggestions. Failures are skipped: suggestions are a bonus.
+    func recentPrimaryEvents() async -> [CalendarEvent] {
+        guard let auth else { return [] }
+        let now = Date()
+        let from = now.addingTimeInterval(-60 * 86_400), to = now.addingTimeInterval(30 * 86_400)
+        var result: [CalendarEvent] = []
+        for account in accounts.accounts where !account.needsReconnect {
+            guard let primary = account.calendars.first(where: \.isPrimary) else { continue }
+            do {
+                let token = try await auth.accessToken(for: account.email)
+                result += try await api.events(token: token, source: primary, accountEmail: account.email,
+                                               from: from, to: to, calendar: .current)
+            } catch {
+                NSLog("Calbar: recent events for suggestions failed: %@", "\(error)")
+            }
+        }
+        return result
+    }
+
     /// Creates `event` in one of `email`'s calendars, then refreshes so
     /// it shows. Throws for the form to show the error.
     func create(_ event: NewEvent, in email: String) async throws {

@@ -337,16 +337,28 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   day grid, pressing on an empty slot (outside the blocks) and dragging, up or down, marks out
   a ghost block that follows the pointer, labelled "10:00-11:30", from the quarter hour under
   the press to the quarter hour past the pointer (`NewEvent.range`, 15 min at least, within the
-  day); a plain click makes it 30 minutes. On release a "New Event" window opens (floating,
-  centered, one at a time) with: the title ("Add title", focused, "(No title)" when left
-  blank); the day, start and end times with the duration (moving the start keeps the duration,
-  changing the day moves both); the calendar (the writable calendars, `accessRole` owner or
-  writer, of the accounts with the write scope, grouped by account, primary first; the last
-  one used is remembered); "Add a Google Meet link" (remembered, on by default); guests as
-  emails in free text ("Name <email>" works, duplicates dropped), who get the invitation
-  (`sendUpdates=all`); location; description. `↵` in the title or Save creates, `esc` cancels.
-  Calbar posts `events.insert` (with `conferenceDataVersion=1` and a `hangoutsMeet` create
-  request for Meet), in the user's time zone, then refreshes. Errors show in the window; a
+  day); a plain click makes it 30 minutes. On release the editor opens beside the popover, to
+  its left (to its right without room), in a borderless non-activating panel that takes the
+  keyboard: the popover stays open (its behavior is application-defined until the editor
+  closes), and closing the popover closes the editor. It has the look of a card: a rounded
+  material panel tinted with the calendar color, "NEW EVENT" and the title ("Add title",
+  focused, "(No title)" when left blank), then lines with an icon as in the event details: day,
+  start and end times with the duration (moving the start keeps the duration, changing the day
+  moves both); the calendar (the writable calendars, `accessRole` owner or writer, of the
+  accounts with the write scope, grouped by account, primary first; the last one used is
+  remembered); "Add a Google Meet link" (remembered, on by default); guests; location;
+  description. `↵` in the title or Save creates, `esc` or Cancel closes.
+- Guests: chips with a remove button, then a field. Typing suggests up to six people
+  (`ContactIndex`): a word of the name or the email starting with the text, accents and case
+  ignored, people met more often first. `↑` `↓` move, `↵` or `tab` picks, `,` `;` or `↵` adds a
+  typed email, `⌫` in the empty field removes the last chip. Sources (`ContactBook`): the
+  attendees and organizers of the loaded events at once, then in the background, once per
+  launch and again after six hours, each account's primary calendar from 60 days back to 30
+  ahead, and the Mac's contacts (macOS asks for access the first time,
+  `NSContactsUsageDescription`). The user's own addresses and Google resource calendars are
+  left out. Guests get the invitation (`sendUpdates=all`).
+- Calbar posts `events.insert` (with `conferenceDataVersion=1` and a `hangoutsMeet` create
+  request for Meet), in the user's time zone, then refreshes. Errors show in the editor; a
   missing scope marks the account read only. Calendars stored before the access role was known
   count as writable only when primary, until the next refresh fills it.
 - Details (card, or a row expanded by a click, one at a time): the "Going?" line for an
