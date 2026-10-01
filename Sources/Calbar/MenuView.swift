@@ -104,11 +104,8 @@ struct MenuView: View {
             return .handled
         }
         .onKeyPress(.escape) {
-            // An editor in the panel asks before closing.
-            if store.editRequest != nil {
-                store.cancelEditing()
-                return .handled
-            }
+            // An editor in the panel handles `esc` itself (`onEscape`).
+            if store.editRequest != nil { return .handled }
             if store.askingDeleteScope != nil {
                 withAnimation(Motion.resize) { store.askingDeleteScope = nil }
                 return .handled

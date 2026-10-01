@@ -356,7 +356,10 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   weeks, monthly on the nth weekday or on the day, "the last" for a fifth weekday, annually;
   one `RRULE:` line, no end), guests, location, description. `↵` saves. `esc` closes it when
   nothing changed; otherwise "Discard this event?" (or "your changes") with Keep Editing and
-  Discard, a second `esc` discarding. A click outside closes it.
+  Discard, a second `esc` discarding. The key is caught by a local `NSEvent` monitor
+  (`EscapeCatcher`) in the editor's window, before the text field's field editor or the
+  popover, which would otherwise take it; a time or day picker is its own window and closes as
+  usual. A click outside closes it.
 - Editing and duplicating (`EventEditor.Mode`): the pencil and the copy icon beside the trash
   in the details, or "Edit Event…" and "Duplicate Event…" in the context menu, set
   `EventStore.editRequest`; the `EventRow` of that event shows the editor in place of its card

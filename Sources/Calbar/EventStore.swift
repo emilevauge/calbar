@@ -493,12 +493,6 @@ final class EventStore: ObservableObject {
         let duplicate: Bool
     }
     @Published var editRequest: EditRequest?
-    /// Bumped by `esc` in the panel while an editor sits in it: the
-    /// editor asks before closing.
-    @Published private(set) var editorCancelCount = 0
-
-    func cancelEditing() { editorCancelCount += 1 }
-
     func edit(_ event: CalendarEvent) {
         withAnimation(Motion.resize) { editRequest = .init(eventID: event.id, duplicate: false) }
     }

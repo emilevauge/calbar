@@ -155,12 +155,7 @@ struct EventEditor: View {
         }
         // `esc` closes only after asking when something was typed: the
         // popover would otherwise go, and the event with it.
-        .onKeyPress(.escape) {
-            cancel()
-            return .handled
-        }
-        .onExitCommand(perform: cancel)
-        .onChange(of: AppDelegate.shared.store.editorCancelCount) { cancel() }
+        .onEscape(cancel)
     }
 
     // MARK: parts
