@@ -261,8 +261,21 @@ final class AppDelegate: NSObject, ObservableObject {
         guard let popover, let button = statusItem?.button, !popover.isShown else { return }
         hoverPeek.cancel()
         NSApp.activate(ignoringOtherApps: true)
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        popover.contentViewController?.view.window?.makeKey()
+        present(popover, from: button) {
+            popover.contentViewController?.view.window?.makeKey()
+        }
+    }
+
+    /// Shows the popover at the size of what it is about to display, not
+    /// the size it had when it last closed (a peek, or the full day). The
+    /// hop lets SwiftUI apply the mode change before it is measured.
+    private func present(_ popover: NSPopover, from button: NSStatusBarButton, then: @escaping () -> Void = {}) {
+        DispatchQueue.main.async {
+            guard !popover.isShown else { return }
+            (popover.contentViewController as? PopoverHost<MenuView>)?.fitPopover()
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            then()
+        }
     }
 
     func closePopover() {
@@ -278,7 +291,7 @@ final class AppDelegate: NSObject, ObservableObject {
         guard let popover, let button = statusItem?.button, !popover.isShown else { return }
         peekTarget = nil
         isPeeking = true
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        present(popover, from: button)
         watchPeek(until: nil)
     }
 
@@ -291,7 +304,7 @@ final class AppDelegate: NSObject, ObservableObject {
         peekTarget = event.occurrenceKey
         if !popover.isShown {
             isPeeking = true
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            present(popover, from: button)
         }
         watchPeek(until: Date().addingTimeInterval(duration))
         return true

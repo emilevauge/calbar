@@ -63,6 +63,15 @@ final class PopoverHost<Content: View>: NSViewController {
         return host.intrinsicContentSize
     }
 
+    /// Sets the popover to the content's size at once, before it shows.
+    func fitPopover() {
+        _ = view
+        host.layoutSubtreeIfNeeded()
+        let size = host.intrinsicContentSize
+        guard let popover, size.width > 0, size.height > 0 else { return }
+        popover.contentSize = size
+    }
+
     /// Once per pass: SwiftUI may invalidate several times in a row.
     private func scheduleResize() {
         guard !pendingResize else { return }
