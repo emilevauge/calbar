@@ -83,6 +83,20 @@ struct MenuView: View {
             step(1)
             return .handled
         }
+        // ⌫ deletes the selected event, ⌘Z brings back the last deleted.
+        .onKeyPress(keys: [.delete, .deleteForward]) { _ in
+            guard !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
+            let event = rows[selectedIndex]
+            guard store.canDelete(event) else { NSSound.beep(); return .handled }
+            withAnimation(Motion.resize) { store.delete(event) }
+            selectedIndex = min(selectedIndex, max(rows.count - 2, 0))
+            return .handled
+        }
+        .onKeyPress(characters: ["z"]) { press in
+            guard press.modifiers.contains(.command), store.lastDeleted != nil else { return .ignored }
+            withAnimation(Motion.resize) { store.undoDelete() }
+            return .handled
+        }
         .onKeyPress(.escape) {
             AppDelegate.shared.closePopover()
             return .handled
@@ -396,11 +410,29 @@ struct MenuView: View {
 
     // MARK: footer
 
+    /// The footer, with the "Undo" bar of a deletion above it.
     private var footer: some View {
-        MenuFooter(isRefreshing: store.isRefreshing, onRefresh: {
-            Task { await store.refresh() }
-        }, calendarURL: GoogleCalendarWeb.home(authuser: accounts.accounts.first?.email)) {
-            SettingsView()
+        VStack(spacing: 0) {
+            if let deleted = store.lastDeleted {
+                UndoBar(title: deleted.title, onUndo: store.undoDelete)
+                Divider()
+            } else if let error = store.deleteError {
+                HStack {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Spacer()
+                    Button("OK", action: store.dismissDeleteError).controlSize(.small)
+                }
+                .font(.caption)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                Divider()
+            }
+            MenuFooter(isRefreshing: store.isRefreshing, onRefresh: {
+                Task { await store.refresh() }
+            }, calendarURL: GoogleCalendarWeb.home(authuser: accounts.accounts.first?.email)) {
+                SettingsView()
+            }
         }
     }
 

@@ -121,6 +121,14 @@ public struct CalendarAPI: Sendable {
                            query: query, body: try event.body(), token: token)
     }
 
+    /// Deletes one event, or one occurrence of a recurring one (its id is
+    /// the occurrence's). Guests get Google's cancellation when `notify`.
+    public func delete(token: String, calendarID: String, eventID: String, notify: Bool) async throws {
+        let path = "/calendars/\(FormEncoding.escape(calendarID))/events/\(FormEncoding.escape(eventID))"
+        _ = try await send("DELETE", path, query: [URLQueryItem(name: "sendUpdates", value: notify ? "all" : "none")],
+                           body: nil, token: token)
+    }
+
     /// Token of the next page, or `nil` to stop. An empty or repeated token
     /// would otherwise loop forever.
     private static func next(_ token: String?, after previous: String?) -> String? {

@@ -153,6 +153,16 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
         calendarID == accountEmail && attendees.contains { $0.isSelf && !$0.isOrganizer }
     }
 
+    /// The user may delete it: on one of their own calendars (`own`
+    /// emails), organized by them, or without guests. Deleting someone
+    /// else's invitation is declining, not this.
+    public func isDeletable(own: Set<String>) -> Bool {
+        guard own.contains(calendarID.lowercased()) || own.contains(accountEmail.lowercased()) else { return false }
+        if attendees.isEmpty { return true }
+        if attendees.contains(where: { $0.isSelf && $0.isOrganizer }) { return true }
+        return organizer.map { own.contains($0.email.lowercased()) } ?? false
+    }
+
     /// The same event with the user's answer set to `response`, in
     /// `selfResponse` and in the attendee list.
     public func answering(_ response: ResponseStatus) -> CalendarEvent {

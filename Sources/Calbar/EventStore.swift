@@ -57,7 +57,9 @@ final class EventStore: ObservableObject {
     }
 
     private func visible(_ raw: [CalendarEvent]) -> [CalendarEvent] {
-        let enabled = raw.filter { accounts.isEnabled(calendarID: $0.calendarID, email: $0.accountEmail) }
+        let enabled = raw.filter {
+            accounts.isEnabled(calendarID: $0.calendarID, email: $0.accountEmail) && !deleting.contains($0.occurrenceKey)
+        }
         return EventMerger.merge(enabled, showDeclined: Prefs.showDeclined, keeping: recentlyAnswered)
     }
 
@@ -452,6 +454,71 @@ final class EventStore: ObservableObject {
                 showAnswerError(describeReply(error), for: id)
             }
         }
+    }
+
+    // MARK: deleting
+
+    /// Occurrences deleted in Calbar, hidden while their deletion waits
+    /// `undoDelay` to be sent, and until the next refresh drops them.
+    @Published private(set) var deleting: Set<String> = []
+    /// The last deletion, for the "Undo" bar, until it is sent or undone.
+    @Published private(set) var lastDeleted: CalendarEvent?
+    @Published private(set) var deleteError: String?
+    private var deleteTasks: [String: Task<Void, Never>] = [:]
+    static let undoDelay: Duration = .seconds(10)
+
+    /// The user's own event on a calendar they may write.
+    func canDelete(_ event: CalendarEvent) -> Bool {
+        let own = Set(accounts.accounts.map { $0.email.lowercased() })
+        return accounts.canReply(event.accountEmail) && event.isDeletable(own: own)
+    }
+
+    /// Hides `event` at once and deletes it in Google after `undoDelay`,
+    /// unless `undoDelete()` comes first: nothing to recreate, no guest
+    /// told twice. A quit within the delay keeps the event.
+    func delete(_ event: CalendarEvent) {
+        guard canDelete(event), let auth else { return }
+        let key = event.occurrenceKey
+        guard !deleting.contains(key) else { return }
+        deleting.insert(key)
+        lastDeleted = event
+        deleteError = nil
+        NSLog("Calbar: event deleted, sending in %d s", 10)
+        deleteTasks[key] = Task {
+            try? await Task.sleep(for: Self.undoDelay)
+            guard !Task.isCancelled else { return }
+            if lastDeleted?.occurrenceKey == key { lastDeleted = nil }
+            do {
+                try await withAccessToken(event.accountEmail, auth: auth) { [api] token in
+                    try await api.delete(token: token, calendarID: event.calendarID, eventID: event.googleEventID,
+                                         notify: event.attendees.contains { !$0.isSelf })
+                }
+                NSLog("Calbar: event deletion sent")
+                deleteTasks[key] = nil
+                await refresh()
+                deleting.remove(key)
+            } catch {
+                NSLog("Calbar: event deletion failed: %@", "\(error)")
+                deleteTasks[key] = nil
+                deleting.remove(key)
+                deleteError = describeCreate(error).replacingOccurrences(of: "add the event", with: "delete the event")
+            }
+        }
+    }
+
+    /// Brings back the last deleted event while its deletion still waits.
+    func undoDelete() {
+        guard let event = lastDeleted else { return }
+        let key = event.occurrenceKey
+        deleteTasks[key]?.cancel()
+        deleteTasks[key] = nil
+        deleting.remove(key)
+        lastDeleted = nil
+        NSLog("Calbar: deletion undone")
+    }
+
+    func dismissDeleteError() {
+        deleteError = nil
     }
 
     /// Events loaded so far, today's window and the cached days.

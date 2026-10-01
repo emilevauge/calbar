@@ -269,6 +269,13 @@ struct EventRow: View {
         if let url = event.webURL {
             Button("Open in Google Calendar") { NSWorkspace.shared.open(url) }
         }
+        if AppDelegate.shared.store.canDelete(event) {
+            Divider()
+            Button("Delete Event") {
+                withAnimation(Motion.resize) { AppDelegate.shared.store.delete(event) }
+            }
+            .keyboardShortcut(.delete, modifiers: [])
+        }
     }
 
 }

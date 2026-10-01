@@ -387,6 +387,15 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   request for Meet), in the user's time zone, then refreshes. Errors show in the editor; a
   missing scope marks the account read only. Calendars stored before the access role was known
   count as writable only when primary, until the next refresh fills it.
+- Deleting: `⌫` deletes the selected row of the list, or the event whose card is open in the
+  grid; the context menu has "Delete Event". Only the user's own events (`isDeletable`: on one of
+  their calendars, organized by them or without guests) of an account with the write scope;
+  otherwise a beep. Deleting someone else's invitation would be declining it, which "Going?"
+  does. The event is hidden at once and an "Undo" bar shows above the footer ("Deleted
+  “Design sync”", the seconds left, Undo or `⌘Z`); Google is told only after 10 s
+  (`events.delete`, the occurrence alone for a recurring event, `sendUpdates=all` when there are
+  guests, so they get Google's cancellation). Undo within the delay sends nothing. A quit within
+  the delay keeps the event. A failure brings it back with a red line and OK.
 - Details (card, or a row expanded by a click, one at a time): the "Going?" line for an
   invitation (see "Answering invitations"), the video provider when there is no Join button,
   location (opens Maps, or the URL when the location is one), organizer, guests as up to 5

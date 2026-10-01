@@ -402,6 +402,16 @@ struct WeekView: View {
                      onToggle: {}, onJoin: { onJoin(event) })
                 .frame(width: 360)
                 .padding(.vertical, 6)
+                // ⌫ in the open card deletes the event (⌘Z in the panel undoes).
+                .focusable()
+                .focusEffectDisabled()
+                .onKeyPress(keys: [.delete, .deleteForward]) { _ in
+                    let store = AppDelegate.shared.store
+                    guard store.canDelete(event) else { NSSound.beep(); return .handled }
+                    opened = nil
+                    withAnimation(Motion.resize) { store.delete(event) }
+                    return .handled
+                }
         }
     }
 }
