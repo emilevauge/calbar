@@ -3,8 +3,10 @@ import AppKit
 
 /// `esc` for the event editor, caught before AppKit: in a text field the
 /// field editor takes the key, and a popover closes on it, so SwiftUI's
-/// key handlers never see it. The last editor shown in the key's window
-/// gets it; a picker's own popover is another window and closes as usual.
+/// key handlers never see it. The last editor still on screen gets it;
+/// the key goes on as usual while a picker (a popover over the editor's
+/// window) is open. Not matched on the event's window: for a popover,
+/// macOS gives the key the window the popover is attached to.
 @MainActor
 final class EscapeCatcher {
     static let shared = EscapeCatcher()
@@ -22,10 +24,13 @@ final class EscapeCatcher {
         entries.append(Entry(id: id, window: window, handler: handler))
         guard monitor == nil else { return }
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.keyCode == 53, event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty else { return event }
+            guard event.keyCode == 53,
+                  event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty else { return event }
             nonisolated(unsafe) let key = event
             return MainActor.assumeIsolated {
-                guard let entry = EscapeCatcher.shared.entries.last(where: { $0.window != nil && $0.window === key.window })
+                guard let entry = EscapeCatcher.shared.entries.last(where: { $0.window?.isVisible == true }),
+                      let window = entry.window,
+                      !(window.childWindows ?? []).contains(where: \.isVisible)
                 else { return key }
                 entry.handler()
                 return nil

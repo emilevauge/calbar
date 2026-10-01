@@ -3,7 +3,8 @@ import AppKit
 import CalbarCore
 
 /// Expanded part of a row or card: answer, link, place, guests,
-/// documents, description, with a Google Calendar button at the top right.
+/// documents, description. The actions sit in the row's or card's top
+/// line (`EventActions`).
 struct EventDetail: View {
     let event: CalendarEvent
     /// Off when the row or card already has a Join button.
@@ -12,24 +13,7 @@ struct EventDetail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 6) {
-                lines
-                Spacer(minLength: 0)
-                HStack(spacing: 8) {
-                    EventActions(event: event)
-                    if let url = event.webURL {
-                        Link(destination: url) {
-                            GoogleCalendarIcon(size: 15)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Open in Google Calendar")
-                    }
-                }
-                // Centers the 16 pt icons on the first caption line.
-                .padding(.vertical, -1.5)
-            }
-            // Notes use the full width, below the icon.
+            lines
             if let notes = event.notes {
                 let text = HTMLText.plainText(notes)
                 if !text.isEmpty {
@@ -194,63 +178,72 @@ struct EventDetail: View {
     }
 }
 
-/// Edit, duplicate and delete, beside the Google Calendar icon. Edit and
-/// delete on the user's own events only. A deletion goes at once, with
-/// 10 seconds to undo from the bar above the footer; for a recurring
-/// event the trash asks which occurrences first.
-private struct EventActions: View {
+/// Edit, duplicate, delete and open in Google Calendar, at the top right
+/// of a card or expanded row. Edit and delete on the user's own events
+/// only. A deletion goes at once, with 10 seconds to undo from the bar
+/// above the footer; for a recurring event the trash asks which
+/// occurrences first.
+struct EventActions: View {
     let event: CalendarEvent
     @ObservedObject private var store = AppDelegate.shared.store
 
     var body: some View {
-        if store.canEdit(event) {
-            ActionIcon(symbol: "pencil", help: "Edit this event") {
-                store.edit(event)
+        HStack(spacing: 2) {
+            if store.canEdit(event) {
+                ActionIcon(symbol: "square.and.pencil", help: "Edit this event") { store.edit(event) }
             }
-        }
-        if !AppDelegate.shared.accounts.writableCalendars.isEmpty {
-            ActionIcon(symbol: "plus.square.on.square", help: "Duplicate this event") {
-                store.duplicate(event)
+            if !AppDelegate.shared.accounts.writableCalendars.isEmpty {
+                ActionIcon(symbol: "plus.square.on.square", help: "Duplicate this event") { store.duplicate(event) }
             }
-        }
-        if store.canDelete(event) {
-            if event.isRecurring {
-                Menu {
-                    ForEach(RecurrenceScope.allCases, id: \.self) { scope in
-                        Button(scope.label) { withAnimation(Motion.resize) { store.delete(event, scope: scope) } }
+            if store.canDelete(event) {
+                if event.isRecurring {
+                    Menu {
+                        ForEach(RecurrenceScope.allCases, id: \.self) { scope in
+                            Button(scope.label) { withAnimation(Motion.resize) { store.delete(event, scope: scope) } }
+                        }
+                    } label: {
+                        Image(systemName: "trash")
                     }
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 12, weight: .medium))
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .frame(width: 24, height: 22)
+                    .help("Delete this recurring event (⌫)")
+                } else {
+                    ActionIcon(symbol: "trash", help: "Delete this event (⌫)", hoverColor: .red) {
+                        withAnimation(Motion.resize) { store.delete(event) }
+                    }
+                }
+            }
+            if let url = event.webURL {
+                Link(destination: url) {
+                    GoogleCalendarIcon(size: 14)
                         .foregroundStyle(.secondary)
+                        .frame(width: 24, height: 22)
+                        .contentShape(Rectangle())
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help("Delete this recurring event (⌫)")
-            } else {
-                ActionIcon(symbol: "trash", help: "Delete this event (⌫)", hoverColor: .red) {
-                    withAnimation(Motion.resize) { store.delete(event) }
-                }
+                .buttonStyle(.plain)
+                .help("Open in Google Calendar")
             }
         }
     }
 }
 
-/// A small secondary icon button, colored on hover.
+/// A small icon button: secondary, on a light square on hover.
 private struct ActionIcon: View {
     let symbol: String
     let help: String
-    var hoverColor: Color = .accentColor
+    var hoverColor: Color = .primary
     let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 12.5, weight: .regular))
                 .foregroundStyle(hovering ? AnyShapeStyle(hoverColor) : AnyShapeStyle(.secondary))
-                .frame(width: 16, height: 16)
+                .frame(width: 24, height: 22)
+                .background(Color.primary.opacity(hovering ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

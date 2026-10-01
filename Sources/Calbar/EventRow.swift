@@ -73,13 +73,16 @@ struct EventRow: View {
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                             .lineLimit(1)
+                        Spacer(minLength: 4)
+                        EventActions(event: event)
+                            // On the caption line without making it taller.
+                            .padding(.vertical, -4)
                     }
                     Text(event.title)
                         .font(.system(size: 15, weight: .semibold))
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer(minLength: 0)
                 if let meeting = event.meeting, canJoin {
                     Button(action: onJoin) {
                         Label("Join", systemImage: "video.fill")
@@ -141,6 +144,10 @@ struct EventRow: View {
 
                 Spacer(minLength: 0)
 
+                if expanded {
+                    EventActions(event: event)
+                        .padding(.top, 1)
+                }
                 if let meeting = event.meeting, canJoin {
                     Button(action: onJoin) {
                         Image(systemName: "video")

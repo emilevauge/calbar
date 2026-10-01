@@ -141,13 +141,24 @@ struct EventEditor: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(14)
+            } else if embedded {
+                // In place of a card: the card's tinted box.
+                form(color)
                     .padding(12)
+                    .background {
+                        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        shape.fill(color.opacity(0.07))
+                        shape.strokeBorder(color.opacity(0.22), lineWidth: 1)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
             } else {
-                card(color)
+                form(color)
+                    .padding(16)
             }
         }
-        .frame(width: embedded ? nil : 360)
-        .padding(.vertical, embedded ? 0 : 6)
+        .frame(width: embedded ? nil : 380)
         .onAppear {
             contacts.prepare()
             initialFields = fields
@@ -160,54 +171,42 @@ struct EventEditor: View {
 
     // MARK: parts
 
-    /// The same box as `EventRow`'s card.
-    private func card(_ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    times
-                    TextField("Add title", text: $title)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 15, weight: .semibold))
-                        .focused($titleFocused)
-                        .onSubmit(save)
-                }
-                Spacer(minLength: 0)
-                Button(action: save) {
-                    Group {
-                        if busy {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Text("Save").font(.system(size: 12, weight: .semibold))
-                        }
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .frame(height: 26)
-                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.defaultAction)
-                .disabled(busy || selected == nil)
+    /// The title beside the calendar's color, the times, the fields with
+    /// an icon each, then Cancel and Save.
+    private func form(_ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 9) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(color)
+                    .frame(width: 4, height: 20)
+                TextField(original == nil ? "New event" : "Title", text: $title)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 17, weight: .semibold))
+                    .focused($titleFocused)
+                    .onSubmit(save)
             }
+            times
+                .padding(.top, 10)
+                .padding(.leading, 13)
+            Divider()
+                .padding(.vertical, 12)
             details
+            if error != nil || confirmingDiscard {
+                Divider().padding(.vertical, 10)
+                notice
+            }
+            Divider()
+                .padding(.vertical, 12)
+            footer
         }
-        .padding(12)
-        .background {
-            let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-            shape.fill(color.opacity(0.07))
-            shape.strokeBorder(color.opacity(0.22), lineWidth: 1)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
     }
 
-    /// Day, start and end, and the duration, in the caption of a card.
-    /// The day opens the same month calendar as the header; each time
-    /// opens a list of quarter hours, as in Google Calendar. An all-day
-    /// event has its day alone.
+    /// Day, start and end as pills that open their picker, then the
+    /// duration. The day opens the same month calendar as the header;
+    /// each time a list of quarter hours, as in Google Calendar. An
+    /// all-day event has its day alone.
     private var times: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 6) {
             PopoverField(label: DayHeaderText.shortTitle(start), help: "Pick the day") { close in
                 DayPicker(day: start, isToday: Calendar.current.isDateInToday(start), onPick: { day in
                     moveDay(to: day)
@@ -219,9 +218,8 @@ struct EventEditor: View {
             }
             if isAllDay {
                 let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 1
-                Text(days > 1 ? "· All day, \(days) days" : "· All day")
-                    .fixedSize()
-                    .padding(.leading, 2)
+                Text(days > 1 ? "All day, \(days) days" : "All day")
+                    .foregroundStyle(.secondary)
             } else {
                 PopoverField(label: AgendaFormat.clock(start, .current), help: "Start time") { close in
                     TimeList(options: TimeList.day(of: start), selection: start, reference: nil) { picked in
@@ -231,88 +229,72 @@ struct EventEditor: View {
                         close()
                     }
                 }
-                Text("-")
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.tertiary)
                 PopoverField(label: AgendaFormat.clock(end, .current), help: "End time") { close in
                     TimeList(options: TimeList.after(start), selection: end, reference: start) { picked in
                         end = picked
                         close()
                     }
                 }
-                Text("· \(AgendaFormat.duration(end.timeIntervalSince(start)))")
+                Text(AgendaFormat.duration(end.timeIntervalSince(start)))
+                    .foregroundStyle(.tertiary)
                     .fixedSize()
-                    .padding(.leading, 2)
             }
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        .font(.system(size: 12))
         .monospacedDigit()
     }
 
     private var details: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            line("calendar") {
-                Circle()
-                    .fill(Color(hex: selected?.calendar.colorHex ?? "#888888"))
-                    .frame(width: 7, height: 7)
+        VStack(alignment: .leading, spacing: 9) {
+            line(color: Color(hex: selected?.calendar.colorHex ?? "#888888")) {
                 if let original {
                     // Moving an event to another calendar is not supported.
                     Text(selected?.calendar.name ?? original.calendarID)
                 } else {
-                    Picker("Calendar", selection: Binding(get: { selected?.id ?? "" }, set: {
-                        chosenCalendar = $0
-                        calendarID = $0
-                    })) {
+                    MenuField(label: selected?.calendar.name ?? "Calendar") {
                         ForEach(Self.byAccount(composer.calendars), id: \.0) { email, list in
                             Section(email) {
-                                ForEach(list) { item in Text(item.calendar.name).tag(item.id) }
+                                ForEach(list) { item in
+                                    CheckItem(item.calendar.name, checked: item.id == selected?.id) {
+                                        chosenCalendar = item.id
+                                        calendarID = item.id
+                                    }
+                                }
                             }
                         }
                     }
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .fixedSize()
                 }
             }
             line("video") {
                 if let meeting = original?.meeting {
                     Text(meeting.provider.displayName)
                 } else {
-                    Picker("Conference", selection: Binding(get: { effectiveConference }, set: {
-                        chosenConference = $0
-                        if original == nil { conference = $0 }
-                    })) {
-                        Text("No video call").tag("none")
-                        Text("Google Meet").tag("meet")
-                        if zoom.isConnected {
-                            Text("Zoom").tag("zoom")
+                    MenuField(label: Self.conferenceName(effectiveConference)) {
+                        ForEach(["none", "meet"] + (zoom.isConnected ? ["zoom"] : []), id: \.self) { choice in
+                            CheckItem(Self.conferenceName(choice), checked: choice == effectiveConference) {
+                                chosenConference = choice
+                                if original == nil { conference = choice }
+                            }
                         }
                     }
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .fixedSize()
                 }
             }
-            if let original, original.isRecurring {
-                line("repeat") {
-                    Picker("Apply to", selection: $scope) {
-                        Text("This event").tag(RecurrenceScope.this)
-                        Text("All events").tag(RecurrenceScope.all)
+            line("repeat") {
+                if let original, original.isRecurring {
+                    MenuField(label: scope == .all ? "Change all events" : "Change this event only") {
+                        CheckItem("Change this event only", checked: scope == .this) { scope = .this }
+                        CheckItem("Change all events", checked: scope == .all) { scope = .all }
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .fixedSize()
-                }
-            } else {
-                line("repeat") {
-                    Picker("Repeat", selection: $repeatRule) {
+                } else {
+                    MenuField(label: repeatRule.label(start: start)) {
                         ForEach(RepeatRule.allCases, id: \.self) { rule in
-                            Text(rule.label(start: start)).tag(rule)
+                            CheckItem(rule.label(start: start), checked: rule == repeatRule) { repeatRule = rule }
+                            if rule == .none { Divider() }
                         }
                     }
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .fixedSize()
                 }
             }
             line("person.2", alignment: .top) {
@@ -327,37 +309,91 @@ struct EventEditor: View {
                     .textFieldStyle(.plain)
                     .lineLimit(1...6)
             }
-            if let error {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, 20)
-            }
-            if confirmingDiscard {
-                HStack(spacing: 6) {
-                    Text(original == nil ? "Discard this event?" : "Discard your changes?")
-                        .foregroundStyle(.primary)
-                    Spacer(minLength: 0)
-                    Button("Keep Editing") { withAnimation(Motion.resize) { confirmingDiscard = false } }
-                    Button("Discard", role: .destructive, action: onDone)
-                }
-                .controlSize(.small)
-                .padding(.leading, 20)
-            }
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        .font(.system(size: 12))
+    }
+
+    /// An error of the last save, or the question before discarding.
+    @ViewBuilder
+    private var notice: some View {
+        if confirmingDiscard {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.circle")
+                    .foregroundStyle(.orange)
+                Text(original == nil ? "Discard this event?" : "Discard your changes?")
+                Spacer(minLength: 0)
+                Button("Keep Editing") { withAnimation(Motion.resize) { confirmingDiscard = false } }
+                Button("Discard", role: .destructive, action: onDone)
+            }
+            .font(.system(size: 12))
+            .controlSize(.small)
+        } else if let error {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: 11.5))
+                .foregroundStyle(.red)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var footer: some View {
+        HStack(spacing: 8) {
+            Text(original == nil ? "esc to cancel" : "Editing")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+            Spacer(minLength: 0)
+            Button("Cancel", action: cancel)
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+            Button(action: save) {
+                Group {
+                    if busy {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text(original == nil ? "Save" : "Save Changes")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(height: 26)
+                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.defaultAction)
+            .disabled(busy || selected == nil)
+        }
+    }
+
+    static func conferenceName(_ choice: String) -> String {
+        switch choice {
+        case "meet": return "Google Meet"
+        case "zoom": return "Zoom"
+        default: return "No video call"
+        }
     }
 
     /// An icon and its content, as in the event details.
-    private func line<Content: View>(_ symbol: String, alignment: VerticalAlignment = .center,
+    private func line<Content: View>(_ symbol: String? = nil, color: Color? = nil,
+                                     alignment: VerticalAlignment = .center,
                                      @ViewBuilder _ content: () -> Content) -> some View {
-        HStack(alignment: alignment == .top ? .firstTextBaseline : .center, spacing: 6) {
-            Image(systemName: symbol)
-                .frame(width: 14)
+        HStack(alignment: alignment == .top ? .firstTextBaseline : .center, spacing: 10) {
+            Group {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                } else {
+                    // The calendar's line: its color.
+                    Circle().fill(color ?? .gray).frame(width: 9, height: 9)
+                }
+            }
+            .frame(width: 16)
             content()
             Spacer(minLength: 0)
         }
+        .frame(minHeight: 20)
     }
 
     /// Every field the user can change, as one string.
@@ -600,6 +636,59 @@ private struct GuestField: View {
     }
 }
 
+/// A value without a bezel that opens a menu of choices, with the
+/// up and down chevrons of a pop-up button.
+private struct MenuField<Items: View>: View {
+    let label: String
+    @ViewBuilder let items: () -> Items
+    @State private var hovering = false
+
+    var body: some View {
+        // A borderless menu draws an image of its label first: the
+        // chevrons go after it, outside.
+        HStack(spacing: 4) {
+            Menu(content: items) { Text(label) }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                // The menu's own inset: aligned with the text fields.
+                .padding(.leading, -3.5)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .allowsHitTesting(false)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.primary.opacity(hovering ? 0.07 : 0), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+        .padding(.horizontal, -6)
+        .onHover { hovering = $0 }
+    }
+}
+
+/// A menu item with a check mark on the current choice.
+private struct CheckItem: View {
+    let title: String
+    let checked: Bool
+    let action: () -> Void
+
+    init(_ title: String, checked: Bool, action: @escaping () -> Void) {
+        self.title = title
+        self.checked = checked
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            if checked {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
+    }
+}
+
 /// A caption-sized value that opens its picker in a popover: the day or a
 /// time of the event editor.
 private struct PopoverField<Content: View>: View {
@@ -612,11 +701,12 @@ private struct PopoverField<Content: View>: View {
     var body: some View {
         Button { open.toggle() } label: {
             Text(label)
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.primary)
-                .padding(.horizontal, 5)
-                .frame(height: 18)
-                .background(Color.primary.opacity(open || hovering ? 0.1 : 0.05),
-                            in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .padding(.horizontal, 8)
+                .frame(height: 22)
+                .background(Color.primary.opacity(open || hovering ? 0.12 : 0.07),
+                            in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

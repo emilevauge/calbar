@@ -342,14 +342,16 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   ghost are placed with padding, not `offset`, which moves the drawing but not the frame a
   popover anchors on. A new selection replaces the one being edited; the editor opens once a
   popover still closing (0.35 s) is gone, since SwiftUI drops a presentation made during that
-  animation. It is laid out
-  as that card, in the same tinted box: day, start and end times with the duration where the
-  card has its time range, each a small chip that opens a popover. The day opens the same
+  animation. It is a plain form, 380 pt wide: the title ("New event", 17 pt) beside a bar in
+  the calendar's color, then day, start, an arrow, end and the duration, each a chip that
+  opens a popover; a divider, the fields with an icon each (the calendar's line has its color
+  dot), the choices as borderless menus with up and down chevrons and a check mark on the
+  current one; a divider, then "esc to cancel", Cancel and Save. Edited in place of a card,
+  the same form sits in the card's tinted box. The day opens the same
   month calendar as the header (`DayPicker`); a time opens a scrolling list of quarter hours
   (`TimeList`) centered on the current one, the end times with the duration each gives
   ("15:30 1 h 15 min", up to 24 hours). A new start keeps the duration, a new day both hours;
-  the title ("Add title", focused, "(No title)" when left blank), Save where the card has Join,
-  then caption lines with an icon: the calendar (the writable calendars, `accessRole` owner or
+  the title (focused, "(No title)" when left blank), then the lines: the calendar (the writable calendars, `accessRole` owner or
   writer, of the accounts with the write scope, grouped by account, primary first; the last one
   used is remembered), "Google Meet" (remembered, on by default), the repetition
   (`RepeatRule`: does not repeat, daily, every weekday, weekly on the start's day, every 2
@@ -360,8 +362,7 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   (`EscapeCatcher`) in the editor's window, before the text field's field editor or the
   popover, which would otherwise take it; a time or day picker is its own window and closes as
   usual. A click outside closes it.
-- Editing and duplicating (`EventEditor.Mode`): the pencil and the copy icon beside the trash
-  in the details, or "Edit Event…" and "Duplicate Event…" in the context menu, set
+- Editing and duplicating (`EventEditor.Mode`): the edit and copy icons of `EventActions`, or "Edit Event…" and "Duplicate Event…" in the context menu, set
   `EventStore.editRequest`; the `EventRow` of that event shows the editor in place of its card
   or row (in the panel, or in the grid's popover, which stays open), and the editor of a copy
   in a popover on itself. While an editor is in the panel, its arrow, `⌫` and `↵` shortcuts
@@ -409,8 +410,10 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   request for Meet), in the user's time zone, then refreshes. Errors show in the editor; a
   missing scope marks the account read only. Calendars stored before the access role was known
   count as writable only when primary, until the next refresh fills it.
-- Deleting: a trash button beside the Google Calendar icon of the details (card, expanded row,
-  grid popover), `⌫` on the selected row of the list or in the open card of the grid (tested on
+- Event actions (`EventActions`): edit, duplicate, delete and Google Calendar, small icons
+  that get a light square on hover, at the top right: on the card's time line, on the top line
+  of an expanded row, before the Join button.
+- Deleting: the trash of `EventActions` (card, expanded row, grid popover), `⌫` on the selected row of the list or in the open card of the grid (tested on
   the characters: macOS sends backspace as DEL, U+007F, which SwiftUI's `.delete` does not
   match), or "Delete Event" in the context menu. For a recurring event the trash and the context
   menu offer "This event", "This and following events" and "All events"; `⌫` shows the same
@@ -429,7 +432,7 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   location (opens Maps, or the URL when the location is one), organizer, guests as up to 5
   initials in colored circles with "5 guests · 3 yes" (a click lists each guest with their
   answer), Drive attachments as chips with a type icon, the description as plain text with
-  clickable links, and a Google Calendar button at the top right that opens the event pinned to
+  clickable links; the Google Calendar icon of `EventActions` opens the event pinned to
   its account. Initials colors come from the email, so a person keeps the same color.
 - Keyboard: `↑` `↓` move the selection, `←` `→` change the day, `↵` expands, `⌘↵` joins, `esc`
   closes. `⌘R` refreshes, `⌘,` opens the settings, `⌘Q` quits.
