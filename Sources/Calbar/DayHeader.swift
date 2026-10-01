@@ -85,6 +85,9 @@ private struct DayPicker: View {
             DatePicker("Day", selection: $selection, displayedComponents: .date)
                 .datePickerStyle(.graphical)
                 .labelsHidden()
+                // It takes the keyboard focus on opening, and its blue
+                // focus ring looks like a stray border.
+                .focusEffectDisabled()
                 .onChange(of: selection) { _, picked in
                     onPick(picked)
                 }
