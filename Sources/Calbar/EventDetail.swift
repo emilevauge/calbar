@@ -16,7 +16,7 @@ struct EventDetail: View {
                 lines
                 Spacer(minLength: 0)
                 HStack(spacing: 8) {
-                    DeleteButton(event: event)
+                    EventActions(event: event)
                     if let url = event.webURL {
                         Link(destination: url) {
                             GoogleCalendarIcon(size: 15)
@@ -194,29 +194,68 @@ struct EventDetail: View {
     }
 }
 
-/// Trash beside the Google Calendar icon, on the user's own events: the
-/// event goes at once, with 10 seconds to undo from the bar above the
-/// footer.
-private struct DeleteButton: View {
+/// Edit, duplicate and delete, beside the Google Calendar icon. Edit and
+/// delete on the user's own events only. A deletion goes at once, with
+/// 10 seconds to undo from the bar above the footer; for a recurring
+/// event the trash asks which occurrences first.
+private struct EventActions: View {
     let event: CalendarEvent
     @ObservedObject private var store = AppDelegate.shared.store
+
+    var body: some View {
+        if store.canEdit(event) {
+            ActionIcon(symbol: "pencil", help: "Edit this event") {
+                store.editRequest = .init(eventID: event.id, duplicate: false)
+            }
+        }
+        if !AppDelegate.shared.accounts.writableCalendars.isEmpty {
+            ActionIcon(symbol: "plus.square.on.square", help: "Duplicate this event") {
+                store.editRequest = .init(eventID: event.id, duplicate: true)
+            }
+        }
+        if store.canDelete(event) {
+            if event.isRecurring {
+                Menu {
+                    ForEach(RecurrenceScope.allCases, id: \.self) { scope in
+                        Button(scope.label) { withAnimation(Motion.resize) { store.delete(event, scope: scope) } }
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Delete this recurring event (⌫)")
+            } else {
+                ActionIcon(symbol: "trash", help: "Delete this event (⌫)", hoverColor: .red) {
+                    withAnimation(Motion.resize) { store.delete(event) }
+                }
+            }
+        }
+    }
+}
+
+/// A small secondary icon button, colored on hover.
+private struct ActionIcon: View {
+    let symbol: String
+    let help: String
+    var hoverColor: Color = .accentColor
+    let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
-        if store.canDelete(event) {
-            Button {
-                withAnimation(Motion.resize) { store.delete(event) }
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(hovering ? AnyShapeStyle(Color.red) : AnyShapeStyle(.secondary))
-                    .frame(width: 16, height: 16)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering = $0 }
-            .help("Delete this event (⌫)")
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(hovering ? AnyShapeStyle(hoverColor) : AnyShapeStyle(.secondary))
+                .frame(width: 16, height: 16)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
     }
 }
 

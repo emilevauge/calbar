@@ -58,7 +58,7 @@ final class EventStore: ObservableObject {
 
     private func visible(_ raw: [CalendarEvent]) -> [CalendarEvent] {
         let enabled = raw.filter {
-            accounts.isEnabled(calendarID: $0.calendarID, email: $0.accountEmail) && !deleting.contains($0.occurrenceKey)
+            accounts.isEnabled(calendarID: $0.calendarID, email: $0.accountEmail) && !isBeingDeleted($0)
         }
         return EventMerger.merge(enabled, showDeclined: Prefs.showDeclined, keeping: recentlyAnswered)
     }
@@ -458,14 +458,45 @@ final class EventStore: ObservableObject {
 
     // MARK: deleting
 
-    /// Occurrences deleted in Calbar, hidden while their deletion waits
-    /// `undoDelay` to be sent, and until the next refresh drops them.
-    @Published private(set) var deleting: Set<String> = []
+    /// A deletion waiting `undoDelay`: one occurrence, or a series from
+    /// one occurrence on, or a whole series.
+    struct Deletion: Equatable {
+        let event: CalendarEvent
+        let scope: RecurrenceScope
+        var key: String { "\(event.occurrenceKey)|\(scope.rawValue)" }
+
+        /// Copies across accounts share the iCalUID, as do occurrences.
+        func hides(_ other: CalendarEvent) -> Bool {
+            switch event.isRecurring ? scope : .this {
+            case .this: return other.occurrenceKey == event.occurrenceKey
+            case .following: return other.iCalUID == event.iCalUID && other.start >= event.start
+            case .all: return other.iCalUID == event.iCalUID
+            }
+        }
+    }
+
+    /// Deletions made in Calbar, hidden while they wait `undoDelay` to be
+    /// sent, and until the next refresh drops them.
+    @Published private(set) var deleting: [String: Deletion] = [:]
     /// The last deletion, for the "Undo" bar, until it is sent or undone.
-    @Published private(set) var lastDeleted: CalendarEvent?
+    @Published private(set) var lastDeleted: Deletion?
     @Published private(set) var deleteError: String?
+    /// A recurring event ⌫ was pressed on: the panel asks which
+    /// occurrences to delete.
+    @Published var askingDeleteScope: CalendarEvent?
     private var deleteTasks: [String: Task<Void, Never>] = [:]
+
+    /// An event whose editor is open, on itself or on a copy of it.
+    struct EditRequest: Equatable {
+        let eventID: String
+        let duplicate: Bool
+    }
+    @Published var editRequest: EditRequest?
     static let undoDelay: Duration = .seconds(10)
+
+    private func isBeingDeleted(_ event: CalendarEvent) -> Bool {
+        deleting.values.contains { $0.hides(event) }
+    }
 
     /// The user's own event on a calendar they may write.
     func canDelete(_ event: CalendarEvent) -> Bool {
@@ -473,46 +504,58 @@ final class EventStore: ObservableObject {
         return accounts.canReply(event.accountEmail) && event.isDeletable(own: own)
     }
 
+    /// Same rule as deleting: the user's own event, writable.
+    func canEdit(_ event: CalendarEvent) -> Bool { canDelete(event) }
+
+    /// ⌫ on `event`: deletes a single event, asks first for a recurring one.
+    func deleteFromKey(_ event: CalendarEvent) {
+        if event.isRecurring {
+            askingDeleteScope = event
+        } else {
+            delete(event)
+        }
+    }
+
     /// Hides `event` at once and deletes it in Google after `undoDelay`,
     /// unless `undoDelete()` comes first: nothing to recreate, no guest
     /// told twice. A quit within the delay keeps the event.
-    func delete(_ event: CalendarEvent) {
+    func delete(_ event: CalendarEvent, scope: RecurrenceScope = .this) {
         guard canDelete(event), let auth else { return }
-        let key = event.occurrenceKey
-        guard !deleting.contains(key) else { return }
-        deleting.insert(key)
-        lastDeleted = event
+        askingDeleteScope = nil
+        let deletion = Deletion(event: event, scope: event.isRecurring ? scope : .this)
+        let key = deletion.key
+        guard deleting[key] == nil else { return }
+        deleting[key] = deletion
+        lastDeleted = deletion
         deleteError = nil
-        NSLog("Calbar: event deleted, sending in %d s", 10)
+        NSLog("Calbar: event deleted (%@), sending in %d s", deletion.scope.rawValue, 10)
         deleteTasks[key] = Task {
             try? await Task.sleep(for: Self.undoDelay)
             guard !Task.isCancelled else { return }
-            if lastDeleted?.occurrenceKey == key { lastDeleted = nil }
+            if lastDeleted?.key == key { lastDeleted = nil }
             do {
                 try await withAccessToken(event.accountEmail, auth: auth) { [api] token in
-                    try await api.delete(token: token, calendarID: event.calendarID, eventID: event.googleEventID,
-                                         notify: event.attendees.contains { !$0.isSelf })
+                    try await api.delete(token: token, event: event, scope: deletion.scope)
                 }
                 NSLog("Calbar: event deletion sent")
                 deleteTasks[key] = nil
                 await refresh()
-                deleting.remove(key)
+                deleting[key] = nil
             } catch {
                 NSLog("Calbar: event deletion failed: %@", "\(error)")
                 deleteTasks[key] = nil
-                deleting.remove(key)
+                deleting[key] = nil
                 deleteError = describeCreate(error).replacingOccurrences(of: "add the event", with: "delete the event")
             }
         }
     }
 
-    /// Brings back the last deleted event while its deletion still waits.
+    /// Brings back the last deletion while it still waits.
     func undoDelete() {
-        guard let event = lastDeleted else { return }
-        let key = event.occurrenceKey
-        deleteTasks[key]?.cancel()
-        deleteTasks[key] = nil
-        deleting.remove(key)
+        guard let deletion = lastDeleted else { return }
+        deleteTasks[deletion.key]?.cancel()
+        deleteTasks[deletion.key] = nil
+        deleting[deletion.key] = nil
         lastDeleted = nil
         NSLog("Calbar: deletion undone")
     }
@@ -590,6 +633,27 @@ final class EventStore: ObservableObject {
             throw OAuthError.invalidGrant
         }
         NSLog("Calbar: event created")
+        await refresh()
+    }
+
+    /// Saves the editor's changes to `original`, or to its whole series,
+    /// then refreshes. Throws for the form to show the error.
+    func update(_ original: CalendarEvent, to draft: NewEvent, notesText: String, scope: RecurrenceScope) async throws {
+        guard let auth else { throw OAuthError.invalidGrant }
+        let email = original.accountEmail
+        NSLog("Calbar: updating an event (%@)", scope.rawValue)
+        do {
+            try await withAccessToken(email, auth: auth) { [api] token in
+                try await api.update(token: token, original: original, draft: draft, notesText: notesText, scope: scope)
+            }
+        } catch APIError.insufficientScope {
+            accounts.markReadOnly(email)
+            throw APIError.insufficientScope
+        } catch OAuthError.invalidGrant {
+            accounts.setNeedsReconnect(true, email: email)
+            throw OAuthError.invalidGrant
+        }
+        NSLog("Calbar: event updated")
         await refresh()
     }
 

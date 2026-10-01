@@ -320,8 +320,7 @@ struct WeekView: View {
                 editorClosedAt = Date()
             }), arrowEdge: .trailing) {
                 if let composer {
-                    EventEditor(start: start, end: end, calendars: composer.calendars, contacts: composer.contacts,
-                                zoom: composer.zoom, onCreate: composer.create, onDone: { self.draft = nil })
+                    EventEditor(start: start, end: end, composer: composer, onDone: { self.draft = nil })
                 }
             }
             // After the popover, so it anchors on the slot itself.
@@ -410,7 +409,7 @@ struct WeekView: View {
                     let store = AppDelegate.shared.store
                     guard store.canDelete(event) else { NSSound.beep(); return .handled }
                     opened = nil
-                    withAnimation(Motion.resize) { store.delete(event) }
+                    withAnimation(Motion.resize) { store.deleteFromKey(event) }
                     return .handled
                 }
         }

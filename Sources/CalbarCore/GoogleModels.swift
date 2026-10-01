@@ -55,6 +55,10 @@ struct GoogleEvent: Decodable {
     let conferenceData: Conference?
     let attachments: [File]?
     let eventType: String?
+    let recurringEventId: String?
+    let originalStartTime: Time?
+    /// Only on a series itself, not on its occurrences.
+    let recurrence: [String]?
 }
 
 struct GoogleEventList: Decodable {
@@ -122,6 +126,12 @@ enum GoogleDate {
     static func rfc3339(_ date: Date) -> String {
         utcOutput.string(from: date)
     }
+
+    /// "2026-10-01", the `date` of an all-day event.
+    static func day(_ date: Date, calendar: Calendar) -> String {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
 }
 
 extension CalendarEvent {
@@ -179,7 +189,9 @@ extension CalendarEvent {
                 location: g.location, description: g.description
             ),
             selfResponse: attendees.first(where: \.isSelf)?.response ?? .accepted,
-            googleEventID: g.id
+            googleEventID: g.id,
+            recurringEventID: g.recurringEventId,
+            originalStart: g.originalStartTime.flatMap { GoogleDate.parse($0, calendar: calendar)?.date }
         )
     }
 }

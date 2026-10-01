@@ -16,6 +16,10 @@ public struct NewEvent: Equatable, Sendable {
     public var zoom: ZoomMeeting?
     /// IANA name, so Google shows the times in the user's zone.
     public var timeZone: String
+    /// `RRULE:` lines; empty for a single event.
+    public var recurrence: [String] = []
+    /// Whole days: `start` and `end` are midnights, the end excluded.
+    public var isAllDay = false
 
     public init(title: String, start: Date, end: Date, calendarID: String, addMeet: Bool,
                 location: String = "", notes: String = "", guests: [String] = [],
@@ -50,11 +54,10 @@ public struct NewEvent: Equatable, Sendable {
     /// The `events.insert` body. `requestId` must be unique per Meet link
     /// request; `id` keeps a retry of the same draft from asking twice.
     public func body(requestID: String = UUID().uuidString) throws -> Data {
-        var json: [String: Any] = [
-            "summary": summary,
-            "start": ["dateTime": GoogleDate.rfc3339(start), "timeZone": timeZone],
-            "end": ["dateTime": GoogleDate.rfc3339(end), "timeZone": timeZone],
-        ]
+        var json: [String: Any] = ["summary": summary]
+        json["start"] = time(start)
+        json["end"] = time(end)
+        if !recurrence.isEmpty { json["recurrence"] = recurrence }
         var place = location.trimmingCharacters(in: .whitespacesAndNewlines)
         var text = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         if let zoom {
@@ -71,6 +74,13 @@ public struct NewEvent: Equatable, Sendable {
             ]]
         }
         return try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
+    }
+
+    /// A start or end in Google's form: a day for an all-day event, else
+    /// a time with the zone, which recurring events need.
+    func time(_ date: Date, calendar: Calendar = .current) -> [String: String] {
+        isAllDay ? ["date": GoogleDate.day(date, calendar: calendar)]
+                 : ["dateTime": GoogleDate.rfc3339(date), "timeZone": timeZone]
     }
 
     /// Start and end minutes of a slot dragged between two points of the

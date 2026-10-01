@@ -78,13 +78,20 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
     /// The account owner's answer. `.accepted` when they organize the
     /// event or when it has no attendee list.
     public let selfResponse: ResponseStatus
+    /// For an occurrence of a recurring event, the id of the series in
+    /// Google's API; nil for a single event.
+    public let recurringEventID: String?
+    /// The time the occurrence has in its series, before any move: where
+    /// "this and following" cuts the series.
+    public let originalStart: Date?
 
     public init(
         id: String, iCalUID: String, accountEmail: String, calendarID: String,
         colorHex: String, title: String, start: Date, end: Date, isAllDay: Bool,
         location: String?, notes: String?, htmlLink: URL?, organizer: Person?,
         attendees: [Attendee], attachments: [Attachment], meeting: MeetingLink?,
-        selfResponse: ResponseStatus, googleEventID: String? = nil
+        selfResponse: ResponseStatus, googleEventID: String? = nil,
+        recurringEventID: String? = nil, originalStart: Date? = nil
     ) {
         self.id = id
         self.googleEventID = googleEventID ?? Self.googleID(fromCompositeID: id)
@@ -104,11 +111,17 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
         self.attachments = attachments
         self.meeting = meeting
         self.selfResponse = selfResponse
+        self.recurringEventID = recurringEventID
+        self.originalStart = originalStart
     }
+
+    /// One occurrence of a recurring event.
+    public var isRecurring: Bool { recurringEventID != nil }
 
     private enum CodingKeys: String, CodingKey {
         case id, googleEventID, iCalUID, accountEmail, calendarID, colorHex, title, start, end, isAllDay
         case location, notes, htmlLink, organizer, attendees, attachments, meeting, selfResponse
+        case recurringEventID, originalStart
     }
 
     /// Events cached before `googleEventID` existed take it from the end
@@ -134,7 +147,9 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
             attachments: try c.decode([Attachment].self, forKey: .attachments),
             meeting: try c.decodeIfPresent(MeetingLink.self, forKey: .meeting),
             selfResponse: try c.decode(ResponseStatus.self, forKey: .selfResponse),
-            googleEventID: try c.decodeIfPresent(String.self, forKey: .googleEventID)
+            googleEventID: try c.decodeIfPresent(String.self, forKey: .googleEventID),
+            recurringEventID: try c.decodeIfPresent(String.self, forKey: .recurringEventID),
+            originalStart: try c.decodeIfPresent(Date.self, forKey: .originalStart)
         )
     }
 
@@ -177,7 +192,7 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
                     : a
             },
             attachments: attachments, meeting: meeting, selfResponse: response,
-            googleEventID: googleEventID
+            googleEventID: googleEventID, recurringEventID: recurringEventID, originalStart: originalStart
         )
     }
 

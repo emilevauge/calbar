@@ -90,8 +90,8 @@ struct MenuView: View {
             guard Self.isDeleteKey(press), !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
             let event = rows[selectedIndex]
             guard store.canDelete(event) else { NSSound.beep(); return .handled }
-            withAnimation(Motion.resize) { store.delete(event) }
-            selectedIndex = min(selectedIndex, max(rows.count - 2, 0))
+            withAnimation(Motion.resize) { store.deleteFromKey(event) }
+            if !event.isRecurring { selectedIndex = min(selectedIndex, max(rows.count - 2, 0)) }
             return .handled
         }
         .onKeyPress(characters: ["z"]) { press in
@@ -100,6 +100,10 @@ struct MenuView: View {
             return .handled
         }
         .onKeyPress(.escape) {
+            if store.askingDeleteScope != nil {
+                withAnimation(Motion.resize) { store.askingDeleteScope = nil }
+                return .handled
+            }
             AppDelegate.shared.closePopover()
             return .handled
         }
@@ -415,8 +419,15 @@ struct MenuView: View {
     /// The footer, with the "Undo" bar of a deletion above it.
     private var footer: some View {
         VStack(spacing: 0) {
-            if let deleted = store.lastDeleted {
-                UndoBar(title: deleted.title, onUndo: store.undoDelete)
+            if let event = store.askingDeleteScope {
+                DeleteScopeBar(title: event.title, onPick: { scope in
+                    withAnimation(Motion.resize) { store.delete(event, scope: scope) }
+                }, onCancel: {
+                    withAnimation(Motion.resize) { store.askingDeleteScope = nil }
+                })
+                Divider()
+            } else if let deleted = store.lastDeleted {
+                UndoBar(deletion: deleted, onUndo: store.undoDelete)
                 Divider()
             } else if let error = store.deleteError {
                 HStack {

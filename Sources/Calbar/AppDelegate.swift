@@ -307,9 +307,11 @@ final class AppDelegate: NSObject, ObservableObject {
     /// For the hour grid: the calendars new events may go to, guest
     /// suggestions, and creating.
     var composer: EventComposer {
-        EventComposer(calendars: accounts.writableCalendars, contacts: contacts, zoom: zoom) { [store] event, email in
+        EventComposer(calendars: accounts.writableCalendars, contacts: contacts, zoom: zoom, create: { [store] event, email in
             try await store.create(event, in: email)
-        }
+        }, update: { [store] original, draft, notesText, scope in
+            try await store.update(original, to: draft, notesText: notesText, scope: scope)
+        })
     }
 
     /// The meeting a timed peek was opened on; nil for a hover peek.

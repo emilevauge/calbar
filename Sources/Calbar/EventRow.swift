@@ -31,11 +31,24 @@ struct EventRow: View {
     private var awaitsAnswer: Bool { event.canRespond && event.selfResponse == .needsAction }
     private var isDeclined: Bool { event.selfResponse == .declined }
 
+    @ObservedObject private var store = AppDelegate.shared.store
+
     var body: some View {
         Group {
             if isFocus { card } else { row }
         }
         .contextMenu { contextMenu }
+        // The editor of this event or of its copy, asked from its details
+        // or its context menu.
+        .popover(isPresented: Binding(get: { store.editRequest?.eventID == event.id }, set: { shown in
+            if !shown, store.editRequest?.eventID == event.id { store.editRequest = nil }
+        }), arrowEdge: .leading) {
+            if let request = store.editRequest {
+                EventEditor(request.duplicate ? .duplicate(event) : .edit(event),
+                            composer: AppDelegate.shared.composer,
+                            onDone: { store.editRequest = nil })
+            }
+        }
     }
 
     // MARK: card
@@ -247,7 +260,6 @@ struct EventRow: View {
     /// Right click: answer the invitation, open the event in Google Calendar.
     @ViewBuilder
     private var contextMenu: some View {
-        let store = AppDelegate.shared.store
         let accounts = AppDelegate.shared.accounts
         if event.canRespond {
             let canReply = accounts.canReply(event.accountEmail)
@@ -269,12 +281,26 @@ struct EventRow: View {
         if let url = event.webURL {
             Button("Open in Google Calendar") { NSWorkspace.shared.open(url) }
         }
-        if AppDelegate.shared.store.canDelete(event) {
-            Divider()
-            Button("Delete Event") {
-                withAnimation(Motion.resize) { AppDelegate.shared.store.delete(event) }
+        Divider()
+        if store.canEdit(event) {
+            Button("Edit Event…") { store.editRequest = .init(eventID: event.id, duplicate: false) }
+        }
+        if !AppDelegate.shared.accounts.writableCalendars.isEmpty {
+            Button("Duplicate Event…") { store.editRequest = .init(eventID: event.id, duplicate: true) }
+        }
+        if store.canDelete(event) {
+            if event.isRecurring {
+                Menu("Delete Event") {
+                    ForEach(RecurrenceScope.allCases, id: \.self) { scope in
+                        Button(scope.label) { withAnimation(Motion.resize) { store.delete(event, scope: scope) } }
+                    }
+                }
+            } else {
+                Button("Delete Event") {
+                    withAnimation(Motion.resize) { store.delete(event) }
+                }
+                .keyboardShortcut(.delete, modifiers: [])
             }
-            .keyboardShortcut(.delete, modifiers: [])
         }
     }
 

@@ -12,62 +12,120 @@ struct WritableCalendar: Identifiable, Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
-/// What the hour grid needs to create events: where they may go, guest
-/// suggestions, and the call that creates one.
+/// What the editor needs: where events may go, guest suggestions, and
+/// the calls that create and update one.
 struct EventComposer {
     let calendars: [WritableCalendar]
     let contacts: ContactBook
     let zoom: ZoomAuth
     let create: (NewEvent, String) async throws -> Void
+    /// The event, the edited copy, the description as shown, which occurrences.
+    let update: (CalendarEvent, NewEvent, String, RecurrenceScope) async throws -> Void
 }
 
-/// The details of a new event, in a popover on the selected slot, laid
-/// out as the event cards: the times where a card has its time range, the
-/// title, Save where a card has Join, then the lines: calendar, Google
-/// Meet link, guests with suggestions, location and description. The last calendar and the Meet choice are
-/// remembered.
+/// The details of an event, in a popover, laid out as the event cards:
+/// the times where a card has its time range, the title, Save where a
+/// card has Join, then the lines: calendar, video call, repetition,
+/// guests with suggestions, location and description. Creates an event,
+/// changes one (`.edit`), or creates a copy of one (`.duplicate`). The
+/// last calendar and video call choice are remembered for new events.
 struct EventEditor: View {
-    let calendars: [WritableCalendar]
+    enum Mode {
+        case create
+        case edit(CalendarEvent)
+        case duplicate(CalendarEvent)
+    }
+
+    let mode: Mode
+    let composer: EventComposer
     @ObservedObject var contacts: ContactBook
     @ObservedObject var zoom: ZoomAuth
-    let onCreate: (NewEvent, String) async throws -> Void
     let onDone: () -> Void
 
     @State private var title = ""
     @State private var start: Date
     @State private var end: Date
+    @State private var isAllDay = false
     @State private var location = ""
     @State private var guests: [ContactIndex.Contact] = []
     @State private var notes = ""
+    /// The description as the event had it, in plain text: unchanged, its
+    /// HTML is kept.
+    private let notesText: String
+    @State private var repeatRule: RepeatRule = .none
+    @State private var scope: RecurrenceScope = .this
     @State private var busy = false
     @State private var error: String?
     @AppStorage("newEventCalendar") private var calendarID = ""
     /// "none", "meet" or "zoom", remembered.
     @AppStorage("newEventConference") private var conference = "meet"
+    /// The choices of this editor when they differ from the remembered ones.
+    @State private var chosenCalendar: String?
+    @State private var chosenConference: String?
     @FocusState private var titleFocused: Bool
 
-    init(start: Date, end: Date, calendars: [WritableCalendar], contacts: ContactBook, zoom: ZoomAuth,
-         onCreate: @escaping (NewEvent, String) async throws -> Void, onDone: @escaping () -> Void) {
-        self.calendars = calendars
-        self.contacts = contacts
-        self.zoom = zoom
-        self.onCreate = onCreate
+    /// A new event from `start` to `end`.
+    init(start: Date, end: Date, composer: EventComposer, onDone: @escaping () -> Void) {
+        self.init(mode: .create, start: start, end: end, composer: composer, onDone: onDone)
+    }
+
+    /// Changes `event`, or prepares a copy of it.
+    init(_ mode: Mode, composer: EventComposer, onDone: @escaping () -> Void) {
+        switch mode {
+        case .create: self.init(mode: mode, start: Date(), end: Date().addingTimeInterval(1800), composer: composer, onDone: onDone)
+        case .edit(let event), .duplicate(let event):
+            self.init(mode: mode, start: event.start, end: event.end, composer: composer, onDone: onDone, from: event)
+        }
+    }
+
+    private init(mode: Mode, start: Date, end: Date, composer: EventComposer, onDone: @escaping () -> Void,
+                 from event: CalendarEvent? = nil) {
+        self.mode = mode
+        self.composer = composer
+        self.contacts = composer.contacts
+        self.zoom = composer.zoom
         self.onDone = onDone
         _start = State(initialValue: start)
         _end = State(initialValue: end)
+        let text = event.map { HTMLText.plainText($0.notes ?? "") } ?? ""
+        notesText = text
+        guard let event else { return }
+        _title = State(initialValue: event.title == "(No title)" ? "" : event.title)
+        _isAllDay = State(initialValue: event.isAllDay)
+        _location = State(initialValue: event.location ?? "")
+        _notes = State(initialValue: text)
+        _guests = State(initialValue: event.attendees.filter { !$0.isSelf }
+            .map { ContactIndex.Contact(email: $0.person.email, name: $0.person.name) })
+        let own = composer.calendars.first { $0.email == event.accountEmail && $0.calendar.id == event.calendarID }
+        _chosenCalendar = State(initialValue: own?.id)
+        if case .duplicate = mode {
+            // A new Meet link for a copy of a Meet; other links stay in the
+            // copied location or description.
+            _chosenConference = State(initialValue: event.meeting?.provider == .meet ? "meet" : "none")
+        } else {
+            _chosenConference = State(initialValue: "none")
+        }
     }
 
-    /// The remembered calendar, else the first primary one.
+    private var original: CalendarEvent? {
+        if case .edit(let event) = mode { return event }
+        return nil
+    }
+
+    /// This editor's calendar, else the remembered one, else the first
+    /// primary one.
     private var selected: WritableCalendar? {
-        calendars.first { $0.id == calendarID }
+        let calendars = composer.calendars
+        return calendars.first { $0.id == chosenCalendar }
+            ?? calendars.first { $0.id == calendarID }
             ?? calendars.first { $0.calendar.isPrimary }
             ?? calendars.first
     }
 
     var body: some View {
-        let color = Color(hex: selected?.calendar.colorHex ?? "#4285f4")
+        let color = Color(hex: original?.colorHex ?? selected?.calendar.colorHex ?? "#4285f4")
         Group {
-            if calendars.isEmpty {
+            if composer.calendars.isEmpty {
                 Text("No calendar to add to. Reconnect your account in Settings to create events.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -79,7 +137,10 @@ struct EventEditor: View {
         }
         .frame(width: 360)
         .padding(.vertical, 6)
-        .onAppear { titleFocused = true }
+        .onAppear {
+            contacts.prepare()
+            titleFocused = true
+        }
     }
 
     // MARK: parts
@@ -94,10 +155,10 @@ struct EventEditor: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 15, weight: .semibold))
                         .focused($titleFocused)
-                        .onSubmit(create)
+                        .onSubmit(save)
                 }
                 Spacer(minLength: 0)
-                Button(action: create) {
+                Button(action: save) {
                     Group {
                         if busy {
                             ProgressView().controlSize(.small)
@@ -128,36 +189,44 @@ struct EventEditor: View {
 
     /// Day, start and end, and the duration, in the caption of a card.
     /// The day opens the same month calendar as the header; each time
-    /// opens a list of quarter hours, as in Google Calendar.
+    /// opens a list of quarter hours, as in Google Calendar. An all-day
+    /// event has its day alone.
     private var times: some View {
         HStack(spacing: 2) {
             PopoverField(label: DayHeaderText.shortTitle(start), help: "Pick the day") { close in
                 DayPicker(day: start, isToday: Calendar.current.isDateInToday(start), onPick: { day in
-                    dayBinding.wrappedValue = day
+                    moveDay(to: day)
                     close()
                 }, onToday: {
-                    dayBinding.wrappedValue = Date()
+                    moveDay(to: Date())
                     close()
                 })
             }
-            PopoverField(label: AgendaFormat.clock(start, .current), help: "Start time") { close in
-                TimeList(options: TimeList.day(of: start), selection: start, reference: nil) { picked in
-                    let duration = end.timeIntervalSince(start)
-                    start = picked
-                    end = picked.addingTimeInterval(duration)
-                    close()
+            if isAllDay {
+                let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 1
+                Text(days > 1 ? "· All day, \(days) days" : "· All day")
+                    .fixedSize()
+                    .padding(.leading, 2)
+            } else {
+                PopoverField(label: AgendaFormat.clock(start, .current), help: "Start time") { close in
+                    TimeList(options: TimeList.day(of: start), selection: start, reference: nil) { picked in
+                        let duration = end.timeIntervalSince(start)
+                        start = picked
+                        end = picked.addingTimeInterval(duration)
+                        close()
+                    }
                 }
-            }
-            Text("-")
-            PopoverField(label: AgendaFormat.clock(end, .current), help: "End time") { close in
-                TimeList(options: TimeList.after(start), selection: end, reference: start) { picked in
-                    end = picked
-                    close()
+                Text("-")
+                PopoverField(label: AgendaFormat.clock(end, .current), help: "End time") { close in
+                    TimeList(options: TimeList.after(start), selection: end, reference: start) { picked in
+                        end = picked
+                        close()
+                    }
                 }
+                Text("· \(AgendaFormat.duration(end.timeIntervalSince(start)))")
+                    .fixedSize()
+                    .padding(.leading, 2)
             }
-            Text("· \(AgendaFormat.duration(end.timeIntervalSince(start)))")
-                .fixedSize()
-                .padding(.leading, 2)
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -170,28 +239,66 @@ struct EventEditor: View {
                 Circle()
                     .fill(Color(hex: selected?.calendar.colorHex ?? "#888888"))
                     .frame(width: 7, height: 7)
-                Picker("Calendar", selection: Binding(get: { selected?.id ?? "" }, set: { calendarID = $0 })) {
-                    ForEach(Self.byAccount(calendars), id: \.0) { email, list in
-                        Section(email) {
-                            ForEach(list) { item in Text(item.calendar.name).tag(item.id) }
+                if let original {
+                    // Moving an event to another calendar is not supported.
+                    Text(selected?.calendar.name ?? original.calendarID)
+                } else {
+                    Picker("Calendar", selection: Binding(get: { selected?.id ?? "" }, set: {
+                        chosenCalendar = $0
+                        calendarID = $0
+                    })) {
+                        ForEach(Self.byAccount(composer.calendars), id: \.0) { email, list in
+                            Section(email) {
+                                ForEach(list) { item in Text(item.calendar.name).tag(item.id) }
+                            }
                         }
                     }
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .fixedSize()
                 }
-                .labelsHidden()
-                .controlSize(.small)
-                .fixedSize()
             }
             line("video") {
-                Picker("Conference", selection: Binding(get: { effectiveConference }, set: { conference = $0 })) {
-                    Text("No video call").tag("none")
-                    Text("Google Meet").tag("meet")
-                    if zoom.isConnected {
-                        Text("Zoom").tag("zoom")
+                if let meeting = original?.meeting {
+                    Text(meeting.provider.displayName)
+                } else {
+                    Picker("Conference", selection: Binding(get: { effectiveConference }, set: {
+                        chosenConference = $0
+                        if original == nil { conference = $0 }
+                    })) {
+                        Text("No video call").tag("none")
+                        Text("Google Meet").tag("meet")
+                        if zoom.isConnected {
+                            Text("Zoom").tag("zoom")
+                        }
                     }
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .fixedSize()
                 }
-                .labelsHidden()
-                .controlSize(.small)
-                .fixedSize()
+            }
+            if let original, original.isRecurring {
+                line("repeat") {
+                    Picker("Apply to", selection: $scope) {
+                        Text("This event").tag(RecurrenceScope.this)
+                        Text("All events").tag(RecurrenceScope.all)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .fixedSize()
+                }
+            } else {
+                line("repeat") {
+                    Picker("Repeat", selection: $repeatRule) {
+                        ForEach(RepeatRule.allCases, id: \.self) { rule in
+                            Text(rule.label(start: start)).tag(rule)
+                        }
+                    }
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .fixedSize()
+                }
             }
             line("person.2", alignment: .top) {
                 GuestField(guests: $guests, contacts: contacts)
@@ -227,27 +334,35 @@ struct EventEditor: View {
         }
     }
 
-    /// Changing the day moves both times, keeping the hours.
-    private var dayBinding: Binding<Date> {
-        Binding(get: { start }, set: { day in
-            let cal = Calendar.current
-            start = start.addingTimeInterval(cal.startOfDay(for: day).timeIntervalSince(cal.startOfDay(for: start)))
-        })
+    /// Changing the day moves both ends, keeping the hours and the length.
+    private func moveDay(to day: Date) {
+        let cal = Calendar.current
+        let shift = cal.startOfDay(for: day).timeIntervalSince(cal.startOfDay(for: start))
+        start = start.addingTimeInterval(shift)
+        end = end.addingTimeInterval(shift)
     }
 
-    /// The remembered choice, Google Meet when Zoom is no longer connected.
+    /// This editor's choice, else the remembered one; Google Meet when
+    /// Zoom is no longer connected.
     private var effectiveConference: String {
-        conference == "zoom" && !zoom.isConnected ? "meet" : conference
+        let choice = chosenConference ?? conference
+        return choice == "zoom" && !zoom.isConnected ? "meet" : choice
     }
 
-    private func create() {
+    private func save() {
         guard !busy, let target = selected else { return }
         busy = true
         error = nil
-        let choice = effectiveConference
-        var event = NewEvent(title: title, start: start, end: max(end, start.addingTimeInterval(5 * 60)),
-                             calendarID: target.calendar.id, addMeet: choice == "meet",
+        let choice = original?.meeting == nil ? effectiveConference : "none"
+        let minimum: TimeInterval = isAllDay ? 86_400 : 5 * 60
+        var event = NewEvent(title: title, start: start, end: max(end, start.addingTimeInterval(minimum)),
+                             calendarID: original?.calendarID ?? target.calendar.id, addMeet: choice == "meet",
                              location: location, notes: notes, guests: guests.map(\.email))
+        event.isAllDay = isAllDay
+        if let rule = repeatRule.rrule(start: start) { event.recurrence = [rule] }
+        let original = original
+        let notesText = notesText
+        let scope = scope
         Task {
             // The Zoom meeting first: its link goes into the event.
             if choice == "zoom" {
@@ -261,7 +376,11 @@ struct EventEditor: View {
                 }
             }
             do {
-                try await onCreate(event, target.email)
+                if let original {
+                    try await composer.update(original, event, notesText, scope)
+                } else {
+                    try await composer.create(event, target.email)
+                }
                 busy = false
                 onDone()
             } catch {

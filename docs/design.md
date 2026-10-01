@@ -351,8 +351,24 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   the title ("Add title", focused, "(No title)" when left blank), Save where the card has Join,
   then caption lines with an icon: the calendar (the writable calendars, `accessRole` owner or
   writer, of the accounts with the write scope, grouped by account, primary first; the last one
-  used is remembered), "Google Meet" (remembered, on by default), guests, location,
-  description. `↵` saves; `esc` or a click outside closes it.
+  used is remembered), "Google Meet" (remembered, on by default), the repetition
+  (`RepeatRule`: does not repeat, daily, every weekday, weekly on the start's day, every 2
+  weeks, monthly on the nth weekday or on the day, "the last" for a fifth weekday, annually;
+  one `RRULE:` line, no end), guests, location, description. `↵` saves; `esc` or a click
+  outside closes it.
+- Editing and duplicating (`EventEditor.Mode`): the pencil and the copy icon beside the trash
+  in the details, or "Edit Event…" and "Duplicate Event…" in the context menu, set
+  `EventStore.editRequest`; the `EventRow` of that event opens the editor in a popover on
+  itself. Edit is offered on the same events as delete. The editor is filled from the event:
+  title, times (an all-day event shows its day alone, "All day, 3 days"), guests but the
+  user, location, the description as plain text. Editing keeps the calendar (no move) and an
+  existing video link; a recurring occurrence gets "This event | All events" instead of the
+  repetition. Save reads the event (`events.get`) and patches only what changed
+  (`EventPatch`): unchanged notes keep their HTML, kept guests keep their answers, the user
+  and meeting rooms stay; for all events the series itself is patched, its times moved by the
+  same amount from its own start. `sendUpdates=all` when there are guests before or after.
+  Duplicate opens a new event with the same fields, a new Meet link for a Meet, in the
+  event's calendar when writable.
 - Guests: chips with a remove button, then a field. Suggestions, six at most, one per email:
   first the people met (`ContactIndex`: attendees and organizers of the loaded events, and in
   the background, once per launch and again after six hours, of each account's primary
@@ -390,12 +406,16 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
 - Deleting: a trash button beside the Google Calendar icon of the details (card, expanded row,
   grid popover), `⌫` on the selected row of the list or in the open card of the grid (tested on
   the characters: macOS sends backspace as DEL, U+007F, which SwiftUI's `.delete` does not
-  match), or "Delete Event" in the context menu. Only the user's own events (`isDeletable`: on one of
+  match), or "Delete Event" in the context menu. For a recurring event the trash and the context
+  menu offer "This event", "This and following events" and "All events"; `⌫` shows the same
+  choice in a bar above the footer (`esc` cancels). Only the user's own events (`isDeletable`: on one of
   their calendars, organized by them or without guests) of an account with the write scope;
   otherwise a beep. Deleting someone else's invitation would be declining it, which "Going?"
   does. The event is hidden at once and an "Undo" bar shows above the footer ("Deleted
   “Design sync”", the seconds left, Undo or `⌘Z`); Google is told only after 10 s
-  (`events.delete`, the occurrence alone for a recurring event, `sendUpdates=all` when there are
+  (`events.delete` on the occurrence, or on the series for all events; for this and following,
+  the series' rules get `UNTIL` just before the occurrence's original start in place of any
+  `COUNT` or `UNTIL`, and the whole series goes when it is the first occurrence; `sendUpdates=all` when there are
   guests, so they get Google's cancellation). Undo within the delay sends nothing. A quit within
   the delay keeps the event. A failure brings it back with a red line and OK.
 - Details (card, or a row expanded by a click, one at a time): the "Going?" line for an

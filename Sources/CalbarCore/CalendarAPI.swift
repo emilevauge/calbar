@@ -129,6 +129,50 @@ public struct CalendarAPI: Sendable {
                            body: nil, token: token)
     }
 
+    /// Deletes `event`, its whole series, or the series from it on: the
+    /// series then ends just before it (`Recurrence.truncate`), or goes
+    /// entirely when `event` is its first occurrence.
+    public func delete(token: String, event: CalendarEvent, scope: RecurrenceScope,
+                       calendar: Calendar = .current) async throws {
+        let notify = event.attendees.contains { !$0.isSelf }
+        guard let series = event.recurringEventID, scope != .this else {
+            return try await delete(token: token, calendarID: event.calendarID, eventID: event.googleEventID, notify: notify)
+        }
+        if scope == .all {
+            return try await delete(token: token, calendarID: event.calendarID, eventID: series, notify: notify)
+        }
+        let path = eventPath(event.calendarID, series)
+        let master = try JSONDecoder().decode(GoogleEvent.self, from: await send("GET", path, query: [], body: nil, token: token))
+        let cut = event.originalStart ?? event.start
+        let first = master.start.flatMap { GoogleDate.parse($0, calendar: calendar) }?.date
+        if let first, cut <= first {
+            return try await delete(token: token, calendarID: event.calendarID, eventID: series, notify: notify)
+        }
+        let rules = Recurrence.truncate(master.recurrence ?? [], before: cut, allDay: event.isAllDay, calendar: calendar)
+        let body = try JSONSerialization.data(withJSONObject: ["recurrence": rules])
+        _ = try await send("PATCH", path, query: [URLQueryItem(name: "sendUpdates", value: notify ? "all" : "none")],
+                           body: body, token: token)
+    }
+
+    /// Saves the editor's `draft` over `original`, or over its whole
+    /// series for `.all`: reads the event, then patches what changed.
+    public func update(token: String, original: CalendarEvent, draft: NewEvent, notesText: String,
+                       scope: RecurrenceScope, calendar: Calendar = .current) async throws {
+        let series = scope == .all ? original.recurringEventID : nil
+        let path = eventPath(original.calendarID, series ?? original.googleEventID)
+        let current = try await send("GET", path, query: [], body: nil, token: token)
+        let patch = try EventPatch(original: original, draft: draft, notesText: notesText, current: current,
+                                   series: series != nil, calendar: calendar)
+        guard !patch.isEmpty else { return }
+        var query = [URLQueryItem(name: "sendUpdates", value: patch.notify ? "all" : "none")]
+        if patch.addsConference { query.append(URLQueryItem(name: "conferenceDataVersion", value: "1")) }
+        _ = try await send("PATCH", path, query: query, body: patch.body, token: token)
+    }
+
+    private func eventPath(_ calendarID: String, _ eventID: String) -> String {
+        "/calendars/\(FormEncoding.escape(calendarID))/events/\(FormEncoding.escape(eventID))"
+    }
+
     /// Token of the next page, or `nil` to stop. An empty or repeated token
     /// would otherwise loop forever.
     private static func next(_ token: String?, after previous: String?) -> String? {
