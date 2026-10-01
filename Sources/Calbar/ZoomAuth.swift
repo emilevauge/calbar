@@ -31,18 +31,24 @@ final class ZoomAuth: ObservableObject {
         isConnected = ((try? Keychain.read(account: Self.tokenAccount, service: Keychain.zoomService)) ?? nil) != nil
     }
 
-    /// Saves the app's Client ID (and secret) then signs in.
-    func connect(clientID: String, clientSecret: String) {
+    /// Keeps what the user typed, as they type, so closing the settings
+    /// loses nothing. The secret goes to the Keychain with the ID.
+    func save(clientID: String, clientSecret: String) {
         let client = ZoomClient(clientID: clientID, clientSecret: clientSecret)
-        guard !client.clientID.isEmpty else { return }
+        guard client != self.client else { return }
         do {
             let data = try JSONEncoder().encode(client)
             try Keychain.save(String(decoding: data, as: UTF8.self), account: Self.clientAccount, service: Keychain.zoomService)
+            self.client = client
         } catch {
             self.error = describe(error)
-            return
         }
-        self.client = client
+    }
+
+    /// Saves the app's Client ID (and secret) then signs in.
+    func connect(clientID: String, clientSecret: String) {
+        save(clientID: clientID, clientSecret: clientSecret)
+        guard let client, !client.clientID.isEmpty else { return }
         signIn?.cancel()
         signIn = Task { await runSignIn(client) }
     }

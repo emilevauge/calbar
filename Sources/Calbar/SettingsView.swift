@@ -251,7 +251,9 @@ struct SettingsView: View {
                 }
             } else {
                 TextField("Client ID", text: $zoomClientID)
+                    .onChange(of: zoomClientID) { _, id in zoom.save(clientID: id, clientSecret: zoomSecret) }
                 SecureField("Client secret (optional)", text: $zoomSecret)
+                    .onChange(of: zoomSecret) { _, secret in zoom.save(clientID: zoomClientID, clientSecret: secret) }
                 HStack {
                     if zoom.isSigningIn {
                         ProgressView().controlSize(.small)
@@ -279,6 +281,7 @@ struct SettingsView: View {
         }
         .onAppear {
             if zoomClientID.isEmpty { zoomClientID = zoom.client?.clientID ?? "" }
+            if zoomSecret.isEmpty { zoomSecret = zoom.client?.clientSecret ?? "" }
         }
     }
 
