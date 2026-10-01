@@ -228,7 +228,13 @@ App (`Sources/Macal`):
 
 ## Hover card
 
-- Shown after the pointer rests 0.5 s anywhere on the item, capsule included, in a
+- During a meeting (`NextMeeting.ongoing`), the hover opens the popover itself instead, in
+  "peek" mode: the meeting's card alone, then "Click for the whole day". It does not activate
+  Macal, so the keyboard stays with the current app. A click on the icon, or on the card outside
+  its buttons, expands it to the whole day with an animation and gives it the keyboard. The
+  peek closes 0.4 s after the pointer has left both the icon and the popover, checked every
+  150 ms rather than with a tracking area, which would miss the gap between them.
+- Otherwise, shown after the pointer rests 0.5 s anywhere on the item, capsule included, in a
   non-activating panel that ignores the mouse. Hidden on exit, on click, and while the popover
   is open. Width 300 pt, corner radius 12 pt, `.regularMaterial` background. Aligned on the
   capsule's left edge, centered under the plain page, kept inside the screen, updated live.
@@ -245,7 +251,9 @@ App (`Sources/Macal`):
 ## Popover
 
 `NSStatusItem` plus `NSPopover` (transient) rather than `MenuBarExtra`, so code can open it (the
-global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt high.
+global shortcut, "Open Macal", notifications). Width 380 pt, list up to 560 pt high. The hosting
+controller publishes its preferred content size, so the popover fits its content and animates
+when it changes, as when a peek expands.
 
 - Header, above a separator: the title of the day shown, "Tuesday, September 29", 15 pt semibold, with a caption
   below it: for today, "offline · updated 5 min ago" when offline, otherwise "Today · 3 left"

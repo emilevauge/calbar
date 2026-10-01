@@ -65,6 +65,9 @@ final class HoverCardController {
 
     /// Returns false while the card must not show, e.g. the popover is open.
     var canShow: () -> Bool = { true }
+    /// Opens the popover on the current meeting instead of the card, and
+    /// says whether it did: during a meeting the hover shows the real panel.
+    var peek: () -> Bool = { false }
     /// The meeting the capsule joins at a given time, with its color.
     var dueState: (Date) -> (event: CalendarEvent, style: CapsuleStyle)? = { _ in nil }
 
@@ -125,6 +128,7 @@ final class HoverCardController {
     private func show() {
         pending = nil
         guard canShow(), button?.window != nil else { return }
+        if peek() { return }
         let panel = self.panel ?? HoverPanel()
         self.panel = panel
         render()

@@ -30,6 +30,11 @@ final class AppDelegate: NSObject, ObservableObject {
     @Published private(set) var isSigningIn = false
     /// Bumped every time the popover closes, so it opens on today again.
     @Published private(set) var popoverCloseCount = 0
+    /// The popover opened on hover during a meeting: it shows only the
+    /// current meeting until a click expands it to the whole day.
+    @Published private(set) var isPeeking = false
+    /// Closes the peeking popover once the pointer has left it and the icon.
+    private var peekWatch: Task<Void, Never>?
 
     private var signInTask: Task<Void, Never>?
     /// Tells a finished sign-in whether a newer one replaced it.
@@ -122,6 +127,7 @@ final class AppDelegate: NSObject, ObservableObject {
         }
         statusItem = item
         hoverCard.canShow = { [weak self] in self?.popover?.isShown != true }
+        hoverCard.peek = { [weak self] in self?.peek() ?? false }
         hoverCard.dueState = { [weak self] now in
             guard let self else { return nil }
             let state = self.indicatorState(now: now)
@@ -136,15 +142,19 @@ final class AppDelegate: NSObject, ObservableObject {
         p.behavior = .transient
         p.animates = true
         p.contentSize = NSSize(width: 380, height: 480)
-        p.contentViewController = NSHostingController(
-            rootView: MenuView(store: store, accounts: accounts)
-        )
+        let host = NSHostingController(rootView: MenuView(store: store, accounts: accounts))
+        // The popover follows the content: short lists leave no blank
+        // space, and expanding a peek animates to the full height.
+        host.sizingOptions = .preferredContentSize
+        p.contentViewController = host
         popover = p
         // Covers every way it closes: click outside, esc, joining a meeting.
         NotificationCenter.default.addObserver(
             forName: NSPopover.didCloseNotification, object: p, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
+                self?.peekWatch?.cancel()
+                self?.isPeeking = false
                 self?.popoverCloseCount += 1
                 self?.store.popoverDidClose()
             }
@@ -249,7 +259,9 @@ final class AppDelegate: NSObject, ObservableObject {
 
     @objc func togglePopover(_ sender: Any?) {
         hoverCard.dismissForClick()
-        if popover?.isShown == true {
+        if isPeeking {
+            expandPeek()
+        } else if popover?.isShown == true {
             closePopover()
         } else {
             showPopover()
@@ -257,6 +269,7 @@ final class AppDelegate: NSObject, ObservableObject {
     }
 
     func showPopover() {
+        if isPeeking { return expandPeek() }
         guard let popover, let button = statusItem?.button, !popover.isShown else { return }
         hoverCard.hide()
         NSApp.activate(ignoringOtherApps: true)
@@ -266,6 +279,55 @@ final class AppDelegate: NSObject, ObservableObject {
 
     func closePopover() {
         popover?.performClose(nil)
+    }
+
+    /// Opens the popover on the current meeting alone, without taking the
+    /// focus from the active app. False when no meeting is running, so the
+    /// hover card shows instead.
+    func peek() -> Bool {
+        guard let popover, let button = statusItem?.button, !popover.isShown,
+              NextMeeting.ongoing(events: store.events, now: store.now) != nil else { return false }
+        isPeeking = true
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        watchPeek()
+        return true
+    }
+
+    /// Grows the peeking popover to the whole day and gives it the keyboard.
+    func expandPeek() {
+        guard isPeeking else { return }
+        peekWatch?.cancel()
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isPeeking = false
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        popover?.contentViewController?.view.window?.makeKey()
+    }
+
+    /// Polls the pointer: a tracking area on the popover would miss the
+    /// gap between it and the icon. Closes after 0.4 s outside both.
+    private func watchPeek() {
+        peekWatch?.cancel()
+        peekWatch = Task { [weak self] in
+            var outsideSince: Date?
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard let self, self.isPeeking, self.popover?.isShown == true else { return }
+                let pointer = NSEvent.mouseLocation
+                let frames = [self.statusItem?.button?.window?.frame,
+                              self.popover?.contentViewController?.view.window?.frame].compactMap { $0 }
+                if frames.contains(where: { $0.insetBy(dx: -6, dy: -6).contains(pointer) }) {
+                    outsideSince = nil
+                } else if let since = outsideSince {
+                    if Date().timeIntervalSince(since) > 0.4 {
+                        self.closePopover()
+                        return
+                    }
+                } else {
+                    outsideSince = Date()
+                }
+            }
+        }
     }
 
     // MARK: accounts

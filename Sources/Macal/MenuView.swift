@@ -25,12 +25,20 @@ struct MenuView: View {
         let rows = Self.rows(agenda, other, showEnded: showEnded)
         let focusID = other == nil ? Self.focusID(agenda, now: store.now) : nil
 
-        VStack(alignment: .leading, spacing: 0) {
-            header(agenda, day: day, other: other)
-            Divider()
-            content(agenda, day: day, other: other, rows: rows, focusID: focusID)
-            Divider()
-            footer
+        Group {
+            if app.isPeeking, let current = NextMeeting.ongoing(events: store.events, now: store.now) {
+                peek(current)
+                    .transition(.opacity)
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    header(agenda, day: day, other: other)
+                    Divider()
+                    content(agenda, day: day, other: other, rows: rows, focusID: focusID)
+                    Divider()
+                    footer
+                }
+                .transition(.opacity)
+            }
         }
         .frame(width: 380)
         .focusable()
@@ -78,6 +86,36 @@ struct MenuView: View {
         .onChange(of: store.requestedEventID) {
             applyRequestedEvent()
         }
+    }
+
+    // MARK: peek
+
+    /// On hover during a meeting: its card alone. A click anywhere but on
+    /// its buttons expands the popover to the whole day.
+    private func peek(_ event: CalendarEvent) -> some View {
+        VStack(spacing: 2) {
+            EventRow(
+                event: event,
+                now: store.now,
+                selected: false,
+                expanded: true,
+                isPast: false,
+                isFocus: true,
+                onToggle: {},
+                onJoin: { join(event) }
+            )
+            HStack(spacing: 4) {
+                Text("Click for the whole day")
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .padding(.bottom, 8)
+        }
+        .padding(.top, 6)
+        .contentShape(Rectangle())
+        .onTapGesture { app.expandPeek() }
     }
 
     // MARK: header
