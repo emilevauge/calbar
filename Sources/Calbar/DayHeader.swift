@@ -64,38 +64,145 @@ struct DayHeader<Info: View>: View {
     }
 }
 
-/// Month calendar in a popover under the day title.
-private struct DayPicker: View {
+/// Month calendar in a popover under the day title: month arrows, a menu
+/// on the year, the days of the month, and "Today". The graphical
+/// DatePicker has no way to change the year but month by month.
+struct DayPicker: View {
     let day: Date
     let isToday: Bool
     let onPick: (Date) -> Void
     let onToday: () -> Void
-    @State private var selection: Date
+    /// First day of the month shown.
+    @State private var month: Date
+
+    private static let calendar = Calendar.current
+    private static let english = Locale(identifier: "en_US")
 
     init(day: Date, isToday: Bool, onPick: @escaping (Date) -> Void, onToday: @escaping () -> Void) {
         self.day = day
         self.isToday = isToday
         self.onPick = onPick
         self.onToday = onToday
-        _selection = State(initialValue: day)
+        _month = State(initialValue: Self.firstOfMonth(day))
     }
 
     var body: some View {
         VStack(spacing: 8) {
-            DatePicker("Day", selection: $selection, displayedComponents: .date)
-                .datePickerStyle(.graphical)
-                .labelsHidden()
-                // It takes the keyboard focus on opening, and its blue
-                // focus ring looks like a stray border.
-                .focusEffectDisabled()
-                .onChange(of: selection) { _, picked in
-                    onPick(picked)
-                }
+            header
+            weekdays
+            grid
             Button("Today", action: onToday)
                 .controlSize(.small)
-                .disabled(isToday)
         }
         .padding(10)
+        .frame(width: 232)
+        // The first control takes the keyboard focus on opening; its blue
+        // focus ring looks like a stray border.
+        .focusEffectDisabled()
+    }
+
+    // MARK: header
+
+    private var header: some View {
+        HStack(spacing: 2) {
+            IconButton("chevron.left", tooltip: "Previous month") { shift(months: -1) }
+            Spacer(minLength: 0)
+            Text(month.formatted(.dateTime.month(.wide).locale(Self.english)))
+                .font(.headline)
+            yearMenu
+            Spacer(minLength: 0)
+            IconButton("chevron.right", tooltip: "Next month") { shift(months: 1) }
+        }
+    }
+
+    private var yearMenu: some View {
+        let year = Self.calendar.component(.year, from: month)
+        let now = Self.calendar.component(.year, from: Date())
+        return Menu {
+            ForEach((now - 10)...(now + 5), id: \.self) { y in
+                Button(String(y)) { shift(months: (y - year) * 12) }
+            }
+        } label: {
+            Text(String(year))
+                .font(.headline)
+                .monospacedDigit()
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.visible)
+        .fixedSize()
+        .help("Pick a year")
+    }
+
+    // MARK: days
+
+    /// Very short names in English, from the user's first weekday.
+    private var weekdays: some View {
+        var english = Calendar(identifier: .gregorian)
+        english.locale = Self.english
+        let symbols = english.veryShortStandaloneWeekdaySymbols
+        let first = Self.calendar.firstWeekday - 1
+        let ordered = Array(symbols[first...] + symbols[..<first])
+        return HStack(spacing: 0) {
+            ForEach(Array(ordered.enumerated()), id: \.offset) { _, symbol in
+                Text(symbol)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private var grid: some View {
+        let cal = Self.calendar
+        let count = cal.range(of: .day, in: .month, for: month)?.count ?? 30
+        let lead = (cal.component(.weekday, from: month) - cal.firstWeekday + 7) % 7
+        let cells: [Date?] = Array(repeating: nil, count: lead)
+            + (0..<count).map { cal.date(byAdding: .day, value: $0, to: month) }
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 2) {
+            ForEach(Array(cells.enumerated()), id: \.offset) { _, date in
+                if let date {
+                    dayCell(date)
+                } else {
+                    Color.clear.frame(height: 26)
+                }
+            }
+        }
+    }
+
+    private func dayCell(_ date: Date) -> some View {
+        let cal = Self.calendar
+        let selected = cal.isDate(date, inSameDayAs: day)
+        let today = cal.isDateInToday(date)
+        return Button {
+            onPick(date)
+        } label: {
+            Text("\(cal.component(.day, from: date))")
+                .font(.system(size: 12, weight: today || selected ? .semibold : .regular))
+                .monospacedDigit()
+                .foregroundStyle(selected ? AnyShapeStyle(.white) : today ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.primary))
+                .frame(width: 26, height: 26)
+                .background {
+                    if selected {
+                        Circle().fill(Color.accentColor)
+                    } else if today {
+                        Circle().strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1)
+                    }
+                }
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: navigation
+
+    private func shift(months: Int) {
+        if let next = Self.calendar.date(byAdding: .month, value: months, to: month) {
+            month = next
+        }
+    }
+
+    private static func firstOfMonth(_ date: Date) -> Date {
+        calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
     }
 }
 
