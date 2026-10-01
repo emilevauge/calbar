@@ -132,6 +132,11 @@ enum CalendarGlyph {
             let band = NSRect(x: body.minX, y: body.maxY - bandHeight, width: body.width, height: bandHeight)
             NSBezierPath(roundedRect: band, xRadius: 1.5 * scale, yRadius: 1.5 * scale).fill()
             textArea.size.height -= bandHeight
+            // From the inner edge of the bottom stroke, not its centerline:
+            // otherwise the digits sit half a stroke too low.
+            let inset = outline.lineWidth / 2
+            textArea.origin.y += inset
+            textArea.size.height -= inset
         }
 
         guard !text.isEmpty else { return true }
