@@ -35,20 +35,10 @@ public struct MeetingLink: Equatable, Codable, Sendable {
 
     public let url: URL
     public let provider: Provider
-    /// A Discord channel named in the location ("#standup"), without
-    /// the "#": `url` is then only Discord's home, the channel's link
-    /// comes from the settings (`DiscordChannels`).
-    public let channel: String?
 
-    public init(url: URL, provider: Provider, channel: String? = nil) {
+    public init(url: URL, provider: Provider) {
         self.url = url
         self.provider = provider
-        self.channel = channel
-    }
-
-    /// "Discord #standup", else the provider's name.
-    public var label: String {
-        channel.map { "Discord #\($0)" } ?? provider.displayName
     }
 
     /// URL that opens the provider's desktop app directly, when we know how
@@ -56,7 +46,7 @@ public struct MeetingLink: Equatable, Codable, Sendable {
     /// otherwise leave a "Launch meeting" tab behind in the browser, and
     /// Discord channel links.
     public var nativeURL: URL? {
-        if provider == .discord { return DiscordChannels.appURL(for: url) }
+        if provider == .discord { return discordAppURL }
         guard provider == .zoom else { return nil }
         let parts = url.pathComponents
         guard parts.count >= 3, parts[1] == "j", let host = url.host else { return nil }
@@ -76,5 +66,13 @@ public struct MeetingLink: Equatable, Codable, Sendable {
         }
         c.percentEncodedQueryItems = items
         return c.url
+    }
+
+    /// "discord://-/channels/<server>/<channel>" for a channel or event
+    /// link; nil for an invite, which only the web page accepts.
+    private var discordAppURL: URL? {
+        guard url.host != "discord.gg",
+              url.path.hasPrefix("/channels/") || url.path.hasPrefix("/events/") else { return nil }
+        return URL(string: "discord://-" + url.path)
     }
 }

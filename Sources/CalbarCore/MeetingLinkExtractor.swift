@@ -2,8 +2,7 @@ import Foundation
 
 /// Finds the video link of an event, most reliable source first:
 /// Google's structured conference data, the Meet link, then any known
-/// provider URL in the location, a Discord "#channel" in the location,
-/// and a provider URL in the description.
+/// provider URL in the location or the description.
 public enum MeetingLinkExtractor {
 
     private static let urlTail = #"[^\s"'<>)]+"#
@@ -22,11 +21,6 @@ public enum MeetingLinkExtractor {
         (#"https://discord\.gg/"# + urlTail, .discord),
     ]
 
-    /// "#standup" in a location: a voice channel on the team's Discord.
-    /// A letter first, so "Room #3" is not one.
-    private static let channelPattern = try! NSRegularExpression(
-        pattern: #"(?<![\p{L}\p{N}_&#])#(\p{L}[\p{L}\p{N}_-]{0,99})"#)
-
     private static let patterns: [(NSRegularExpression, MeetingLink.Provider)] = sources.map {
         (try! NSRegularExpression(pattern: $0.0, options: [.caseInsensitive]), $0.1)
     }
@@ -41,21 +35,10 @@ public enum MeetingLinkExtractor {
             if let link = link(from: uri) { return link }
         }
         if let hangoutLink, let link = link(from: hangoutLink) { return link }
-        let place = location.map(HTMLText.decodeEntities)
-        if let place, let link = firstLink(in: place) { return link }
-        if let place, let channel = channel(in: place) {
-            return MeetingLink(url: DiscordChannels.home, provider: .discord, channel: channel)
+        for text in [location, description].compactMap({ $0 }) {
+            if let link = firstLink(in: HTMLText.decodeEntities(text)) { return link }
         }
-        if let description, let link = firstLink(in: HTMLText.decodeEntities(description)) { return link }
         return nil
-    }
-
-    /// The first "#name" of the location, without the "#".
-    static func channel(in text: String) -> String? {
-        let range = NSRange(text.startIndex..., in: text)
-        guard let match = channelPattern.firstMatch(in: text, range: range),
-              let r = Range(match.range(at: 1), in: text) else { return nil }
-        return String(text[r])
     }
 
     private static func link(from string: String) -> MeetingLink? {
