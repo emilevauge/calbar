@@ -3,7 +3,7 @@ import Foundation
 /// Video conference link attached to an event.
 public struct MeetingLink: Equatable, Codable, Sendable {
     public enum Provider: String, Codable, Sendable, CaseIterable {
-        case meet, zoom, teams, webex, around, whereby, other
+        case meet, zoom, teams, webex, around, whereby, discord, other
 
         public var displayName: String {
             switch self {
@@ -13,6 +13,7 @@ public struct MeetingLink: Equatable, Codable, Sendable {
             case .webex: return "Webex"
             case .around: return "Around"
             case .whereby: return "Whereby"
+            case .discord: return "Discord"
             case .other: return "Video call"
             }
         }
@@ -25,22 +26,37 @@ public struct MeetingLink: Equatable, Codable, Sendable {
             if h.hasSuffix(".webex.com") { return .webex }
             if h == "around.co" || h.hasSuffix(".around.co") { return .around }
             if h == "whereby.com" { return .whereby }
+            if ["discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com", "discord.gg"].contains(h) {
+                return .discord
+            }
             return .other
         }
     }
 
     public let url: URL
     public let provider: Provider
+    /// A Discord channel named in the location ("#standup"), without
+    /// the "#": `url` is then only Discord's home, the channel's link
+    /// comes from the settings (`DiscordChannels`).
+    public let channel: String?
 
-    public init(url: URL, provider: Provider) {
+    public init(url: URL, provider: Provider, channel: String? = nil) {
         self.url = url
         self.provider = provider
+        self.channel = channel
+    }
+
+    /// "Discord #standup", else the provider's name.
+    public var label: String {
+        channel.map { "Discord #\($0)" } ?? provider.displayName
     }
 
     /// URL that opens the provider's desktop app directly, when we know how
-    /// to build one. Only Zoom meeting links ("/j/<id>") qualify: the https
-    /// link would otherwise leave a "Launch meeting" tab behind in the browser.
+    /// to build one: Zoom meeting links ("/j/<id>"), whose https link would
+    /// otherwise leave a "Launch meeting" tab behind in the browser, and
+    /// Discord channel links.
     public var nativeURL: URL? {
+        if provider == .discord { return DiscordChannels.appURL(for: url) }
         guard provider == .zoom else { return nil }
         let parts = url.pathComponents
         guard parts.count >= 3, parts[1] == "j", let host = url.host else { return nil }

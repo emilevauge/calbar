@@ -93,7 +93,7 @@ struct EventRow: View {
                             .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                     }
                     .buttonStyle(.plain)
-                    .help("Join on \(meeting.provider.displayName)")
+                    .help("Join on \(meeting.label)")
                 }
             }
             if isOngoing {
@@ -148,7 +148,7 @@ struct EventRow: View {
                     EventActions(event: event, onJoin: canJoin ? onJoin : nil)
                         .padding(.top, -2)
                 } else if let meeting = event.meeting, canJoin {
-                    ActionIcon(help: "Join on \(meeting.provider.displayName)", tint: .accentColor, action: onJoin) {
+                    ActionIcon(help: "Join on \(meeting.label)", tint: .accentColor, action: onJoin) {
                         Image(systemName: "video")
                     }
                     .padding(.top, -2)

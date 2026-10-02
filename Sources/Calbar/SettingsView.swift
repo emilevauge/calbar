@@ -97,6 +97,8 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            discordSection
+
             Section("Global shortcut") {
                 ShortcutRecorder(title: "Open Calbar", name: .toggleCalbar)
             }
@@ -240,6 +242,27 @@ struct SettingsView: View {
 
     /// Zoom meetings for new events: the user's own Zoom app, then a
     /// sign-in, like the Google OAuth client.
+    @AppStorage(Prefs.discordServerKey) private var discordServer = ""
+    @AppStorage(Prefs.discordChannelsKey) private var discordChannels = ""
+
+    /// An event whose location names a "#channel" gets a Join button that
+    /// opens that channel: its link from here, else the server.
+    private var discordSection: some View {
+        Section {
+            TextField("Server", text: $discordServer, prompt: Text("https://discord.com/channels/…"))
+            TextField("Channels", text: $discordChannels,
+                      prompt: Text("#standup https://discord.com/channels/…"), axis: .vertical)
+                .lineLimit(2...8)
+                .font(.system(.body, design: .monospaced))
+        } header: {
+            Text("Discord")
+        } footer: {
+            Text("An event whose location is a #channel gets a Join button. In Discord, right-click a channel and choose Copy Link; add one channel per line, its #name then its link. A channel not listed opens the server.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private var zoomSection: some View {
         Section {
             if zoom.isConnected {

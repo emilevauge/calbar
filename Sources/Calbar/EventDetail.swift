@@ -35,7 +35,7 @@ struct EventDetail: View {
             }
             if showsMeetingLink, let meeting = event.meeting {
                 line("video") {
-                    Button(meeting.provider.displayName) { MeetingOpener.open(meeting) }
+                    Button(meeting.label) { MeetingOpener.open(meeting) }
                         .buttonStyle(.link)
                         .clickable()
                 }
@@ -224,7 +224,7 @@ struct EventActions: View {
                 }
             }
             if let onJoin, let meeting = event.meeting {
-                ActionIcon(help: "Join on \(meeting.provider.displayName)", tint: .accentColor, action: onJoin) {
+                ActionIcon(help: "Join on \(meeting.label)", tint: .accentColor, action: onJoin) {
                     Image(systemName: "video")
                 }
             }

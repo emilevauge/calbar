@@ -18,6 +18,10 @@ enum Prefs {
     /// Weekdays the week view shows, `Calendar` numbers (1 = Sunday):
     /// "1234567" for all, "23456" for Monday to Friday.
     static let weekDaysKey = "weekDays"
+    /// Discord: a link into the team's server, and "#name link" lines
+    /// for the channels event locations name (`DiscordChannels`).
+    static let discordServerKey = "discordServer"
+    static let discordChannelsKey = "discordChannels"
     /// "yyyy-MM-dd" of the last day the popover opened by itself.
     static let lastDayStartOpenKey = "lastDayStartOpen"
 

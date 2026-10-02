@@ -63,9 +63,16 @@ Core (`Sources/CalbarCore`), no AppKit:
   primary calendar copy reliably holds the user's own answer.
 - `RefreshMerge`: keeps the previous events of an account or a calendar whose fetch failed.
 - `MeetingLinkExtractor`, `MeetingLink`: video link from `conferenceData` entry points of type
-  `video`, then `hangoutLink`, then the earliest known provider URL in the location or the
-  description (Meet, Zoom, Teams, Webex, Around, Whereby). Zoom meeting links also get a
-  `zoommtg://` URL that opens the Zoom app directly.
+  `video`, then `hangoutLink`, then the earliest known provider URL in the location (Meet,
+  Zoom, Teams, Webex, Around, Whereby, Discord channel, event or invite links), then a Discord
+  channel named in the location ("#batcave": a letter first, so "Room #3" is not one; only in
+  the location, the description's hashtags are not channels), then a provider URL in the
+  description. Zoom meeting links also get a `zoommtg://` URL that opens the Zoom app
+  directly, Discord channel links a `discord://-/channels/...` one.
+- `DiscordChannels`: a channel's name does not give its link, which holds the server's and
+  the channel's ids, so Settings > Discord lists them, one "#name link" line each (copied
+  with Copy Link in Discord), plus a link into the server. Join opens the listed channel,
+  else the server, else Discord.
 - `HTMLText`, `Linkify`: event descriptions as plain text with clickable links.
 - `DayWindow`, `DayAgenda`, `DayListing`, `DayCache`: day boundaries in the local time zone,
   today's split into ongoing, upcoming and past events, the listing of any other day, and the
