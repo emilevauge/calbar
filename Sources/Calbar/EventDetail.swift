@@ -191,6 +191,9 @@ struct EventActions: View {
             .resizable()
             .scaledToFit()
             .frame(width: 14, height: 14)
+            // The pencil's square sits low and left in the symbol, to
+            // leave the pencil room: lifted to line up with the others.
+            .offset(x: name == "square.and.pencil" ? 0.5 : 0, y: name == "square.and.pencil" ? -1 : 0)
     }
 
     let event: CalendarEvent
