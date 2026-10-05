@@ -503,7 +503,14 @@ final class EventStore: ObservableObject {
         var end: Date
         /// Lowercased guest emails, the user's account first.
         var people: [String] = []
+        /// First names for the conflicts line, "You" for the user.
         var names: [String: String] = [:]
+        /// Full names, when known, for the chips.
+        var fullNames: [String: String] = [:]
+        /// Lowercased emails shown; nil for everyone.
+        var shown: Set<String>?
+
+        var shownEmails: Set<String> { shown ?? Set(people) }
         /// The account that asks Google.
         var account: String?
         var availability: [String: FreeBusy.Availability] = [:]
@@ -522,7 +529,7 @@ final class EventStore: ObservableObject {
         var busy: [String: [DateInterval]] {
             let own = original.map { DateInterval(start: $0.start, end: max($0.end, $0.start)) }
             var result: [String: [DateInterval]] = [:]
-            for email in people {
+            for email in people where shownEmails.contains(email) {
                 if case .busy(let spans) = availability[email] {
                     result[email] = own.map { FreeBusy.removing($0, from: spans) } ?? spans
                 }
@@ -563,7 +570,14 @@ final class EventStore: ObservableObject {
         session.end = end
         session.account = account
         var people: [String] = []
+        /// First names for the conflicts line, "You" for the user.
         var names: [String: String] = [:]
+        /// Full names, when known, for the chips.
+        var fullNames: [String: String] = [:]
+        /// Lowercased emails shown; nil for everyone.
+        var shown: Set<String>?
+
+        var shownEmails: Set<String> { shown ?? Set(people) }
         if let account {
             people.append(account.lowercased())
             names[account.lowercased()] = "You"
@@ -572,13 +586,41 @@ final class EventStore: ObservableObject {
             let key = guest.email.lowercased()
             people.append(key)
             names[key] = FindTimeBar.firstName(Person(email: guest.email, name: guest.name))
+            fullNames[key] = guest.name
         }
         session.people = people
         session.names = names
+        session.fullNames = fullNames
+        // People removed from the guests leave the selection.
+        if let shown = session.shown {
+            let kept = shown.intersection(people)
+            session.shown = kept.isEmpty ? nil : kept
+        }
         if session.start != composing?.start || session.end != composing?.end || session.people != composing?.people
             || session.account != composing?.account {
             composing = session
         }
+    }
+
+    /// Everyone shown, or only `email` when everyone was; otherwise
+    /// `email` in or out.
+    func toggleComposingShown(_ email: String) {
+        guard var session = composing else { return }
+        let key = email.lowercased()
+        var shown = session.shownEmails
+        if session.shown == nil {
+            shown = [key]
+        } else if shown.contains(key) {
+            shown.remove(key)
+        } else {
+            shown.insert(key)
+        }
+        session.shown = shown.isEmpty || shown == Set(session.people) ? nil : shown
+        composing = session
+    }
+
+    func showComposingEveryone() {
+        composing?.shown = nil
     }
 
     /// From the grid: new times for the editor.

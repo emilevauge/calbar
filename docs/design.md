@@ -352,7 +352,10 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   there with the same length. With guests, the grid shows their availability as when finding
   a time (`freebusy.query` as the event's or the chosen calendar's account, for the days
   shown, again 300 ms after the guests or the week change; the edited event's old time taken
-  out): busy times hatched, the slots that fit everyone green. Under the guests the editor says
+  out): busy times hatched, the slots that fit everyone green. Above the grid, the same bar as
+  for finding a time ("Guests' availability", the length, Everyone and a chip per person, the
+  legend) shows everyone or chosen people; people removed from the guests leave the choice.
+  Under the guests the editor says
   "Everyone is free" or "Busy: Ann, Bob". Editor and grid share the session's times: each
   change on one side shows on the other, and a day picked in the editor moves the grid to its
   week.

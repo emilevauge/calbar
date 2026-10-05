@@ -47,6 +47,11 @@ struct MenuView: View {
                                 onDone: { withAnimation(Motion.resize) { store.endFindingTime() } })
                     Divider()
                 }
+                if let session = store.composing, session.people.count > 1 {
+                    FindTimeBar(composing: session, onToggle: store.toggleComposingShown,
+                                onEveryone: store.showComposingEveryone)
+                    Divider()
+                }
                 if let session = store.composing {
                     // The editor beside the grid: the grid shows the
                     // guests' availability and sets the times.

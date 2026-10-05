@@ -4,40 +4,82 @@ import CalbarCore
 /// Above the week grid while finding a time: the event, one chip per
 /// person to show everyone or someone alone, the legend, and Done.
 struct FindTimeBar: View {
-    let session: EventStore.FindTime
+    let title: String
+    let duration: TimeInterval
+    let people: [Person]
+    /// Lowercased emails shown.
+    let shown: Set<String>
+    let availability: [String: FreeBusy.Availability]
+    let isLoading: Bool
+    let error: String?
+    /// Under the legend, on the right.
+    let hint: String?
     let onToggle: (String) -> Void
     let onEveryone: () -> Void
-    let onDone: () -> Void
+    /// Done, when the bar ends a mode of its own.
+    var onDone: (() -> Void)?
+
+    init(session: EventStore.FindTime, onToggle: @escaping (String) -> Void, onEveryone: @escaping () -> Void,
+         onDone: @escaping () -> Void) {
+        title = "Find a time for \u{201C}\(session.event.title)\u{201D}"
+        duration = session.event.end.timeIntervalSince(session.event.start)
+        people = session.people
+        shown = session.shown
+        availability = session.availability
+        isLoading = session.isLoading
+        error = session.error
+        hint = session.canMove ? "Click a time to move the event there." : nil
+        self.onToggle = onToggle
+        self.onEveryone = onEveryone
+        self.onDone = onDone
+    }
+
+    init(composing session: EventStore.Composing, onToggle: @escaping (String) -> Void,
+         onEveryone: @escaping () -> Void) {
+        title = "Guests' availability"
+        duration = session.end.timeIntervalSince(session.start)
+        people = session.people.map { Person(email: $0, name: session.fullNames[$0]) }
+        shown = session.shownEmails
+        availability = session.availability
+        isLoading = session.isLoading
+        error = nil
+        hint = "Click or drag on the grid to set the time."
+        self.onToggle = onToggle
+        self.onEveryone = onEveryone
+        onDone = nil
+    }
 
     var body: some View {
-        let everyone = session.shown.count == session.people.count
+        let everyone = shown.count == people.count
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "calendar.badge.clock")
                     .foregroundStyle(.secondary)
-                Text("Find a time for \u{201C}\(session.event.title)\u{201D}")
+                Text(title)
                     .font(.system(size: 12.5, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text(AgendaFormat.duration(session.event.end.timeIntervalSince(session.event.start)))
+                Text(AgendaFormat.duration(duration))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 8)
-                if session.isLoading {
+                if isLoading {
                     ProgressView().controlSize(.small)
                 }
-                Button("Done", action: onDone)
-                    .controlSize(.small)
-                    .keyboardShortcut(.cancelAction)
+                if let onDone {
+                    Button("Done", action: onDone)
+                        .controlSize(.small)
+                        .keyboardShortcut(.cancelAction)
+                }
             }
             FlowLayout(spacing: 4, lineSpacing: 4) {
                 chip(selected: everyone, help: "Show everyone's availability", action: onEveryone) {
                     Image(systemName: "person.2.fill").font(.system(size: 9))
                     Text("Everyone")
                 }
-                ForEach(session.people, id: \.email) { person in
+                ForEach(people, id: \.email) { person in
                     let key = person.email.lowercased()
-                    let unknown = session.availability[key] == .unknown
-                    chip(selected: !everyone && session.shown.contains(key),
+                    let unknown = availability[key] == .unknown
+                    chip(selected: !everyone && shown.contains(key),
                          help: unknown ? "\(person.email): calendar not shared" : person.email,
                          action: { onToggle(person.email) }) {
                         Avatar(person: person, response: .accepted)
@@ -48,19 +90,19 @@ struct FindTimeBar: View {
                             Image(systemName: "questionmark.circle").foregroundStyle(.tertiary)
                         }
                     }
-                    .opacity(everyone || session.shown.contains(key) ? 1 : 0.5)
+                    .opacity(everyone || shown.contains(key) ? 1 : 0.5)
                 }
             }
             HStack(spacing: 12) {
-                legend(Color.green.opacity(0.35), session.shown.count > 1 ? "Free for everyone shown" : "Free")
+                legend(Color.green.opacity(0.35), shown.count > 1 ? "Free for everyone shown" : "Free")
                 legend(Color.primary.opacity(0.14), "Busy")
                 Spacer(minLength: 0)
-                if let error = session.error {
+                if let error {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
                         .lineLimit(1)
-                } else if session.canMove {
-                    Text("Click a time to move the event there.")
+                } else if let hint {
+                    Text(hint)
                         .foregroundStyle(.tertiary)
                 }
             }
