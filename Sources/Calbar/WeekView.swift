@@ -417,7 +417,7 @@ struct WeekView: View {
                 if draft.moving, let availability {
                     let slot = DateInterval(start: start, end: end)
                     MoveConfirm(event: availability.event, proposes: availability.proposes, start: start, end: end,
-                                busy: FreeBusy.conflicts(slot, busy: availability.busy).map { availability.names[$0] ?? $0 },
+                                busy: FreeBusy.conflicts(slot, busy: availability.busy).map { availability.names[$0] ?? FindTimeBar.firstName(Person(email: $0, name: nil)) },
                                 unknown: availability.unknown,
                                 onMove: {
                                     try await availability.onMove(start)

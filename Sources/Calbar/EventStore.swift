@@ -513,8 +513,9 @@ final class EventStore: ObservableObject {
         var shownEmails: Set<String> { shown ?? Set(people) }
         /// The account that asks Google.
         var account: String?
-        var availability: [String: FreeBusy.Availability] = [:]
-        /// The people and days `availability` was read for.
+        var result = FreeBusy.Result()
+        var availability: [String: FreeBusy.Availability] { result.availability }
+        /// The people and days `result` was read for.
         var loadedKey: String?
         var isLoading = false
 
@@ -527,14 +528,8 @@ final class EventStore: ObservableObject {
         /// Busy times of the guests and the user, the edited event's old
         /// time left out.
         var busy: [String: [DateInterval]] {
-            let own = original.map { DateInterval(start: $0.start, end: max($0.end, $0.start)) }
-            var result: [String: [DateInterval]] = [:]
-            for email in people where shownEmails.contains(email) {
-                if case .busy(let spans) = availability[email] {
-                    result[email] = own.map { FreeBusy.removing($0, from: spans) } ?? spans
-                }
-            }
-            return result
+            FreeBusy.busy(people: people, shown: shownEmails, result: result,
+                          removing: original.map { DateInterval(start: $0.start, end: max($0.end, $0.start)) })
         }
 
         /// Names of the people whose calendar Google does not share.
@@ -608,7 +603,8 @@ final class EventStore: ObservableObject {
         session.fullNames = fullNames
         // People removed from the guests leave the selection.
         if let shown = session.shown {
-            let kept = shown.intersection(people)
+            let known = Set(people).union(session.result.groups.values.flatMap { $0 })
+            let kept = shown.intersection(known)
             session.shown = kept.isEmpty ? nil : kept
         }
         if session.start != composing?.start || session.end != composing?.end || session.people != composing?.people
@@ -621,16 +617,10 @@ final class EventStore: ObservableObject {
     /// `email` in or out.
     func toggleComposingShown(_ email: String) {
         guard var session = composing else { return }
-        let key = email.lowercased()
-        var shown = session.shownEmails
-        if session.shown == nil {
-            shown = [key]
-        } else if shown.contains(key) {
-            shown.remove(key)
-        } else {
-            shown.insert(key)
-        }
-        session.shown = shown.isEmpty || shown == Set(session.people) ? nil : shown
+        let everyone = Set(session.people)
+        let shown = FreeBusy.toggle(email.lowercased(), shown: session.shownEmails, everyone: everyone,
+                                    groups: session.result.groups)
+        session.shown = shown == everyone ? nil : shown
         composing = session
     }
 
@@ -658,12 +648,12 @@ final class EventStore: ObservableObject {
         guard !Task.isCancelled, composing?.id == session.id else { return }
         composing?.isLoading = true
         do {
-            var result: [String: FreeBusy.Availability] = [:]
+            var result = FreeBusy.Result()
             try await withAccessToken(account, auth: auth) { [api] token in
                 result = try await api.freeBusy(token: token, emails: session.people, from: range.start, to: range.end)
             }
             guard composing?.id == session.id else { return }
-            composing?.availability = result
+            composing?.result = result
             composing?.loadedKey = key
         } catch {
             NSLog("Calbar: reading availability failed: %@", "\(error)")
@@ -845,7 +835,8 @@ final class EventStore: ObservableObject {
         let people: [Person]
         /// Lowercased emails shown; everyone at first.
         var shown: Set<String>
-        var availability: [String: FreeBusy.Availability] = [:]
+        var result = FreeBusy.Result()
+        var availability: [String: FreeBusy.Availability] { result.availability }
         var loaded: DateInterval?
         var isLoading = false
         var error: String?
@@ -858,12 +849,8 @@ final class EventStore: ObservableObject {
         /// Busy times of the people shown whose calendar Google shares,
         /// the meeting's own time left out.
         var busy: [String: [DateInterval]] {
-            let own = DateInterval(start: event.start, end: max(event.end, event.start))
-            var result: [String: [DateInterval]] = [:]
-            for email in shown {
-                if case .busy(let spans) = availability[email] { result[email] = FreeBusy.removing(own, from: spans) }
-            }
-            return result
+            FreeBusy.busy(people: people.map { $0.email.lowercased() }, shown: shown, result: result,
+                          removing: DateInterval(start: event.start, end: max(event.end, event.start)))
         }
     }
 
@@ -887,16 +874,9 @@ final class EventStore: ObservableObject {
     /// `email` in or out.
     func toggleShown(_ email: String) {
         guard var session = findTime else { return }
-        let key = email.lowercased()
         let everyone = Set(session.people.map { $0.email.lowercased() })
-        if session.shown == everyone {
-            session.shown = [key]
-        } else if session.shown.contains(key) {
-            session.shown.remove(key)
-            if session.shown.isEmpty { session.shown = everyone }
-        } else {
-            session.shown.insert(key)
-        }
+        session.shown = FreeBusy.toggle(email.lowercased(), shown: session.shown, everyone: everyone,
+                                        groups: session.result.groups)
         findTime = session
     }
 
@@ -918,16 +898,16 @@ final class EventStore: ObservableObject {
         findTime?.isLoading = true
         findTime?.error = nil
         do {
-            var result: [String: FreeBusy.Availability] = [:]
+            var result = FreeBusy.Result()
             try await withAccessToken(session.event.accountEmail, auth: auth) { [api] token in
                 result = try await api.freeBusy(token: token, emails: session.people.map(\.email),
                                                 from: range.start, to: range.end)
             }
             guard findTime?.event.id == id else { return }
-            findTime?.availability = result
+            findTime?.result = result
             findTime?.loaded = range
             findTime?.isLoading = false
-            NSLog("Calbar: availability of %d people read", result.count)
+            NSLog("Calbar: availability of %d calendars read", result.availability.count)
         } catch {
             guard findTime?.event.id == id else { return }
             NSLog("Calbar: reading availability failed: %@", "\(error)")

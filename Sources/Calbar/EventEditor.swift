@@ -316,7 +316,7 @@ struct EventEditor: View {
     private var availabilityHint: some View {
         let session = store.composing
         let conflicts = session.map { s in
-            FreeBusy.conflicts(DateInterval(start: start, end: max(end, start)), busy: s.busy).map { s.names[$0] ?? $0 }
+            FreeBusy.conflicts(DateInterval(start: start, end: max(end, start)), busy: s.busy).map { s.names[$0] ?? FindTimeBar.firstName(Person(email: $0, name: nil)) }
         } ?? []
         return HStack(spacing: 5) {
             if session?.isLoading == true {

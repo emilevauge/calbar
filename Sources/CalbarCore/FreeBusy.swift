@@ -9,16 +9,48 @@ public enum FreeBusy {
         case unknown
     }
 
+    /// What a query gives: each calendar's availability, and the members
+    /// of the groups among the emails (Google expands them), each in
+    /// `availability` too.
+    public struct Result: Equatable, Sendable {
+        public var availability: [String: Availability] = [:]
+        /// Lowercased group email to its members' lowercased emails.
+        public var groups: [String: [String]] = [:]
+
+        public init(availability: [String: Availability] = [:], groups: [String: [String]] = [:]) {
+            self.availability = availability
+            self.groups = groups
+        }
+    }
+
     /// Google answers at most 50 calendars per query.
     static let batch = 50
 
-    /// The `freebusy.query` body for `emails` over `from..<to`.
+    /// The `freebusy.query` body for `emails` over `from..<to`; groups
+    /// expanded to their members, up to Google's limits.
     static func body(emails: [String], from: Date, to: Date) throws -> Data {
         try JSONSerialization.data(withJSONObject: [
             "timeMin": GoogleDate.rfc3339(from),
             "timeMax": GoogleDate.rfc3339(to),
             "items": emails.map { ["id": $0] },
+            "groupExpansionMax": 100,
+            "calendarExpansionMax": 50,
         ], options: [.sortedKeys])
+    }
+
+    /// The groups of the answer, by lowercased email: their members.
+    static func parseGroups(_ data: Data) throws -> [String: [String]] {
+        struct Answer: Decodable {
+            struct Group: Decodable { let calendars: [String]? }
+            let groups: [String: Group]?
+        }
+        let answer = try JSONDecoder().decode(Answer.self, from: data)
+        var result: [String: [String]] = [:]
+        for (email, group) in answer.groups ?? [:] {
+            let members = (group.calendars ?? []).map { $0.lowercased() }
+            if !members.isEmpty { result[email.lowercased()] = members }
+        }
+        return result
     }
 
     /// Each calendar of the answer, by lowercased email.
@@ -95,6 +127,46 @@ public enum FreeBusy {
         return result.filter { $0.duration >= duration }
     }
 
+    /// Busy times by email of the people shown (`shown`, lowercased) among
+    /// `people`: a group stands for its members, each shown with it, or
+    /// alone when picked; `own` (the event moved or edited) left out.
+    public static func busy(people: [String], shown: Set<String>, result: Result,
+                            removing own: DateInterval?) -> [String: [DateInterval]] {
+        var emails: [String] = []
+        for person in people {
+            if let members = result.groups[person] {
+                emails += members.filter { shown.contains(person) || shown.contains($0) }
+            } else if shown.contains(person) {
+                emails.append(person)
+            }
+        }
+        var busy: [String: [DateInterval]] = [:]
+        for email in emails {
+            if case .busy(let spans) = result.availability[email] {
+                busy[email] = own.map { removing($0, from: spans) } ?? spans
+            }
+        }
+        return busy
+    }
+
+    /// The people shown after a click on `key`, a person, a group or a
+    /// group's member: alone when everyone was shown, else in or out. A
+    /// member taken out of a shown group leaves the rest of the group.
+    public static func toggle(_ key: String, shown: Set<String>, everyone: Set<String>,
+                              groups: [String: [String]]) -> Set<String> {
+        if shown == everyone { return [key] }
+        var next = shown
+        if next.contains(key) {
+            next.remove(key)
+        } else if let group = groups.first(where: { next.contains($0.key) && $0.value.contains(key) }) {
+            next.remove(group.key)
+            next.formUnion(group.value.filter { $0 != key })
+        } else {
+            next.insert(key)
+        }
+        return next.isEmpty ? everyone : next
+    }
+
     /// Who in `busy` is busy at some point of `slot`.
     public static func conflicts(_ slot: DateInterval, busy: [String: [DateInterval]]) -> [String] {
         busy.filter { _, spans in spans.contains { $0.start < slot.end && slot.start < $0.end } }
@@ -104,16 +176,19 @@ public enum FreeBusy {
 
 extension CalendarAPI {
     /// Availability of `emails` over `from..<to`, as seen by the account
-    /// of `token`, in batches of 50.
-    public func freeBusy(token: String, emails: [String], from: Date, to: Date) async throws -> [String: FreeBusy.Availability] {
-        var result: [String: FreeBusy.Availability] = [:]
+    /// of `token`, in batches of 50; groups come with their members.
+    public func freeBusy(token: String, emails: [String], from: Date, to: Date) async throws -> FreeBusy.Result {
+        var result = FreeBusy.Result()
         var rest = emails
         while !rest.isEmpty {
             let chunk = Array(rest.prefix(FreeBusy.batch))
             rest.removeFirst(chunk.count)
             let data = try await post("/freeBusy", body: try FreeBusy.body(emails: chunk, from: from, to: to), token: token)
-            result.merge(try FreeBusy.parse(data)) { _, new in new }
+            result.availability.merge(try FreeBusy.parse(data)) { _, new in new }
+            result.groups.merge(try FreeBusy.parseGroups(data)) { _, new in new }
         }
+        // A group is not a calendar: its own entry, an error, says nothing.
+        for group in result.groups.keys { result.availability[group] = nil }
         return result
     }
 }

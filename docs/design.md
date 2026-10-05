@@ -443,7 +443,13 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   (the user first, then the guests) and "Everyone"; a click on a person when everyone is shown
   shows that person alone, then adds or removes people. Availability comes from
   `freebusy.query` (allowed by `calendar.readonly`, 50 calendars per query), as the event's
-  account, for the days shown, read again when the week changes: busy times only. Calendars
+  account, for the days shown, read again when the week changes: busy times only. Groups
+  among the guests (a mailing list such as head@...) are expanded by Google
+  (`groupExpansionMax` 100, `calendarExpansionMax` 50): the answer lists their members, each
+  with their own busy times, and a group stands for its members in the free slots. Its chip
+  says "head (5)" with a chevron that shows a smaller chip per member; a click on a member
+  shows them alone, or takes them out of their shown group, the rest of it staying
+  (`FreeBusy.toggle`). Calendars
   Google does not share (`errors` in the answer, often outside the organization) show a
   question mark and count as free. The event's own time is taken out of everyone's busy
   times. Each shown person's busy times are a gray band, darker where several overlap, hatched

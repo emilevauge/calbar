@@ -10,6 +10,7 @@ import Testing
     @Test func parsesBusyAndUnknown() throws {
         let json = #"{"calendars": {"Ann@x.com": {"busy": [{"start": "2026-10-06T08:00:00Z", "end": "2026-10-06T09:00:00Z"}]}, "out@y.com": {"errors": [{"domain": "global", "reason": "notFound"}], "busy": []}}}"#
         let result = try FreeBusy.parse(Data(json.utf8))
+        #expect(try FreeBusy.parseGroups(Data(json.utf8)).isEmpty)
         #expect(result["ann@x.com"] == .busy([span("10:00", "11:00")]))
         #expect(result["out@y.com"] == .unknown)
     }
@@ -45,5 +46,30 @@ import Testing
         #expect(http.requests[0].url?.path.hasSuffix("/freeBusy") == true)
         let body = try #require(JSONSerialization.jsonObject(with: http.requests[1].httpBody!) as? [String: Any])
         #expect((body["items"] as? [Any])?.count == 10)
+    }
+
+    @Test func groupsStandForTheirMembers() async throws {
+        let json = #"{"groups": {"Head@x.com": {"calendars": ["ann@x.com", "Bob@x.com"]}}, "calendars": {"head@x.com": {"errors": [{"reason": "notFound"}]}, "ann@x.com": {"busy": [{"start": "2026-10-06T08:00:00Z", "end": "2026-10-06T09:00:00Z"}]}, "bob@x.com": {"busy": []}}}"#
+        let http = StubHTTP([(200, json)])
+        let result = try await CalendarAPI(http: http).freeBusy(token: "t", emails: ["head@x.com"], from: at("00:00"), to: at("23:00"))
+        #expect(result.groups == ["head@x.com": ["ann@x.com", "bob@x.com"]])
+        #expect(result.availability["head@x.com"] == nil)
+        let body = try #require(JSONSerialization.jsonObject(with: http.requests[0].httpBody!) as? [String: Any])
+        #expect(body["groupExpansionMax"] as? Int == 100)
+        // The group shown: every member counts; one member picked: that one.
+        let all = FreeBusy.busy(people: ["me@x.com", "head@x.com"], shown: ["me@x.com", "head@x.com"], result: result, removing: nil)
+        #expect(Set(all.keys) == ["ann@x.com", "bob@x.com"])
+        let ann = FreeBusy.busy(people: ["me@x.com", "head@x.com"], shown: ["ann@x.com"], result: result, removing: nil)
+        #expect(Array(ann.keys) == ["ann@x.com"])
+    }
+
+    @Test func toggling() {
+        let everyone: Set<String> = ["me", "head"]
+        let groups = ["head": ["ann", "bob", "cy"]]
+        #expect(FreeBusy.toggle("ann", shown: everyone, everyone: everyone, groups: groups) == ["ann"])
+        #expect(FreeBusy.toggle("bob", shown: ["ann"], everyone: everyone, groups: groups) == ["ann", "bob"])
+        #expect(FreeBusy.toggle("ann", shown: ["ann"], everyone: everyone, groups: groups) == everyone)
+        // Out of a shown group: the other members stay.
+        #expect(FreeBusy.toggle("ann", shown: ["head"], everyone: everyone, groups: groups) == ["bob", "cy"])
     }
 }

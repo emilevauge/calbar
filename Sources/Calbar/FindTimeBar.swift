@@ -10,6 +10,8 @@ struct FindTimeBar: View {
     /// Lowercased emails shown.
     let shown: Set<String>
     let availability: [String: FreeBusy.Availability]
+    /// Group emails to their members, lowercased.
+    let groups: [String: [String]]
     let isLoading: Bool
     let error: String?
     /// Under the legend, on the right.
@@ -18,6 +20,8 @@ struct FindTimeBar: View {
     let onEveryone: () -> Void
     /// Done, when the bar ends a mode of its own.
     var onDone: (() -> Void)?
+    /// Groups opened on their members.
+    @State private var expanded: Set<String> = []
 
     init(session: EventStore.FindTime, onToggle: @escaping (String) -> Void, onEveryone: @escaping () -> Void,
          onDone: @escaping () -> Void) {
@@ -26,6 +30,7 @@ struct FindTimeBar: View {
         people = session.people
         shown = session.shown
         availability = session.availability
+        groups = session.result.groups
         isLoading = session.isLoading
         error = session.error
         hint = session.canMove ? "Click a time to move the event there."
@@ -42,6 +47,7 @@ struct FindTimeBar: View {
         people = session.people.map { Person(email: $0, name: session.fullNames[$0]) }
         shown = session.shownEmails
         availability = session.availability
+        groups = session.result.groups
         isLoading = session.isLoading
         error = nil
         hint = "Click or drag on the grid to set the time."
@@ -79,19 +85,16 @@ struct FindTimeBar: View {
                 }
                 ForEach(people, id: \.email) { person in
                     let key = person.email.lowercased()
-                    let unknown = availability[key] == .unknown
-                    chip(selected: !everyone && shown.contains(key),
-                         help: unknown ? "\(person.email): calendar not shared" : person.email,
-                         action: { onToggle(person.email) }) {
-                        Avatar(person: person, response: .accepted)
-                            .scaleEffect(0.8)
-                            .frame(width: 16, height: 16)
-                        Text(Self.firstName(person))
-                        if unknown {
-                            Image(systemName: "questionmark.circle").foregroundStyle(.tertiary)
+                    if let members = groups[key] {
+                        groupChip(person, members: members, everyone: everyone)
+                        if expanded.contains(key) {
+                            ForEach(members, id: \.self) { member in
+                                personChip(Person(email: member, name: nil), everyone: everyone, inGroup: key)
+                            }
                         }
+                    } else {
+                        personChip(person, everyone: everyone, inGroup: nil)
                     }
-                    .opacity(everyone || shown.contains(key) ? 1 : 0.5)
                 }
             }
             HStack(spacing: 12) {
@@ -112,6 +115,54 @@ struct FindTimeBar: View {
         .font(.system(size: 12))
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
+    }
+
+    /// A person, or a group's member (smaller, tinted like its group).
+    private func personChip(_ person: Person, everyone: Bool, inGroup group: String?) -> some View {
+        let key = person.email.lowercased()
+        let unknown = availability[key] == .unknown
+        let isShown = shown.contains(key) || group.map { shown.contains($0) } == true
+        return chip(selected: !everyone && isShown,
+                    help: unknown ? "\(person.email): calendar not shared" : person.email,
+                    action: { onToggle(person.email) }) {
+            Avatar(person: person, response: .accepted)
+                .scaleEffect(group == nil ? 0.8 : 0.65)
+                .frame(width: group == nil ? 16 : 13, height: group == nil ? 16 : 13)
+            Text(Self.firstName(person))
+                .font(.system(size: group == nil ? 12 : 11))
+            if unknown {
+                Image(systemName: "questionmark.circle").foregroundStyle(.tertiary)
+            }
+        }
+        .opacity(everyone || isShown ? 1 : 0.5)
+    }
+
+    /// A group: its name and size, a chevron to show its members.
+    private func groupChip(_ person: Person, members: [String], everyone: Bool) -> some View {
+        let key = person.email.lowercased()
+        let isShown = shown.contains(key)
+        let open = expanded.contains(key)
+        return HStack(spacing: 0) {
+            chip(selected: !everyone && isShown, help: "\(person.email): \(members.count) people",
+                 action: { onToggle(person.email) }) {
+                Image(systemName: "person.3.fill").font(.system(size: 9))
+                Text("\(Self.firstName(person)) (\(members.count))")
+                Button {
+                    withAnimation(Motion.resize) {
+                        if open { expanded.remove(key) } else { expanded.insert(key) }
+                    }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .rotationEffect(.degrees(open ? 90 : 0))
+                        .frame(width: 12, height: 16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(open ? "Hide the members" : "Show the members")
+            }
+        }
+        .opacity(everyone || isShown || members.contains(where: shown.contains) ? 1 : 0.5)
     }
 
     static func firstName(_ person: Person) -> String {
