@@ -500,7 +500,11 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
 - Meetings (`MeetingPeeker`, `NotificationPlanner`): no system notification. For timed, not
   declined events, with or without a link, the popover opens in peek mode on the meeting
   twice per occurrence: when it enters its alert window, before its start, and at the start,
-  until the alert window ends (so a Mac woken 2 min after the start still gets it). The peek
+  until the alert window ends (so a Mac woken 2 min after the start still gets it). Only
+  while the menu bar icon is in view (`AppDelegate.isOnScreen`: its window visible, not
+  occluded, in the top half of a screen): from an icon out of view (a full screen app's
+  hidden menu bar, another display or space) the popover would land at the bottom left of the
+  screen, so the peek waits, tried again each tick, and its sound plays only when it shows. The peek
   stays 8 s, then closes by itself, unless the pointer is on it or the icon: then it follows the
   hover rule. A peek already showing moves to the newer meeting; the start wins over an alert
   due at the same tick. A stage counts as done only once the peek showed: while the screen is

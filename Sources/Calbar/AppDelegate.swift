@@ -292,8 +292,13 @@ final class AppDelegate: NSObject, ObservableObject {
     /// the size it had when it last closed (a peek, or the full day). The
     /// hop lets SwiftUI apply the mode change before it is measured.
     private func present(_ popover: NSPopover, from button: NSStatusBarButton, then: @escaping () -> Void = {}) {
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
             guard !popover.isShown else { return }
+            // The icon may have left the screen during the hop.
+            if self?.isPeeking == true, !Self.isOnScreen(button) {
+                self?.isPeeking = false
+                return
+            }
             (popover.contentViewController as? PopoverHost<MenuView>)?.fitPopover()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             then()
@@ -314,13 +319,27 @@ final class AppDelegate: NSObject, ObservableObject {
         })
     }
 
+    /// The menu bar icon is on a screen, in view: not in a hidden menu bar
+    /// (an app in full screen) nor on a display or space out of sight. A
+    /// popover shown from an icon out of view lands at the bottom left of
+    /// the screen.
+    static func isOnScreen(_ button: NSStatusBarButton) -> Bool {
+        guard let window = button.window, window.isVisible, window.occlusionState.contains(.visible) else { return false }
+        let frame = window.frame
+        guard frame.width > 0, frame.height > 0,
+              let screen = NSScreen.screens.first(where: { $0.frame.contains(CGPoint(x: frame.midX, y: frame.midY)) })
+        else { return false }
+        // The menu bar is at the top of its screen.
+        return frame.midY > screen.frame.midY
+    }
+
     /// The meeting a timed peek was opened on; nil for a hover peek.
     private var peekTarget: String?
 
     /// Opens the popover on one meeting alone (`peekEvent`), without
     /// taking the focus from the active app.
     func peek() {
-        guard let popover, let button = statusItem?.button, !popover.isShown else { return }
+        guard let popover, let button = statusItem?.button, !popover.isShown, Self.isOnScreen(button) else { return }
         peekTarget = nil
         isPeeking = true
         present(popover, from: button)
@@ -333,6 +352,8 @@ final class AppDelegate: NSObject, ObservableObject {
     func peek(on event: CalendarEvent, for duration: TimeInterval) -> Bool {
         guard let popover, let button = statusItem?.button else { return false }
         if popover.isShown && !isPeeking { return false }
+        // Not now: the next tick tries again, until the alert window ends.
+        guard Self.isOnScreen(button) else { return false }
         peekTarget = event.occurrenceKey
         if Prefs.soundBeforeMeetings {
             NSSound(named: "Glass")?.play()
