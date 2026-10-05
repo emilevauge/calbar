@@ -422,9 +422,10 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   account, for the days shown, read again when the week changes: busy times only. Calendars
   Google does not share (`errors` in the answer, often outside the organization) show a
   question mark and count as free. The event's own time is taken out of everyone's busy
-  times. Each shown person's busy times are a light gray band, darker where several overlap;
-  the slots within the grid's hours, from now on, long enough for the event and free for
-  everyone shown are green. The other events fade and let clicks through; the event itself
+  times. Each shown person's busy times are a gray band, darker where several overlap, hatched
+  where anyone is busy; the slots within the grid's hours, from now on, long enough for the
+  event and free for everyone shown are green with a green edge and "Free". The other events
+  fade to 30 % and let clicks through; the event itself
   has a dashed accent outline. On the user's own event, a click places it there (to the
   quarter hour, green or orange as the slot is free or not) and a popover confirms: day and
   times, "Everyone is free" or "Busy: Ann, Bob", the people not shared, Move. Moving patches

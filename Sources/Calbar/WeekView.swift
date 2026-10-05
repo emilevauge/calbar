@@ -335,7 +335,7 @@ struct WeekView: View {
                     .frame(width: width - 2)
                     // Finding a time: the other events step back and let
                     // clicks through to the slots under them.
-                    .opacity(availability.map { $0.event.id == p.event.id ? 1 : 0.4 } ?? 1)
+                    .opacity(availability.map { $0.event.id == p.event.id ? 1 : 0.3 } ?? 1)
                     .allowsHitTesting(availability == nil)
                     .overlay {
                         if availability?.event.id == p.event.id {
@@ -413,8 +413,8 @@ struct WeekView: View {
         return min(max(m - m % 15, 0), 24 * 60 - availability.minutes)
     }
 
-    /// Each shown person's busy times in light gray, darker where several
-    /// overlap, and the free slots in green.
+    /// Busy times hatched, darker where several people are busy, and the
+    /// free slots in green, marked "Free".
     private func availabilityLayer(_ day: Date, _ availability: Availability, minuteHeight: CGFloat) -> some View {
         let midnight = Calendar.current.startOfDay(for: day)
         let next = Calendar.current.date(byAdding: .day, value: 1, to: midnight) ?? midnight.addingTimeInterval(86_400)
@@ -423,20 +423,40 @@ struct WeekView: View {
             return (max(span.start, midnight).timeIntervalSince(midnight) / 60,
                     min(span.end, next).timeIntervalSince(midnight) / 60)
         }
-        let busy = availability.busy.values.flatMap { $0 }.compactMap(minutes)
+        let each = availability.busy.values.flatMap { $0 }.compactMap(minutes)
+        let any = FreeBusy.union(availability.busy.values.flatMap { $0 }).compactMap(minutes)
         let free = availability.free.compactMap(minutes)
+        let width = columnWidth - 1
         return ZStack(alignment: .topLeading) {
-            ForEach(Array(busy.enumerated()), id: \.offset) { _, span in
+            ForEach(Array(each.enumerated()), id: \.offset) { _, span in
                 Rectangle()
-                    .fill(Color.primary.opacity(0.07))
-                    .frame(width: columnWidth - 1, height: CGFloat(span.1 - span.0) * minuteHeight)
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(width: width, height: CGFloat(span.1 - span.0) * minuteHeight)
+                    .padding(.top, CGFloat(span.0) * minuteHeight)
+            }
+            ForEach(Array(any.enumerated()), id: \.offset) { _, span in
+                Hatching()
+                    .stroke(Color.primary.opacity(0.22), lineWidth: 1)
+                    .frame(width: width, height: CGFloat(span.1 - span.0) * minuteHeight)
+                    .clipped()
                     .padding(.top, CGFloat(span.0) * minuteHeight)
             }
             ForEach(Array(free.enumerated()), id: \.offset) { _, span in
+                let height = CGFloat(span.1 - span.0) * minuteHeight
                 Rectangle()
-                    .fill(Color.green.opacity(0.16))
-                    .overlay(alignment: .leading) { Rectangle().fill(Color.green.opacity(0.7)).frame(width: 2) }
-                    .frame(width: columnWidth - 1, height: CGFloat(span.1 - span.0) * minuteHeight)
+                    .fill(Color.green.opacity(scheme == .dark ? 0.32 : 0.26))
+                    .overlay(alignment: .leading) { Rectangle().fill(Color.green).frame(width: 3) }
+                    .overlay(alignment: .topLeading) {
+                        if height > 16 {
+                            Text("Free")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(Color.green)
+                                .brightness(scheme == .dark ? 0.1 : -0.25)
+                                .padding(.leading, 6)
+                                .padding(.top, 2)
+                        }
+                    }
+                    .frame(width: width, height: height)
                     .padding(.top, CGFloat(span.0) * minuteHeight)
             }
         }
@@ -531,5 +551,19 @@ struct WeekView: View {
                     return .handled
                 }
         }
+    }
+}
+
+/// Diagonal lines every 6 points, for busy times.
+private struct Hatching: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        var x = rect.minX - rect.height
+        while x < rect.maxX {
+            path.move(to: CGPoint(x: x, y: rect.maxY))
+            path.addLine(to: CGPoint(x: x + rect.height, y: rect.minY))
+            x += 6
+        }
+        return path
     }
 }
