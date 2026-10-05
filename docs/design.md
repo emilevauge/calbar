@@ -365,16 +365,6 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   (`EscapeCatcher`) in the editor's window, before the text field's field editor or the
   popover, which would otherwise take it; a time or day picker is its own window and closes as
   usual. A click outside closes it.
-- Availability in the editor (`AvailabilityStrip`): with guests, a clock button at the end of
-  their line shows or hides it (remembered, shown by default; not for all-day events). Under
-  the guests: the event's day, "Next free", then an "Everyone" line (green where the event
-  fits for all, gray where anyone is busy) and a line per person ("You", then the guests by
-  first name; "not shared" for calendars Google does not share), busy times in gray, over the
-  week grid's hours widened to the event's, the event's time framed across the lines. A click
-  starts the event at that quarter hour, same length; "Next free" moves it to the next quarter
-  hour free for everyone, up to seven days ahead. Read with `freebusy.query` as the event's
-  account (or the chosen calendar's) for seven days from the event's, again 300 ms after the
-  guests or the day change; an edited event's old time is taken out of the busy times.
 - Editing and duplicating (`EventEditor.Mode`): the edit and copy icons of `EventActions`, or "Edit Event…" and "Duplicate Event…" in the context menu, set
   `EventStore.editRequest`; the `EventRow` of that event shows the editor in place of its card
   or row (in the panel, or in the grid's popover, which stays open), and the editor of a copy

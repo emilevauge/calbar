@@ -46,12 +46,4 @@ import Testing
         let body = try #require(JSONSerialization.jsonObject(with: http.requests[1].httpBody!) as? [String: Any])
         #expect((body["items"] as? [Any])?.count == 10)
     }
-
-    @Test func nextFree() {
-        let free = [span("10:30", "12:00"), span("13:00", "15:00")]
-        #expect(FreeBusy.nextFree(after: at("09:00"), duration: 3600, free: free) == at("10:30"))
-        #expect(FreeBusy.nextFree(after: at("11:15"), duration: 3600, free: free) == at("13:00"))
-        #expect(FreeBusy.nextFree(after: at("13:30"), duration: 3600, free: free) == at("13:30"))
-        #expect(FreeBusy.nextFree(after: at("14:30"), duration: 3600, free: free) == nil)
-    }
 }

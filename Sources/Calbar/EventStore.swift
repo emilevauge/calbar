@@ -767,18 +767,6 @@ final class EventStore: ObservableObject {
         }
     }
 
-    /// Availability of `emails` over `range`, asked as `account`, for
-    /// the event editor.
-    func availability(of emails: [String], as account: String, over range: DateInterval) async throws
-        -> [String: FreeBusy.Availability] {
-        guard let auth else { throw OAuthError.invalidGrant }
-        var result: [String: FreeBusy.Availability] = [:]
-        try await withAccessToken(account, auth: auth) { [api] token in
-            result = try await api.freeBusy(token: token, emails: emails, from: range.start, to: range.end)
-        }
-        return result
-    }
-
     /// Moves the occurrence to start at `start`, same length, guests told.
     func move(_ event: CalendarEvent, to start: Date) async throws {
         let notes = HTMLText.plainText(event.notes ?? "")

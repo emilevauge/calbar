@@ -311,8 +311,6 @@ final class AppDelegate: NSObject, ObservableObject {
             try await store.create(event, in: email)
         }, update: { [store] original, draft, notesText, scope in
             try await store.update(original, to: draft, notesText: notesText, scope: scope)
-        }, availability: { [store] email, people, range in
-            try await store.availability(of: people, as: email, over: range)
         })
     }
 
