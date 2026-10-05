@@ -35,22 +35,9 @@ struct EventRow: View {
 
     var body: some View {
         Group {
-            // Editing happens in place of the card or row; a copy is a
-            // new event, in a popover beside it.
-            if let request = store.editRequest, request.eventID == event.id, !request.duplicate {
-                EventEditor(.edit(event), composer: AppDelegate.shared.composer, embedded: true,
-                            onDone: store.endEditing)
-            } else if isFocus {
-                card.contextMenu { contextMenu }
-            } else {
-                row.contextMenu { contextMenu }
-            }
+            if isFocus { card } else { row }
         }
-        .popover(isPresented: Binding(get: { store.editRequest == .init(eventID: event.id, duplicate: true) }, set: { shown in
-            if !shown, store.editRequest?.eventID == event.id { store.editRequest = nil }
-        }), arrowEdge: .leading) {
-            EventEditor(.duplicate(event), composer: AppDelegate.shared.composer, onDone: { store.editRequest = nil })
-        }
+        .contextMenu { contextMenu }
     }
 
     // MARK: card

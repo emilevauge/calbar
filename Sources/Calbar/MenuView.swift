@@ -34,8 +34,8 @@ struct MenuView: View {
         let peekID = peeking ? app.peekEvent(now: store.now)?.id : nil
         let focusID = peeking ? peekID : (other == nil ? Self.focusID(agenda, now: store.now) : nil)
 
-        // Finding a time always shows the week grid.
-        let week = (viewMode == .week || store.findTime != nil) && !peeking
+        // Finding a time and editing an event always show the week grid.
+        let week = (viewMode == .week || store.findTime != nil || store.composing != nil) && !peeking
         let dayGrid = viewMode == .dayGrid && !peeking && !week
 
         VStack(alignment: .leading, spacing: 0) {
@@ -47,7 +47,22 @@ struct MenuView: View {
                                 onDone: { withAnimation(Motion.resize) { store.endFindingTime() } })
                     Divider()
                 }
-                weekContent(day: day)
+                if let session = store.composing {
+                    // The editor beside the grid: the grid shows the
+                    // guests' availability and sets the times.
+                    HStack(alignment: .top, spacing: 0) {
+                        weekContent(day: day)
+                        Divider()
+                        ScrollView {
+                            EventEditor(session: session, composer: app.composer, onDone: store.endComposing)
+                        }
+                        .frame(width: EventEditor.width)
+                        .id(session.id)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    weekContent(day: day)
+                }
                 Divider()
                 footer
             } else if dayGrid {
@@ -63,7 +78,7 @@ struct MenuView: View {
         // In a peek, a click anywhere but on the card's buttons expands it.
         .contentShape(Rectangle())
         .gesture(TapGesture().onEnded { app.expandPeek() }, including: peeking ? .all : .subviews)
-        .frame(width: week ? WeekView.width : 380)
+        .frame(width: week ? WeekView.width + (store.composing != nil ? EventEditor.width + 1 : 0) : 380)
         // Pinned to the top: while the popover grows or shrinks around a
         // change of content, the content stays put under the arrow
         // instead of sliding to the middle.
@@ -72,24 +87,24 @@ struct MenuView: View {
         .focusEffectDisabled()
         .focused($focused)
         .onKeyPress(.downArrow) {
-            guard store.editRequest == nil else { return .ignored }
+            guard store.composing == nil else { return .ignored }
             selectedIndex = min(selectedIndex + 1, max(rows.count - 1, 0))
             return .handled
         }
         .onKeyPress(.upArrow) {
-            guard store.editRequest == nil else { return .ignored }
+            guard store.composing == nil else { return .ignored }
             selectedIndex = max(selectedIndex - 1, 0)
             return .handled
         }
         // Up and down move the selection; left and right change the day,
         // or the week in the week view.
         .onKeyPress(.leftArrow) {
-            guard store.editRequest == nil else { return .ignored }
+            guard store.composing == nil else { return .ignored }
             step(-1)
             return .handled
         }
         .onKeyPress(.rightArrow) {
-            guard store.editRequest == nil else { return .ignored }
+            guard store.composing == nil else { return .ignored }
             step(1)
             return .handled
         }
@@ -97,7 +112,7 @@ struct MenuView: View {
         // macOS sends backspace as DEL (U+007F), which `.delete` (U+0008)
         // does not match: test the characters.
         .onKeyPress { press in
-            guard Self.isDeleteKey(press), store.editRequest == nil, !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
+            guard Self.isDeleteKey(press), store.composing == nil, !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
             let event = rows[selectedIndex]
             guard store.canDelete(event) else { NSSound.beep(); return .handled }
             withAnimation(Motion.resize) { store.deleteFromKey(event) }
@@ -111,7 +126,7 @@ struct MenuView: View {
         }
         .onKeyPress(.escape) {
             // An editor in the panel handles `esc` itself (`onEscape`).
-            if store.editRequest != nil { return .handled }
+            if store.composing != nil { return .handled }
             if store.findTime != nil {
                 withAnimation(Motion.resize) { store.endFindingTime() }
                 return .handled
@@ -124,7 +139,7 @@ struct MenuView: View {
             return .handled
         }
         .onKeyPress(keys: [.return]) { press in
-            guard store.editRequest == nil, !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
+            guard store.composing == nil, !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
             let event = rows[selectedIndex]
             if press.modifiers.contains(.command) {
                 join(event)
@@ -137,9 +152,18 @@ struct MenuView: View {
             focused = true
             applyRequestedEvent()
         }
-        // Finding a time opens on the event's week.
+        // Finding a time, and editing, open on the event's week.
         .onChange(of: store.findTime?.event.id) { _, id in
             if id != nil, let event = store.findTime?.event { show(day: event.start) }
+        }
+        .onChange(of: store.composing?.id) { _, id in
+            if id != nil, let start = store.composing?.start { show(day: start) }
+        }
+        // A day picked in the editor: the grid follows to its week.
+        .onChange(of: store.composing?.start) { _, start in
+            guard let start else { return }
+            let shown = weekDays(DayWindow.day(offset: dayOffset, from: store.now, calendar: .current))
+            if !shown.contains(where: { Calendar.current.isDate($0, inSameDayAs: start) }) { show(day: start) }
         }
         .onChange(of: app.popoverCloseCount) {
             showToday()
@@ -207,8 +231,20 @@ struct MenuView: View {
             onShowDay: { _ in withAnimation(Motion.resize) { viewMode = .day } },
             onJoin: join,
             width: 380,
-            composer: app.composer
+            onSelect: { start, end in store.compose(.create, start: start, end: end) }
         )
+    }
+
+    /// What the grid draws while an event is edited beside it.
+    private func slot(days: [Date]) -> WeekView.Slot? {
+        guard let session = store.composing else { return nil }
+        let busy = session.busy
+        let free = session.loadedKey == nil ? [] : FreeBusy.commonFree(
+            busy: Array(busy.values), days: days,
+            startHour: min(max(weekStartHour, 0), 23), endHour: min(max(weekEndHour, weekStartHour + 1), 24),
+            duration: max(session.end.timeIntervalSince(session.start), 15 * 60), notBefore: store.now, calendar: .current)
+        return WeekView.Slot(start: session.start, end: session.end, eventID: session.original?.id,
+                             busy: busy, free: free, hasGuests: session.people.count > 1)
     }
 
     /// What the grid draws while finding a time.
@@ -245,11 +281,22 @@ struct MenuView: View {
                 show(day: picked)
             },
             onJoin: join,
-            composer: store.findTime == nil ? app.composer : nil,
+            onSelect: store.findTime != nil ? nil : { start, end in
+                if store.composing != nil {
+                    store.setComposingTimes(start: start, end: end)
+                } else {
+                    app.contacts.prepare()
+                    store.compose(.create, start: start, end: end)
+                }
+            },
+            slot: slot(days: days),
             availability: availability(days: days)
         )
         .task(id: "\(store.findTime?.event.id ?? "")|\(days.first?.timeIntervalSince1970 ?? 0)") {
             await store.loadAvailability(days: days)
+        }
+        .task(id: "\(store.composing?.id.uuidString ?? "")|\(store.composing?.account ?? "")|\(store.composing?.people.joined(separator: ",") ?? "")|\(days.first?.timeIntervalSince1970 ?? 0)") {
+            await store.loadComposingAvailability(days: days)
         }
     }
 

@@ -340,17 +340,25 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   grid, pressing on an empty slot (outside the blocks) and dragging, up or down, marks out a
   ghost block that follows the pointer, labelled "10:00-11:30", from the quarter hour under the
   press to the quarter hour past the pointer (`NewEvent.range`, 15 min at least, within the
-  day); a plain click makes it 30 minutes. On release the editor opens in a popover on the
-  ghost, as an event's card opens on its block, so the main popover stays open. Blocks and the
-  ghost are placed with padding, not `offset`, which moves the drawing but not the frame a
-  popover anchors on. A new selection replaces the one being edited; the editor opens once a
-  popover still closing (0.35 s) is gone, since SwiftUI drops a presentation made during that
-  animation. It is a plain form, 380 pt wide: the title ("New event", 17 pt) beside a bar in
+  day); a plain click makes it 30 minutes. On release the editor opens beside the week grid
+  (`EventStore.Composing`), the panel widening by its 360 pt, the day grid switching to the
+  week. Blocks and the ghost are placed with padding, not `offset`, which moves the drawing but
+  not the frame a popover anchors on. While the editor is open the grid is its time picker: the
+  event is drawn at its new times (blue, or green when every guest is free then and orange
+  when someone is not), the other events fade and let clicks through, the edited event stays
+  faded at its old time with a dashed outline; a drag sets new times, a click moves the event
+  there with the same length. With guests, the grid shows their availability as when finding
+  a time (`freebusy.query` as the event's or the chosen calendar's account, for the days
+  shown, again 300 ms after the guests or the week change; the edited event's old time taken
+  out): busy times hatched, the slots that fit everyone green. Under the guests the editor says
+  "Everyone is free" or "Busy: Ann, Bob". Editor and grid share the session's times: each
+  change on one side shows on the other, and a day picked in the editor moves the grid to its
+  week.
+- The editor is a plain form, 360 pt wide: the title ("New event", 17 pt) beside a bar in
   the calendar's color, then day, start, an arrow, end and the duration, each a chip that
   opens a popover; a divider, the fields with an icon each (the calendar's line has its color
   dot), the choices as borderless menus with up and down chevrons and a check mark on the
-  current one; a divider, then "esc to cancel", Cancel and Save. Edited in place of a card,
-  the same form sits in the card's tinted box. The day opens the same
+  current one; a divider, then "esc to cancel", Cancel and Save. The day opens the same
   month calendar as the header (`DayPicker`); a time opens a scrolling list of quarter hours
   (`TimeList`) centered on the current one, the end times with the duration each gives
   ("15:30 1 h 15 min", up to 24 hours). A new start keeps the duration, a new day both hours;
@@ -364,12 +372,10 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   Discard, a second `esc` discarding. The key is caught by a local `NSEvent` monitor
   (`EscapeCatcher`) in the editor's window, before the text field's field editor or the
   popover, which would otherwise take it; a time or day picker is its own window and closes as
-  usual. A click outside closes it.
+  usual. Closing the panel closes it.
 - Editing and duplicating (`EventEditor.Mode`): the edit and copy icons of `EventActions`, or "Edit Event…" and "Duplicate Event…" in the context menu, set
-  `EventStore.editRequest`; the `EventRow` of that event shows the editor in place of its card
-  or row (in the panel, or in the grid's popover, which stays open), and the editor of a copy
-  in a popover on itself. While an editor is in the panel, its arrow, `⌫` and `↵` shortcuts
-  stand aside. Edit is offered on the same events as delete. The editor is filled from the event:
+  open the same editor beside the week grid, on the event's week. While it is open, the
+  panel's arrow, `⌫` and `↵` shortcuts stand aside. Edit is offered on the same events as delete. The editor is filled from the event:
   title, times (an all-day event shows its day alone, "All day, 3 days"), guests but the
   user, location, the description as plain text. Editing keeps the calendar (no move) and an
   existing video link; a recurring occurrence gets "This event | All events" instead of the

@@ -19,8 +19,23 @@ struct WeekView: View {
     static let width: CGFloat = 720
     /// 720 pt for the week; the popover's width for one day.
     var width: CGFloat = Self.width
-    /// Creating events from a selected slot; none without it.
-    var composer: EventComposer?
+    /// A slot selected on the grid, by a click or a drag: a new event, or
+    /// new times for the one being edited. None: no selecting.
+    var onSelect: ((Date, Date) -> Void)?
+    /// The event being created or edited beside the grid: its times, and
+    /// its guests' availability.
+    var slot: Slot?
+
+    struct Slot {
+        let start: Date
+        let end: Date
+        /// The edited event, drawn faded at its old time.
+        let eventID: String?
+        let busy: [String: [DateInterval]]
+        let free: [DateInterval]
+        /// No guests: no availability to draw.
+        let hasGuests: Bool
+    }
     /// Finding a time for an event: the guests' busy times and the free
     /// slots drawn on the grid, a click proposing to move it there.
     var availability: Availability?
@@ -280,8 +295,7 @@ struct WeekView: View {
                                               editing: false, moving: true)
                                 return
                             }
-                            // A new selection replaces one being edited.
-                            guard composer != nil else { return }
+                            guard onSelect != nil else { return }
                             let r = NewEvent.range(from: value.startLocation.y / minuteHeight,
                                                    to: value.location.y / minuteHeight,
                                                    dragThreshold: 8 / minuteHeight)
@@ -303,25 +317,24 @@ struct WeekView: View {
                                 }
                                 return
                             }
-                            guard let composer else { return }
-                            let r = NewEvent.range(from: value.startLocation.y / minuteHeight,
+                            guard let onSelect else { return }
+                            draft = nil
+                            var r = NewEvent.range(from: value.startLocation.y / minuteHeight,
                                                    to: value.location.y / minuteHeight,
                                                    dragThreshold: 8 / minuteHeight)
-                            composer.contacts.prepare()
-                            let selection = Draft(day: day, start: r.start, end: r.end, editing: false)
-                            draft = selection
-                            // Wait out a popover still closing (this click may
-                            // have closed it), then open the editor.
-                            let wait = max(0.05, 0.35 - Date().timeIntervalSince(editorClosedAt))
-                            DispatchQueue.main.asyncAfter(deadline: .now() + wait) {
-                                guard let current = draft, current.day == selection.day,
-                                      current.start == selection.start, current.end == selection.end else { return }
-                                draft = Draft(day: day, start: r.start, end: r.end, editing: true)
+                            // A click while editing moves the event, same length.
+                            if let slot, abs(value.location.y - value.startLocation.y) < 8 {
+                                let minutes = max(Int(slot.end.timeIntervalSince(slot.start) / 60), 15)
+                                r = (r.start, min(r.start + minutes, 24 * 60))
                             }
+                            onSelect(day.addingTimeInterval(TimeInterval(r.start * 60)),
+                                     day.addingTimeInterval(TimeInterval(r.end * 60)))
                         }
                 )
             if let availability {
-                availabilityLayer(day, availability, minuteHeight: minuteHeight)
+                availabilityLayer(day, busy: availability.busy, free: availability.free, minuteHeight: minuteHeight)
+            } else if let slot, slot.hasGuests {
+                availabilityLayer(day, busy: slot.busy, free: slot.free, minuteHeight: minuteHeight)
             }
             if case .loading = content {
                 ProgressView().controlSize(.small)
@@ -335,10 +348,11 @@ struct WeekView: View {
                     .frame(width: width - 2)
                     // Finding a time: the other events step back and let
                     // clicks through to the slots under them.
-                    .opacity(availability.map { $0.event.id == p.event.id ? 1 : 0.3 } ?? 1)
-                    .allowsHitTesting(availability == nil)
+                    .opacity(availability.map { $0.event.id == p.event.id ? 1 : 0.3 }
+                             ?? slot.map { $0.eventID == p.event.id ? 0.35 : 0.45 } ?? 1)
+                    .allowsHitTesting(availability == nil && slot == nil)
                     .overlay {
-                        if availability?.event.id == p.event.id {
+                        if availability?.event.id == p.event.id || (slot != nil && slot?.eventID == p.event.id) {
                             RoundedRectangle(cornerRadius: 4, style: .continuous)
                                 .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, dash: [4, 2]))
                                 .allowsHitTesting(false)
@@ -351,6 +365,9 @@ struct WeekView: View {
             }
             if today {
                 nowLine(day, minuteHeight: minuteHeight)
+            }
+            if let slot, draft == nil, Calendar.current.isDate(slot.start, inSameDayAs: day) {
+                slotGhost(slot, day: day, minuteHeight: minuteHeight)
             }
             if let draft, Calendar.current.isDate(draft.day, inSameDayAs: day) {
                 ghost(draft, minuteHeight: minuteHeight)
@@ -396,8 +413,6 @@ struct WeekView: View {
                                     self.draft = nil
                                 },
                                 onCancel: { self.draft = nil })
-                } else if let composer {
-                    EventEditor(start: start, end: end, composer: composer, onDone: { self.draft = nil })
                 }
             }
             // After the popover, so it anchors on the slot itself.
@@ -406,6 +421,30 @@ struct WeekView: View {
     }
 
     /// Red line at the current time, with a dot on the left.
+    /// The event being edited beside the grid, at its new times: green
+    /// when every guest is free, orange otherwise, blue without guests.
+    private func slotGhost(_ slot: Slot, day: Date, minuteHeight: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
+        let startMinute = slot.start.timeIntervalSince(Calendar.current.startOfDay(for: day)) / 60
+        let length = max(slot.end.timeIntervalSince(slot.start) / 60, 15)
+        let tint: Color = !slot.hasGuests ? .accentColor
+            : FreeBusy.conflicts(DateInterval(start: slot.start, end: slot.end), busy: slot.busy).isEmpty ? .green : .orange
+        return shape.fill(tint.opacity(0.3))
+            .overlay(shape.strokeBorder(tint, lineWidth: 1.5))
+            .overlay(alignment: .topLeading) {
+                Text("\(AgendaFormat.clock(slot.start, .current))-\(AgendaFormat.clock(slot.end, .current))")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(Self.ink(0.9))
+                    .padding(.leading, 5)
+                    .padding(.top, 2)
+            }
+            .frame(width: columnWidth - 3, height: max(CGFloat(length) * minuteHeight - 2, 10))
+            .allowsHitTesting(false)
+            .padding(.leading, 1)
+            .padding(.top, CGFloat(startMinute) * minuteHeight + 1)
+    }
+
     /// The start of the moved event under the pointer: to the quarter
     /// hour, the event ending by midnight.
     private func moveStart(_ minute: Double, _ availability: Availability) -> Int {
@@ -415,7 +454,8 @@ struct WeekView: View {
 
     /// Busy times hatched, darker where several people are busy, and the
     /// free slots in green, marked "Free".
-    private func availabilityLayer(_ day: Date, _ availability: Availability, minuteHeight: CGFloat) -> some View {
+    private func availabilityLayer(_ day: Date, busy: [String: [DateInterval]], free freeSlots: [DateInterval],
+                                   minuteHeight: CGFloat) -> some View {
         let midnight = Calendar.current.startOfDay(for: day)
         let next = Calendar.current.date(byAdding: .day, value: 1, to: midnight) ?? midnight.addingTimeInterval(86_400)
         func minutes(_ span: DateInterval) -> (Double, Double)? {
@@ -423,9 +463,9 @@ struct WeekView: View {
             return (max(span.start, midnight).timeIntervalSince(midnight) / 60,
                     min(span.end, next).timeIntervalSince(midnight) / 60)
         }
-        let each = availability.busy.values.flatMap { $0 }.compactMap(minutes)
-        let any = FreeBusy.union(availability.busy.values.flatMap { $0 }).compactMap(minutes)
-        let free = availability.free.compactMap(minutes)
+        let each = busy.values.flatMap { $0 }.compactMap(minutes)
+        let any = FreeBusy.union(busy.values.flatMap { $0 }).compactMap(minutes)
+        let free = freeSlots.compactMap(minutes)
         let width = columnWidth - 1
         return ZStack(alignment: .topLeading) {
             ForEach(Array(each.enumerated()), id: \.offset) { _, span in
@@ -531,7 +571,6 @@ struct WeekView: View {
         .popover(isPresented: Binding(get: { opened == event.id }, set: { shown in
             guard !shown else { return }
             opened = nil
-            if AppDelegate.shared.store.editRequest?.eventID == event.id { AppDelegate.shared.store.editRequest = nil }
         }),
                  arrowEdge: .trailing) {
             EventRow(event: event, now: now, selected: false, expanded: true, isPast: past,
@@ -544,7 +583,7 @@ struct WeekView: View {
                 .focusEffectDisabled()
                 .onKeyPress { press in
                     let store = AppDelegate.shared.store
-                    guard MenuView.isDeleteKey(press), store.editRequest == nil else { return .ignored }
+                    guard MenuView.isDeleteKey(press), store.composing == nil else { return .ignored }
                     guard store.canDelete(event) else { NSSound.beep(); return .handled }
                     opened = nil
                     withAnimation(Motion.resize) { store.deleteFromKey(event) }

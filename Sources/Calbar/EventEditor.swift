@@ -41,9 +41,6 @@ struct EventEditor: View {
     @ObservedObject var contacts: ContactBook
     @ObservedObject var zoom: ZoomAuth
     let onDone: () -> Void
-    /// In place of an event's card or row, at its width, rather than in
-    /// a popover of its own.
-    let embedded: Bool
 
     @State private var title = ""
     @State private var start: Date
@@ -66,32 +63,30 @@ struct EventEditor: View {
     @State private var chosenCalendar: String?
     @State private var chosenConference: String?
     @FocusState private var titleFocused: Bool
+    @ObservedObject private var store = AppDelegate.shared.store
+    static let width: CGFloat = 360
     /// `esc` with changes: asks before throwing them away.
     @State private var confirmingDiscard = false
     /// The fields as the editor opened, to tell whether anything changed.
     @State private var initialFields = ""
 
-    /// A new event from `start` to `end`.
-    init(start: Date, end: Date, composer: EventComposer, onDone: @escaping () -> Void) {
-        self.init(mode: .create, start: start, end: end, composer: composer, onDone: onDone, embedded: false)
-    }
-
-    /// Changes `event`, or prepares a copy of it.
-    init(_ mode: Mode, composer: EventComposer, embedded: Bool = false, onDone: @escaping () -> Void) {
-        switch mode {
+    /// The editor of `session`, beside the week grid.
+    init(session: EventStore.Composing, composer: EventComposer, onDone: @escaping () -> Void) {
+        switch session.mode {
         case .create:
-            self.init(mode: mode, start: Date(), end: Date().addingTimeInterval(1800), composer: composer,
-                      onDone: onDone, embedded: embedded)
-        case .edit(let event), .duplicate(let event):
-            self.init(mode: mode, start: event.start, end: event.end, composer: composer, onDone: onDone,
-                      embedded: embedded, from: event)
+            self.init(mode: .create, start: session.start, end: session.end, composer: composer, onDone: onDone)
+        case .edit(let event):
+            self.init(mode: .edit(event), start: session.start, end: session.end, composer: composer,
+                      onDone: onDone, from: event)
+        case .duplicate(let event):
+            self.init(mode: .duplicate(event), start: session.start, end: session.end, composer: composer,
+                      onDone: onDone, from: event)
         }
     }
 
     private init(mode: Mode, start: Date, end: Date, composer: EventComposer, onDone: @escaping () -> Void,
-                 embedded: Bool, from event: CalendarEvent? = nil) {
+                 from event: CalendarEvent? = nil) {
         self.mode = mode
-        self.embedded = embedded
         self.composer = composer
         self.contacts = composer.contacts
         self.zoom = composer.zoom
@@ -142,30 +137,26 @@ struct EventEditor: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(14)
-            } else if embedded {
-                // In place of a card: the card's tinted box.
-                form(color)
-                    .padding(12)
-                    .background {
-                        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        shape.fill(color.opacity(0.07))
-                        shape.strokeBorder(color.opacity(0.22), lineWidth: 1)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
             } else {
                 form(color)
                     .padding(16)
             }
         }
-        .frame(width: embedded ? nil : 380)
-        // Its full height, always: squeezed by a popover that has not
-        // grown yet, the lines would overlap; this way the popover grows.
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: Self.width)
         .onAppear {
             contacts.prepare()
             initialFields = fields
             titleFocused = true
+            report()
+        }
+        // The grid draws the times and the guests' availability, and
+        // changes the times on a click.
+        .onChange(of: reportKey) { report() }
+        .onChange(of: store.composing?.start) { _, new in
+            if let new, new != start { start = new }
+        }
+        .onChange(of: store.composing?.end) { _, new in
+            if let new, new != end { end = new }
         }
         // `esc` closes only after asking when something was typed: the
         // popover would otherwise go, and the event with it.
@@ -303,6 +294,10 @@ struct EventEditor: View {
             line("person.2", alignment: .top) {
                 GuestField(guests: $guests, contacts: contacts)
             }
+            if !guests.isEmpty && !isAllDay {
+                availabilityHint
+                    .padding(.leading, 26)
+            }
             line("mappin.and.ellipse") {
                 TextField("Add location", text: $location)
                     .textFieldStyle(.plain)
@@ -314,6 +309,32 @@ struct EventEditor: View {
             }
         }
         .font(.system(size: 12))
+    }
+
+    /// What the grid shows of the guests: free slots, or who is busy at
+    /// the event's time.
+    private var availabilityHint: some View {
+        let session = store.composing
+        let conflicts = session.map { s in
+            FreeBusy.conflicts(DateInterval(start: start, end: max(end, start)), busy: s.busy).map { s.names[$0] ?? $0 }
+        } ?? []
+        return HStack(spacing: 5) {
+            if session?.isLoading == true {
+                ProgressView().controlSize(.mini)
+                Text("Reading availability…")
+            } else if session?.loadedKey == nil {
+                EmptyView()
+            } else if conflicts.isEmpty {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text("Everyone is free. Green slots on the grid fit everyone.")
+            } else {
+                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+                Text("Busy: \(conflicts.joined(separator: ", ")). Pick a green slot on the grid.")
+            }
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// An error of the last save, or the question before discarding.
@@ -397,6 +418,17 @@ struct EventEditor: View {
             Spacer(minLength: 0)
         }
         .frame(minHeight: 20)
+    }
+
+    /// What the grid needs from the editor, as one string to watch.
+    private var reportKey: String {
+        "\(start.timeIntervalSince1970)|\(end.timeIntervalSince1970)|\(selected?.email ?? "")|"
+            + guests.map(\.email).joined(separator: ",")
+    }
+
+    private func report() {
+        store.composingChanged(start: start, end: end, account: original?.accountEmail ?? selected?.email,
+                               guests: guests.map { ($0.email, $0.name) })
     }
 
     /// Every field the user can change, as one string.

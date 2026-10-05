@@ -487,22 +487,131 @@ final class EventStore: ObservableObject {
     @Published var askingDeleteScope: CalendarEvent?
     private var deleteTasks: [String: Task<Void, Never>] = [:]
 
-    /// An event whose editor is open, on itself or on a copy of it.
-    struct EditRequest: Equatable {
-        let eventID: String
-        let duplicate: Bool
+    /// The event editor beside the week grid: what it edits, and the
+    /// times and guests it has now, which the grid draws, with the
+    /// guests' availability, and changes on a click.
+    struct Composing: Identifiable {
+        enum Mode {
+            case create
+            case edit(CalendarEvent)
+            case duplicate(CalendarEvent)
+        }
+
+        let id = UUID()
+        let mode: Mode
+        var start: Date
+        var end: Date
+        /// Lowercased guest emails, the user's account first.
+        var people: [String] = []
+        var names: [String: String] = [:]
+        /// The account that asks Google.
+        var account: String?
+        var availability: [String: FreeBusy.Availability] = [:]
+        /// The people and days `availability` was read for.
+        var loadedKey: String?
+        var isLoading = false
+
+        /// The event being changed, if any.
+        var original: CalendarEvent? {
+            if case .edit(let event) = mode { return event }
+            return nil
+        }
+
+        /// Busy times of the guests and the user, the edited event's old
+        /// time left out.
+        var busy: [String: [DateInterval]] {
+            let own = original.map { DateInterval(start: $0.start, end: max($0.end, $0.start)) }
+            var result: [String: [DateInterval]] = [:]
+            for email in people {
+                if case .busy(let spans) = availability[email] {
+                    result[email] = own.map { FreeBusy.removing($0, from: spans) } ?? spans
+                }
+            }
+            return result
+        }
+
+        /// Names of the people whose calendar Google does not share.
+        var unknown: [String] {
+            people.filter { availability[$0] == .unknown }.map { names[$0] ?? $0 }
+        }
     }
-    @Published var editRequest: EditRequest?
+
+    @Published var composing: Composing?
+
+    func compose(_ mode: Composing.Mode, start: Date, end: Date) {
+        findTime = nil
+        askingDeleteScope = nil
+        withAnimation(Motion.resize) { composing = Composing(mode: mode, start: start, end: end) }
+    }
+
     func edit(_ event: CalendarEvent) {
-        withAnimation(Motion.resize) { editRequest = .init(eventID: event.id, duplicate: false) }
+        compose(.edit(event), start: event.start, end: event.end)
     }
 
     func duplicate(_ event: CalendarEvent) {
-        editRequest = .init(eventID: event.id, duplicate: true)
+        compose(.duplicate(event), start: event.start, end: event.end)
     }
 
-    func endEditing() {
-        withAnimation(Motion.resize) { editRequest = nil }
+    func endComposing() {
+        withAnimation(Motion.resize) { composing = nil }
+    }
+
+    /// From the editor: its times, account and guests.
+    func composingChanged(start: Date, end: Date, account: String?, guests: [(email: String, name: String?)]) {
+        guard var session = composing else { return }
+        session.start = start
+        session.end = end
+        session.account = account
+        var people: [String] = []
+        var names: [String: String] = [:]
+        if let account {
+            people.append(account.lowercased())
+            names[account.lowercased()] = "You"
+        }
+        for guest in guests where !people.contains(guest.email.lowercased()) {
+            let key = guest.email.lowercased()
+            people.append(key)
+            names[key] = FindTimeBar.firstName(Person(email: guest.email, name: guest.name))
+        }
+        session.people = people
+        session.names = names
+        if session.start != composing?.start || session.end != composing?.end || session.people != composing?.people
+            || session.account != composing?.account {
+            composing = session
+        }
+    }
+
+    /// From the grid: new times for the editor.
+    func setComposingTimes(start: Date, end: Date) {
+        composing?.start = start
+        composing?.end = end
+    }
+
+    /// Reads the guests' availability over `days`, unless already read.
+    func loadComposingAvailability(days: [Date]) async {
+        guard let session = composing, let account = session.account, let auth,
+              session.people.count > 1, let first = days.min(), let last = days.max() else { return }
+        let calendar = Calendar.current
+        let range = DateInterval(start: calendar.startOfDay(for: first),
+                                 end: calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: last)) ?? last)
+        let key = "\(account)|\(session.people.joined(separator: ","))|\(range.start.timeIntervalSince1970)"
+        guard session.loadedKey != key else { return }
+        // Guests come one chip at a time: wait for a pause.
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled, composing?.id == session.id else { return }
+        composing?.isLoading = true
+        do {
+            var result: [String: FreeBusy.Availability] = [:]
+            try await withAccessToken(account, auth: auth) { [api] token in
+                result = try await api.freeBusy(token: token, emails: session.people, from: range.start, to: range.end)
+            }
+            guard composing?.id == session.id else { return }
+            composing?.availability = result
+            composing?.loadedKey = key
+        } catch {
+            NSLog("Calbar: reading availability failed: %@", "\(error)")
+        }
+        if composing?.id == session.id { composing?.isLoading = false }
     }
     static let undoDelay: Duration = .seconds(10)
 
@@ -705,7 +814,7 @@ final class EventStore: ObservableObject {
         let me = event.attendees.first(where: \.isSelf)?.person ?? Person(email: event.accountEmail, name: nil)
         let people = ([me] + event.attendees.filter { !$0.isSelf }.map(\.person))
             .filter { seen.insert($0.email.lowercased()).inserted }
-        editRequest = nil
+        composing = nil
         findTime = FindTime(event: event, people: people, shown: Set(people.map { $0.email.lowercased() }),
                             canMove: canEdit(event))
     }
@@ -780,7 +889,7 @@ final class EventStore: ObservableObject {
 
     /// Declined events answered while the popover was open leave the list.
     func popoverDidClose() {
-        editRequest = nil
+        composing = nil
         findTime = nil
         recentlyAnswered = recentlyAnswered.intersection(pendingAnswers)
     }
