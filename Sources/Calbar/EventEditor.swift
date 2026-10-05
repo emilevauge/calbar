@@ -594,7 +594,9 @@ private struct GuestField: View {
                     guests.removeLast()
                     return .handled
                 }
-            if focused, contacts.needsReconnectForGoogle, text.count >= 2 {
+            // Same condition as the list: a line that left on focus loss
+            // would move the list under the pointer mid-click.
+            if focused || overSuggestions, contacts.needsReconnectForGoogle, text.count >= 2 {
                 Text("Reconnect your account in Settings to search your Google contacts.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
@@ -602,26 +604,27 @@ private struct GuestField: View {
             if focused || overSuggestions, !suggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(suggestions.enumerated()), id: \.element.email) { i, contact in
-                        Button { add(contact) } label: {
-                            HStack(spacing: 6) {
-                                Avatar(person: Person(email: contact.email, name: contact.name), response: .accepted)
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(contact.name ?? contact.email)
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                    if contact.name != nil {
-                                        Text(contact.email).lineLimit(1)
-                                    }
+                        HStack(spacing: 6) {
+                            Avatar(person: Person(email: contact.email, name: contact.name), response: .accepted)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(contact.name ?? contact.email)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                if contact.name != nil {
+                                    Text(contact.email).lineLimit(1)
                                 }
-                                Spacer(minLength: 0)
                             }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(i == highlighted ? Color.accentColor.opacity(0.18) : .clear,
-                                        in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                            .contentShape(Rectangle())
+                            Spacer(minLength: 0)
                         }
-                        .buttonStyle(.plain)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(i == highlighted ? Color.accentColor.opacity(0.18) : .clear,
+                                    in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        .contentShape(Rectangle())
+                        // On release wherever the pointer is: a button
+                        // drops a click released outside it.
+                        .gesture(DragGesture(minimumDistance: 0).onEnded { _ in add(contact) })
+                        .onHover { if $0 { highlighted = i } }
                     }
                 }
                 .padding(3)
