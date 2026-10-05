@@ -206,8 +206,7 @@ struct EventActions: View {
                 }
             }
             if event.attendees.contains(where: { !$0.isSelf }) {
-                ActionIcon(help: store.canEdit(event) ? "Find a time: guests' availability, to move it"
-                                                      : "Guests' availability",
+                ActionIcon(help: "Reschedule",
                            action: { withAnimation(Motion.resize) { store.startFindingTime(for: event) } }) {
                     EventActions.symbol("clock.arrow.circlepath")
                 }

@@ -23,7 +23,9 @@ struct MenuView: View {
 
     var body: some View {
         let agenda = store.agenda
-        let day = DayWindow.day(offset: dayOffset, from: store.now, calendar: .current)
+        // Editing or rescheduling opens on the event's week from the first
+        // frame: the day offset only catches up afterwards, without a jump.
+        let day = pendingDay ?? DayWindow.day(offset: dayOffset, from: store.now, calendar: .current)
         // Today keeps its own presentation; other days come from the store.
         let other: DayContent? = dayOffset == 0 ? nil : store.events(for: day)
         let rows = Self.rows(agenda, other, showEnded: showEnded)
@@ -159,10 +161,12 @@ struct MenuView: View {
         }
         // Finding a time, and editing, open on the event's week.
         .onChange(of: store.findTime?.event.id) { _, id in
-            if id != nil, let event = store.findTime?.event { show(day: event.start) }
+            if id != nil, let event = store.findTime?.event { catchUp(to: event.start) }
+            shownSession = store.findTime?.event.id
         }
         .onChange(of: store.composing?.id) { _, id in
-            if id != nil, let start = store.composing?.start { show(day: start) }
+            if id != nil, let start = store.composing?.start { catchUp(to: start) }
+            shownSession = store.composing?.id.uuidString
         }
         // A day picked in the editor: the grid follows to its week.
         .onChange(of: store.composing?.start) { _, start in
@@ -267,8 +271,13 @@ struct MenuView: View {
             duration: session.event.end.timeIntervalSince(session.event.start), notBefore: store.now, calendar: .current)
         let event = session.event
         return WeekView.Availability(event: event, busy: busy, free: free, names: names, unknown: unknown,
-                                     canMove: session.canMove, onMove: { start in
-            try await store.move(event, to: start)
+                                     canMove: session.canMove || session.proposes, proposes: session.proposes,
+                                     onMove: { start in
+            if session.proposes {
+                try await store.propose(event, start: start)
+            } else {
+                try await store.move(event, to: start)
+            }
             withAnimation(Motion.resize) { store.endFindingTime() }
         })
     }
@@ -579,6 +588,28 @@ struct MenuView: View {
     }
 
     /// Jumps to the day of `date`, counted in calendar days from today.
+    /// The editor or reschedule session the day offset has caught up with.
+    @State private var shownSession: String?
+
+    /// The event's day while a new session's day offset has not caught up.
+    private var pendingDay: Date? {
+        if let session = store.composing, session.id.uuidString != shownSession {
+            return Calendar.current.startOfDay(for: session.start)
+        }
+        if let session = store.findTime, store.composing == nil, session.event.id != shownSession {
+            return Calendar.current.startOfDay(for: session.event.start)
+        }
+        return nil
+    }
+
+    /// The day offset of `date`, with no animation: the panel shows it
+    /// already.
+    private func catchUp(to date: Date) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { show(day: date) }
+    }
+
     private func show(day date: Date) {
         let calendar = Calendar.current
         let delta = calendar.dateComponents([.day], from: calendar.startOfDay(for: store.now),

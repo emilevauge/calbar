@@ -21,14 +21,15 @@ struct FindTimeBar: View {
 
     init(session: EventStore.FindTime, onToggle: @escaping (String) -> Void, onEveryone: @escaping () -> Void,
          onDone: @escaping () -> Void) {
-        title = "Find a time for \u{201C}\(session.event.title)\u{201D}"
+        title = "Reschedule \u{201C}\(session.event.title)\u{201D}"
         duration = session.event.end.timeIntervalSince(session.event.start)
         people = session.people
         shown = session.shown
         availability = session.availability
         isLoading = session.isLoading
         error = session.error
-        hint = session.canMove ? "Click a time to move the event there." : nil
+        hint = session.canMove ? "Click a time to move the event there."
+            : session.proposes ? "Click a time to propose it to the organizer." : nil
         self.onToggle = onToggle
         self.onEveryone = onEveryone
         self.onDone = onDone
@@ -144,6 +145,8 @@ struct FindTimeBar: View {
 /// and Move.
 struct MoveConfirm: View {
     let event: CalendarEvent
+    /// Not the user's event: the time goes to the organizer as a proposal.
+    var proposes = false
     let start: Date
     let end: Date
     /// Names of the people busy then.
@@ -157,7 +160,7 @@ struct MoveConfirm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Move \u{201C}\(event.title)\u{201D}")
+            Text(proposes ? "Propose a new time for \u{201C}\(event.title)\u{201D}" : "Move \u{201C}\(event.title)\u{201D}")
                 .font(.system(size: 13, weight: .semibold))
                 .lineLimit(2)
             HStack(spacing: 6) {
@@ -184,7 +187,8 @@ struct MoveConfirm: View {
                 Text(error).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
             HStack {
-                Text(event.attendees.contains { !$0.isSelf } ? "Guests get the update." : "")
+                Text(proposes ? "Sent to the organizer with your answer."
+                     : event.attendees.contains { !$0.isSelf } ? "Guests get the update." : "")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                 Spacer()
@@ -196,12 +200,13 @@ struct MoveConfirm: View {
                         do {
                             try await onMove()
                         } catch {
-                            self.error = describeCreate(error).replacingOccurrences(of: "add the event", with: "move the event")
+                            self.error = describeCreate(error).replacingOccurrences(
+                                of: "add the event", with: proposes ? "send the proposal" : "move the event")
                         }
                         moving = false
                     }
                 } label: {
-                    if moving { ProgressView().controlSize(.small) } else { Text("Move") }
+                    if moving { ProgressView().controlSize(.small) } else { Text(proposes ? "Propose" : "Move") }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(moving)

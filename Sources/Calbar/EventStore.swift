@@ -836,6 +836,9 @@ final class EventStore: ObservableObject {
         var error: String?
         /// The user may move it: their own event.
         let canMove: Bool
+        /// The user is invited: a picked time goes to the organizer as a
+        /// proposal.
+        let proposes: Bool
 
         /// Busy times of the people shown whose calendar Google shares,
         /// the meeting's own time left out.
@@ -858,7 +861,7 @@ final class EventStore: ObservableObject {
             .filter { seen.insert($0.email.lowercased()).inserted }
         composing = nil
         findTime = FindTime(event: event, people: people, shown: Set(people.map { $0.email.lowercased() }),
-                            canMove: canEdit(event))
+                            canMove: canEdit(event), proposes: !canEdit(event) && event.canRespond)
     }
 
     func endFindingTime() {
@@ -916,6 +919,24 @@ final class EventStore: ObservableObject {
             findTime?.isLoading = false
             findTime?.error = describe(error)
         }
+    }
+
+    /// Proposes `start`, same length, to the organizer, in a note on the
+    /// user's answer.
+    func propose(_ event: CalendarEvent, start: Date) async throws {
+        guard let auth else { throw OAuthError.invalidGrant }
+        let end = start.addingTimeInterval(event.end.timeIntervalSince(event.start))
+        NSLog("Calbar: proposing a new time")
+        do {
+            try await withAccessToken(event.accountEmail, auth: auth) { [api] token in
+                try await api.propose(token: token, calendarID: event.calendarID, eventID: event.googleEventID,
+                                      start: start, end: end)
+            }
+        } catch APIError.insufficientScope {
+            accounts.markReadOnly(event.accountEmail)
+            throw APIError.insufficientScope
+        }
+        await refresh()
     }
 
     /// Moves the occurrence to start at `start`, same length, guests told.

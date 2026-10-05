@@ -349,8 +349,8 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   event is drawn at its new times (blue, or green when every guest is free then and orange
   when someone is not), the other events fade and let clicks through, the edited event stays
   faded at its old time with a dashed outline; a drag sets new times, a click moves the event
-  there with the same length. With guests, the grid shows their availability as when finding
-  a time (`freebusy.query` as the event's or the chosen calendar's account, for the days
+  there with the same length. With guests, the grid shows their availability as when
+  rescheduling (`freebusy.query` as the event's or the chosen calendar's account, for the days
   shown, again 300 ms after the guests or the week change; the edited event's old time taken
   out): busy times hatched, the slots that fit everyone green. Above the grid, the same bar as
   for finding a time ("Guests' availability", the length, Everyone and a chip per person, the
@@ -426,8 +426,15 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   request for Meet), in the user's time zone, then refreshes. Errors show in the editor; a
   missing scope marks the account read only. Calendars stored before the access role was known
   count as writable only when primary, until the next refresh fills it.
-- Finding a time (`EventStore.FindTime`, `FreeBusy`, `FindTimeBar`): the clock icon of
-  `EventActions` (events with guests) or "Find a Time…" in the context menu. The panel shows
+- Rescheduling (`EventStore.FindTime`, `FreeBusy`, `FindTimeBar`): the "Reschedule" icon of
+  `EventActions` (events with guests, a clock with a circular arrow) or "Reschedule…" in the
+  context menu. On an invitation (`canRespond`), a picked time is proposed rather than moved:
+  the API has no "propose a new time", so the user's answer gets the note "Proposed new time:
+  Tue, Oct 6, 14:00-14:45 (GMT+2)" (`RSVPPatch.proposal`; a pending answer becomes maybe),
+  sent with `sendUpdates=all`, which emails it to the organizer; the popover says "Propose a
+  new time for …", Propose. Editing and rescheduling open on the event's week from the first
+  frame (the panel uses the event's day until its day offset catches up, without animation),
+  and the card they start from closes. The panel shows
   the week grid on the event's week, with a bar: the event and its length, a chip per person
   (the user first, then the guests) and "Everyone"; a click on a person when everyone is shown
   shows that person alone, then adds or removes people. Availability comes from

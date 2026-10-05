@@ -50,7 +50,10 @@ struct WeekView: View {
         let names: [String: String]
         /// Names of the people whose calendar is not shared.
         let unknown: [String]
+        /// A click picks a time: to move the event, or to propose.
         let canMove: Bool
+        /// Picking proposes the time to the organizer rather than moving.
+        let proposes: Bool
         let onMove: (Date) async throws -> Void
 
         var minutes: Int { max(Int(event.end.timeIntervalSince(event.start) / 60), 15) }
@@ -95,10 +98,13 @@ struct WeekView: View {
             }
         }
         .frame(width: width)
-        // Finding a time starts from an event's card: it closes.
+        // Rescheduling and editing start from an event's card: it closes.
         .onChange(of: availability?.event.id) {
             opened = nil
             draft = nil
+        }
+        .onChange(of: slot != nil) {
+            opened = nil
         }
     }
 
@@ -405,7 +411,7 @@ struct WeekView: View {
             }), arrowEdge: .trailing) {
                 if draft.moving, let availability {
                     let slot = DateInterval(start: start, end: end)
-                    MoveConfirm(event: availability.event, start: start, end: end,
+                    MoveConfirm(event: availability.event, proposes: availability.proposes, start: start, end: end,
                                 busy: FreeBusy.conflicts(slot, busy: availability.busy).map { availability.names[$0] ?? $0 },
                                 unknown: availability.unknown,
                                 onMove: {

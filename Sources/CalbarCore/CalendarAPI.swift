@@ -111,6 +111,16 @@ public struct CalendarAPI: Sendable {
         _ = try await send("PATCH", path, query: [URLQueryItem(name: "sendUpdates", value: "all")], body: body, token: token)
     }
 
+    /// Proposes `start..<end` to the organizer of an invitation: the
+    /// user's answer with a note (`RSVPPatch.proposal`), the organizer
+    /// told by Google.
+    public func propose(token: String, calendarID: String, eventID: String, start: Date, end: Date) async throws {
+        let path = "/calendars/\(FormEncoding.escape(calendarID))/events/\(FormEncoding.escape(eventID))"
+        let event = try await send("GET", path, query: [], body: nil, token: token)
+        let body = try RSVPPatch.proposal(event: event, start: start, end: end)
+        _ = try await send("PATCH", path, query: [URLQueryItem(name: "sendUpdates", value: "all")], body: body, token: token)
+    }
+
     /// Adds an event, with a Google Meet link when `NewEvent.addMeet`.
     /// `sendUpdates=all` emails the invitation to the guests.
     public func insert(token: String, event: NewEvent) async throws {

@@ -274,7 +274,7 @@ struct EventRow: View {
             Button("Edit Event…") { store.edit(event) }
         }
         if event.attendees.contains(where: { !$0.isSelf }) {
-            Button(store.canEdit(event) ? "Find a Time…" : "Show Guests' Availability") {
+            Button("Reschedule…") {
                 withAnimation(Motion.resize) { store.startFindingTime(for: event) }
             }
         }

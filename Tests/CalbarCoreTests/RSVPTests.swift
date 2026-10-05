@@ -185,4 +185,21 @@ import Testing
         }
         #expect(http.requests.count == 1)
     }
+
+    @Test func proposalNoteAndAnswer() throws {
+        let paris = TimeZone(identifier: "Europe/Paris")!
+        let start = TestClock.date("2026-10-06T14:00:00+02:00")
+        #expect(RSVPPatch.proposalNote(start: start, end: start.addingTimeInterval(2700), timeZone: paris)
+                == "Proposed new time: Tue, Oct 6, 14:00-14:45 (GMT+2)")
+        let event = #"{"attendees": [{"email": "boss@x.com", "organizer": true}, {"email": "me@x.com", "self": true, "responseStatus": "needsAction"}]}"#
+        let body = try RSVPPatch.proposal(event: Data(event.utf8), start: start, end: start.addingTimeInterval(2700), timeZone: paris)
+        let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let me = try #require((json["attendees"] as? [[String: Any]])?.last)
+        #expect(me["responseStatus"] as? String == "tentative")
+        #expect((me["comment"] as? String)?.hasPrefix("Proposed new time:") == true)
+        let mine = #"{"attendees": [{"email": "me@x.com", "self": true, "organizer": true}]}"#
+        #expect(throws: RSVPPatch.Failure.notInvited) {
+            try RSVPPatch.proposal(event: Data(mine.utf8), start: start, end: start)
+        }
+    }
 }
