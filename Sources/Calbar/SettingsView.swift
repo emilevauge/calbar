@@ -149,7 +149,7 @@ struct SettingsView: View {
                     .font(.caption)
             }
             Spacer(minLength: 8)
-            if account.needsReconnect || !account.canReply {
+            if account.needsReconnect || !account.canReply || account.contactSources.isEmpty {
                 Button("Reconnect") {
                     app.addAccount(loginHint: account.email)
                 }
@@ -207,6 +207,9 @@ struct SettingsView: View {
                 .foregroundStyle(.red)
         } else if !account.canReply {
             Text("Read only · reconnect to reply to invitations")
+                .foregroundStyle(.secondary)
+        } else if account.contactSources.isEmpty {
+            Text("Connected · reconnect to search your Google contacts")
                 .foregroundStyle(.secondary)
         } else {
             Text("Connected")
