@@ -169,6 +169,11 @@ public struct CalendarAPI: Sendable {
         _ = try await send("PATCH", path, query: query, body: patch.body, token: token)
     }
 
+    /// A POST with a JSON body, its answer's body.
+    func post(_ path: String, body: Data, token: String) async throws -> Data {
+        try await send("POST", path, query: [], body: body, token: token)
+    }
+
     private func eventPath(_ calendarID: String, _ eventID: String) -> String {
         "/calendars/\(FormEncoding.escape(calendarID))/events/\(FormEncoding.escape(eventID))"
     }

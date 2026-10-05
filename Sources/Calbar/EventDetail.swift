@@ -196,6 +196,13 @@ struct EventActions: View {
                     Image(systemName: "square.and.pencil")
                 }
             }
+            if event.attendees.contains(where: { !$0.isSelf }) {
+                ActionIcon(help: store.canEdit(event) ? "Find a time: guests' availability, to move it"
+                                                      : "Guests' availability",
+                           action: { withAnimation(Motion.resize) { store.startFindingTime(for: event) } }) {
+                    Image(systemName: "calendar.badge.clock")
+                }
+            }
             if !AppDelegate.shared.accounts.writableCalendars.isEmpty {
                 ActionIcon(help: "Duplicate this event", action: { store.duplicate(event) }) {
                     Image(systemName: "plus.square.on.square")

@@ -669,9 +669,119 @@ final class EventStore: ObservableObject {
         await refresh()
     }
 
+    // MARK: finding a time
+
+    /// The week grid shows the guests' availability for `event`: their
+    /// busy times, and the slots where it fits for everyone shown.
+    struct FindTime {
+        let event: CalendarEvent
+        /// The guests and the user, in the event's order, the user first.
+        let people: [Person]
+        /// Lowercased emails shown; everyone at first.
+        var shown: Set<String>
+        var availability: [String: FreeBusy.Availability] = [:]
+        var loaded: DateInterval?
+        var isLoading = false
+        var error: String?
+        /// The user may move it: their own event.
+        let canMove: Bool
+
+        /// Busy times of the people shown whose calendar Google shares,
+        /// the meeting's own time left out.
+        var busy: [String: [DateInterval]] {
+            let own = DateInterval(start: event.start, end: max(event.end, event.start))
+            var result: [String: [DateInterval]] = [:]
+            for email in shown {
+                if case .busy(let spans) = availability[email] { result[email] = FreeBusy.removing(own, from: spans) }
+            }
+            return result
+        }
+    }
+
+    @Published var findTime: FindTime?
+
+    func startFindingTime(for event: CalendarEvent) {
+        var seen = Set<String>()
+        let me = event.attendees.first(where: \.isSelf)?.person ?? Person(email: event.accountEmail, name: nil)
+        let people = ([me] + event.attendees.filter { !$0.isSelf }.map(\.person))
+            .filter { seen.insert($0.email.lowercased()).inserted }
+        editRequest = nil
+        findTime = FindTime(event: event, people: people, shown: Set(people.map { $0.email.lowercased() }),
+                            canMove: canEdit(event))
+    }
+
+    func endFindingTime() {
+        findTime = nil
+    }
+
+    /// Everyone shown, or only `email` when everyone was; otherwise
+    /// `email` in or out.
+    func toggleShown(_ email: String) {
+        guard var session = findTime else { return }
+        let key = email.lowercased()
+        let everyone = Set(session.people.map { $0.email.lowercased() })
+        if session.shown == everyone {
+            session.shown = [key]
+        } else if session.shown.contains(key) {
+            session.shown.remove(key)
+            if session.shown.isEmpty { session.shown = everyone }
+        } else {
+            session.shown.insert(key)
+        }
+        findTime = session
+    }
+
+    func showEveryone() {
+        guard var session = findTime else { return }
+        session.shown = Set(session.people.map { $0.email.lowercased() })
+        findTime = session
+    }
+
+    /// Reads the availability of everyone over `days`, unless already
+    /// read; asked as the event's account.
+    func loadAvailability(days: [Date]) async {
+        guard let session = findTime, let auth, let first = days.min(), let last = days.max() else { return }
+        let calendar = Calendar.current
+        let range = DateInterval(start: calendar.startOfDay(for: first),
+                                 end: calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: last)) ?? last)
+        if let loaded = session.loaded, loaded.start <= range.start, loaded.end >= range.end { return }
+        let id = session.event.id
+        findTime?.isLoading = true
+        findTime?.error = nil
+        do {
+            var result: [String: FreeBusy.Availability] = [:]
+            try await withAccessToken(session.event.accountEmail, auth: auth) { [api] token in
+                result = try await api.freeBusy(token: token, emails: session.people.map(\.email),
+                                                from: range.start, to: range.end)
+            }
+            guard findTime?.event.id == id else { return }
+            findTime?.availability = result
+            findTime?.loaded = range
+            findTime?.isLoading = false
+            NSLog("Calbar: availability of %d people read", result.count)
+        } catch {
+            guard findTime?.event.id == id else { return }
+            NSLog("Calbar: reading availability failed: %@", "\(error)")
+            findTime?.isLoading = false
+            findTime?.error = describe(error)
+        }
+    }
+
+    /// Moves the occurrence to start at `start`, same length, guests told.
+    func move(_ event: CalendarEvent, to start: Date) async throws {
+        let notes = HTMLText.plainText(event.notes ?? "")
+        var draft = NewEvent(title: event.title == "(No title)" ? "" : event.title, start: start,
+                             end: start.addingTimeInterval(event.end.timeIntervalSince(event.start)),
+                             calendarID: event.calendarID, addMeet: false, location: event.location ?? "",
+                             notes: notes, guests: event.attendees.filter { !$0.isSelf }.map(\.person.email))
+        draft.isAllDay = event.isAllDay
+        try await update(event, to: draft, notesText: notes, scope: .this)
+    }
+
     /// Declined events answered while the popover was open leave the list.
     func popoverDidClose() {
         editRequest = nil
+        findTime = nil
         recentlyAnswered = recentlyAnswered.intersection(pendingAnswers)
     }
 

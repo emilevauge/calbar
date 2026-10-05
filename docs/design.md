@@ -413,7 +413,24 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   request for Meet), in the user's time zone, then refreshes. Errors show in the editor; a
   missing scope marks the account read only. Calendars stored before the access role was known
   count as writable only when primary, until the next refresh fills it.
-- Event actions (`EventActions`): edit, duplicate, delete, Google Calendar and, on a row,
+- Finding a time (`EventStore.FindTime`, `FreeBusy`, `FindTimeBar`): the clock icon of
+  `EventActions` (events with guests) or "Find a Time…" in the context menu. The panel shows
+  the week grid on the event's week, with a bar: the event and its length, a chip per person
+  (the user first, then the guests) and "Everyone"; a click on a person when everyone is shown
+  shows that person alone, then adds or removes people. Availability comes from
+  `freebusy.query` (allowed by `calendar.readonly`, 50 calendars per query), as the event's
+  account, for the days shown, read again when the week changes: busy times only. Calendars
+  Google does not share (`errors` in the answer, often outside the organization) show a
+  question mark and count as free. The event's own time is taken out of everyone's busy
+  times. Each shown person's busy times are a light gray band, darker where several overlap;
+  the slots within the grid's hours, from now on, long enough for the event and free for
+  everyone shown are green. The other events fade and let clicks through; the event itself
+  has a dashed accent outline. On the user's own event, a click places it there (to the
+  quarter hour, green or orange as the slot is free or not) and a popover confirms: day and
+  times, "Everyone is free" or "Busy: Ann, Bob", the people not shared, Move. Moving patches
+  the times alone (`EventStore.move`, `sendUpdates=all` with guests) and ends the search.
+  Done or `esc` ends it too, as does closing the panel.
+- Event actions (`EventActions`): edit, find a time, duplicate, delete, Google Calendar and, on a row,
   Join, each an `ActionIcon`: 26 by 24, 13 pt, secondary (Join in the accent color), a light
   rounded square on hover (the recurring trash is a menu with the same face). At the top
   right: on the card's time line, beside its Join button, and on the top line of an expanded

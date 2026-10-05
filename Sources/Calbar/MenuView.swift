@@ -34,13 +34,19 @@ struct MenuView: View {
         let peekID = peeking ? app.peekEvent(now: store.now)?.id : nil
         let focusID = peeking ? peekID : (other == nil ? Self.focusID(agenda, now: store.now) : nil)
 
-        let week = viewMode == .week && !peeking
-        let dayGrid = viewMode == .dayGrid && !peeking
+        // Finding a time always shows the week grid.
+        let week = (viewMode == .week || store.findTime != nil) && !peeking
+        let dayGrid = viewMode == .dayGrid && !peeking && !week
 
         VStack(alignment: .leading, spacing: 0) {
             if week {
                 weekHeader(day: day)
                 Divider()
+                if let session = store.findTime {
+                    FindTimeBar(session: session, onToggle: store.toggleShown, onEveryone: store.showEveryone,
+                                onDone: { withAnimation(Motion.resize) { store.endFindingTime() } })
+                    Divider()
+                }
                 weekContent(day: day)
                 Divider()
                 footer
@@ -106,6 +112,10 @@ struct MenuView: View {
         .onKeyPress(.escape) {
             // An editor in the panel handles `esc` itself (`onEscape`).
             if store.editRequest != nil { return .handled }
+            if store.findTime != nil {
+                withAnimation(Motion.resize) { store.endFindingTime() }
+                return .handled
+            }
             if store.askingDeleteScope != nil {
                 withAnimation(Motion.resize) { store.askingDeleteScope = nil }
                 return .handled
@@ -126,6 +136,10 @@ struct MenuView: View {
         .onAppear {
             focused = true
             applyRequestedEvent()
+        }
+        // Finding a time opens on the event's week.
+        .onChange(of: store.findTime?.event.id) { _, id in
+            if id != nil, let event = store.findTime?.event { show(day: event.start) }
         }
         .onChange(of: app.popoverCloseCount) {
             showToday()
@@ -197,6 +211,27 @@ struct MenuView: View {
         )
     }
 
+    /// What the grid draws while finding a time.
+    private func availability(days: [Date]) -> WeekView.Availability? {
+        guard let session = store.findTime else { return nil }
+        let busy = session.busy
+        var names: [String: String] = [:]
+        for person in session.people { names[person.email.lowercased()] = FindTimeBar.firstName(person) }
+        let unknown = session.people.filter {
+            session.shown.contains($0.email.lowercased()) && session.availability[$0.email.lowercased()] == .unknown
+        }.map(FindTimeBar.firstName)
+        let free = session.loaded == nil ? [] : FreeBusy.commonFree(
+            busy: Array(busy.values), days: days,
+            startHour: min(max(weekStartHour, 0), 23), endHour: min(max(weekEndHour, weekStartHour + 1), 24),
+            duration: session.event.end.timeIntervalSince(session.event.start), notBefore: store.now, calendar: .current)
+        let event = session.event
+        return WeekView.Availability(event: event, busy: busy, free: free, names: names, unknown: unknown,
+                                     canMove: session.canMove, onMove: { start in
+            try await store.move(event, to: start)
+            withAnimation(Motion.resize) { store.endFindingTime() }
+        })
+    }
+
     private func weekContent(day: Date) -> some View {
         let days = weekDays(day)
         return WeekView(
@@ -210,8 +245,12 @@ struct MenuView: View {
                 show(day: picked)
             },
             onJoin: join,
-            composer: app.composer
+            composer: store.findTime == nil ? app.composer : nil,
+            availability: availability(days: days)
         )
+        .task(id: "\(store.findTime?.event.id ?? "")|\(days.first?.timeIntervalSince1970 ?? 0)") {
+            await store.loadAvailability(days: days)
+        }
     }
 
     // MARK: peek

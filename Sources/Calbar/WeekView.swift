@@ -21,6 +21,25 @@ struct WeekView: View {
     var width: CGFloat = Self.width
     /// Creating events from a selected slot; none without it.
     var composer: EventComposer?
+    /// Finding a time for an event: the guests' busy times and the free
+    /// slots drawn on the grid, a click proposing to move it there.
+    var availability: Availability?
+
+    struct Availability {
+        let event: CalendarEvent
+        /// Busy times of each person shown, by email.
+        let busy: [String: [DateInterval]]
+        /// Where the event fits for everyone shown.
+        let free: [DateInterval]
+        /// Display names by lowercased email.
+        let names: [String: String]
+        /// Names of the people whose calendar is not shared.
+        let unknown: [String]
+        let canMove: Bool
+        let onMove: (Date) async throws -> Void
+
+        var minutes: Int { max(Int(event.end.timeIntervalSince(event.start) / 60), 15) }
+    }
     static let gutter: CGFloat = 40
     static let hourHeight: CGFloat = 44
     @State private var opened: String?
@@ -36,6 +55,8 @@ struct WeekView: View {
         let start: Int
         let end: Int
         let editing: Bool
+        /// A new time for `availability`'s event, not a new event.
+        var moving = false
     }
     /// The all-day row shows every event instead of two per day.
     @State private var allDayUnfolded = false
@@ -59,6 +80,11 @@ struct WeekView: View {
             }
         }
         .frame(width: width)
+        // Finding a time starts from an event's card: it closes.
+        .onChange(of: availability?.event.id) {
+            opened = nil
+            draft = nil
+        }
     }
 
     /// Text on the opaque blocks. Not `.secondary`: on the popover's
@@ -247,6 +273,13 @@ struct WeekView: View {
                 .gesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .local)
                         .onChanged { value in
+                            if let availability {
+                                guard availability.canMove else { return }
+                                let start = moveStart(value.location.y / minuteHeight, availability)
+                                draft = Draft(day: day, start: start, end: start + availability.minutes,
+                                              editing: false, moving: true)
+                                return
+                            }
                             // A new selection replaces one being edited.
                             guard composer != nil else { return }
                             let r = NewEvent.range(from: value.startLocation.y / minuteHeight,
@@ -255,6 +288,21 @@ struct WeekView: View {
                             draft = Draft(day: day, start: r.start, end: r.end, editing: false)
                         }
                         .onEnded { value in
+                            if let availability {
+                                guard availability.canMove else { return }
+                                let start = moveStart(value.location.y / minuteHeight, availability)
+                                let selection = Draft(day: day, start: start, end: start + availability.minutes,
+                                                      editing: false, moving: true)
+                                draft = selection
+                                let wait = max(0.05, 0.35 - Date().timeIntervalSince(editorClosedAt))
+                                DispatchQueue.main.asyncAfter(deadline: .now() + wait) {
+                                    guard let current = draft, current.moving, current.day == selection.day,
+                                          current.start == selection.start else { return }
+                                    draft = Draft(day: day, start: start, end: start + availability.minutes,
+                                                  editing: true, moving: true)
+                                }
+                                return
+                            }
                             guard let composer else { return }
                             let r = NewEvent.range(from: value.startLocation.y / minuteHeight,
                                                    to: value.location.y / minuteHeight,
@@ -272,6 +320,9 @@ struct WeekView: View {
                             }
                         }
                 )
+            if let availability {
+                availabilityLayer(day, availability, minuteHeight: minuteHeight)
+            }
             if case .loading = content {
                 ProgressView().controlSize(.small)
                     .frame(maxWidth: .infinity)
@@ -282,6 +333,17 @@ struct WeekView: View {
                 // 1 pt inset all round: back-to-back blocks get a gap.
                 block(p, height: max(CGFloat(p.endMinute - p.startMinute) * minuteHeight - 2, 14))
                     .frame(width: width - 2)
+                    // Finding a time: the other events step back and let
+                    // clicks through to the slots under them.
+                    .opacity(availability.map { $0.event.id == p.event.id ? 1 : 0.4 } ?? 1)
+                    .allowsHitTesting(availability == nil)
+                    .overlay {
+                        if availability?.event.id == p.event.id {
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, dash: [4, 2]))
+                                .allowsHitTesting(false)
+                        }
+                    }
                     // Padding, not offset: an offset moves the drawing but
                     // not the frame a popover anchors on.
                     .padding(.leading, 1 + CGFloat(p.lane) * width)
@@ -301,8 +363,13 @@ struct WeekView: View {
         let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
         let start = draft.day.addingTimeInterval(TimeInterval(draft.start * 60))
         let end = draft.day.addingTimeInterval(TimeInterval(draft.end * 60))
-        return shape.fill(Color.accentColor.opacity(0.25))
-            .overlay(shape.strokeBorder(Color.accentColor, lineWidth: 1))
+        // A new time is green where everyone is free, orange otherwise.
+        let tint: Color = draft.moving
+            ? (availability.map { FreeBusy.conflicts(DateInterval(start: start, end: end), busy: $0.busy).isEmpty } == true
+                ? .green : .orange)
+            : .accentColor
+        return shape.fill(tint.opacity(0.25))
+            .overlay(shape.strokeBorder(tint, lineWidth: 1))
             .overlay(alignment: .topLeading) {
                 Text("\(AgendaFormat.clock(start, .current))-\(AgendaFormat.clock(end, .current))")
                     .font(.system(size: 9.5, weight: .semibold))
@@ -319,7 +386,17 @@ struct WeekView: View {
                 self.draft = nil
                 editorClosedAt = Date()
             }), arrowEdge: .trailing) {
-                if let composer {
+                if draft.moving, let availability {
+                    let slot = DateInterval(start: start, end: end)
+                    MoveConfirm(event: availability.event, start: start, end: end,
+                                busy: FreeBusy.conflicts(slot, busy: availability.busy).map { availability.names[$0] ?? $0 },
+                                unknown: availability.unknown,
+                                onMove: {
+                                    try await availability.onMove(start)
+                                    self.draft = nil
+                                },
+                                onCancel: { self.draft = nil })
+                } else if let composer {
                     EventEditor(start: start, end: end, composer: composer, onDone: { self.draft = nil })
                 }
             }
@@ -329,6 +406,43 @@ struct WeekView: View {
     }
 
     /// Red line at the current time, with a dot on the left.
+    /// The start of the moved event under the pointer: to the quarter
+    /// hour, the event ending by midnight.
+    private func moveStart(_ minute: Double, _ availability: Availability) -> Int {
+        let m = Int(minute.rounded(.down))
+        return min(max(m - m % 15, 0), 24 * 60 - availability.minutes)
+    }
+
+    /// Each shown person's busy times in light gray, darker where several
+    /// overlap, and the free slots in green.
+    private func availabilityLayer(_ day: Date, _ availability: Availability, minuteHeight: CGFloat) -> some View {
+        let midnight = Calendar.current.startOfDay(for: day)
+        let next = Calendar.current.date(byAdding: .day, value: 1, to: midnight) ?? midnight.addingTimeInterval(86_400)
+        func minutes(_ span: DateInterval) -> (Double, Double)? {
+            guard span.end > midnight, span.start < next else { return nil }
+            return (max(span.start, midnight).timeIntervalSince(midnight) / 60,
+                    min(span.end, next).timeIntervalSince(midnight) / 60)
+        }
+        let busy = availability.busy.values.flatMap { $0 }.compactMap(minutes)
+        let free = availability.free.compactMap(minutes)
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(busy.enumerated()), id: \.offset) { _, span in
+                Rectangle()
+                    .fill(Color.primary.opacity(0.07))
+                    .frame(width: columnWidth - 1, height: CGFloat(span.1 - span.0) * minuteHeight)
+                    .padding(.top, CGFloat(span.0) * minuteHeight)
+            }
+            ForEach(Array(free.enumerated()), id: \.offset) { _, span in
+                Rectangle()
+                    .fill(Color.green.opacity(0.16))
+                    .overlay(alignment: .leading) { Rectangle().fill(Color.green.opacity(0.7)).frame(width: 2) }
+                    .frame(width: columnWidth - 1, height: CGFloat(span.1 - span.0) * minuteHeight)
+                    .padding(.top, CGFloat(span.0) * minuteHeight)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
     private func nowLine(_ day: Date, minuteHeight: CGFloat) -> some View {
         let minutes = now.timeIntervalSince(Calendar.current.startOfDay(for: day)) / 60
         return HStack(spacing: 0) {
