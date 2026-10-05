@@ -184,6 +184,15 @@ struct EventDetail: View {
 /// above the footer; for a recurring event the trash asks which
 /// occurrences first.
 struct EventActions: View {
+    /// A symbol fitted in a 14 point square: at one font size, symbols
+    /// of different shapes look of different sizes and off center.
+    static func symbol(_ name: String) -> some View {
+        Image(systemName: name)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 14, height: 14)
+    }
+
     let event: CalendarEvent
     /// The Join button of a row, last, in the same style.
     var onJoin: (() -> Void)?
@@ -193,19 +202,19 @@ struct EventActions: View {
         HStack(spacing: 2) {
             if store.canEdit(event) {
                 ActionIcon(help: "Edit this event", action: { store.edit(event) }) {
-                    Image(systemName: "square.and.pencil")
+                    EventActions.symbol("square.and.pencil")
                 }
             }
             if event.attendees.contains(where: { !$0.isSelf }) {
                 ActionIcon(help: store.canEdit(event) ? "Find a time: guests' availability, to move it"
                                                       : "Guests' availability",
                            action: { withAnimation(Motion.resize) { store.startFindingTime(for: event) } }) {
-                    Image(systemName: "calendar.badge.clock")
+                    EventActions.symbol("clock.arrow.circlepath")
                 }
             }
             if !AppDelegate.shared.accounts.writableCalendars.isEmpty {
                 ActionIcon(help: "Duplicate this event", action: { store.duplicate(event) }) {
-                    Image(systemName: "plus.square.on.square")
+                    EventActions.symbol("plus.square.on.square")
                 }
             }
             if store.canDelete(event) {
@@ -215,24 +224,24 @@ struct EventActions: View {
                             Button(scope.label) { withAnimation(Motion.resize) { store.delete(event, scope: scope) } }
                         }
                     }) {
-                        Image(systemName: "trash")
+                        EventActions.symbol("trash")
                     }
                 } else {
                     ActionIcon(help: "Delete this event (⌫)", hoverColor: .red, action: {
                         withAnimation(Motion.resize) { store.delete(event) }
                     }) {
-                        Image(systemName: "trash")
+                        EventActions.symbol("trash")
                     }
                 }
             }
             if let url = event.webURL {
                 ActionIcon(help: "Open in Google Calendar", action: { NSWorkspace.shared.open(url) }) {
-                    GoogleCalendarIcon(size: 13.5)
+                    GoogleCalendarIcon(size: 13)
                 }
             }
             if let onJoin, let meeting = event.meeting {
                 ActionIcon(help: "Join on \(meeting.provider.displayName)", tint: .accentColor, action: onJoin) {
-                    Image(systemName: "video")
+                    EventActions.symbol("video")
                 }
             }
         }

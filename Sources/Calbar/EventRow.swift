@@ -136,7 +136,7 @@ struct EventRow: View {
                         .padding(.top, -2)
                 } else if let meeting = event.meeting, canJoin {
                     ActionIcon(help: "Join on \(meeting.provider.displayName)", tint: .accentColor, action: onJoin) {
-                        Image(systemName: "video")
+                        EventActions.symbol("video")
                     }
                     .padding(.top, -2)
                 }
