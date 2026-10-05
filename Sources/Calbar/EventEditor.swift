@@ -534,6 +534,10 @@ private struct GuestField: View {
     @State private var remote: [ContactIndex.Contact] = []
     @State private var remoteQuery = ""
     @FocusState private var focused: Bool
+    /// The pointer is on the suggestions: a click there takes the focus
+    /// from the field on mouse down, which must not hide them before the
+    /// click lands.
+    @State private var overSuggestions = false
 
     /// People met first, then Google matches, one per email, six at most.
     private var suggestions: [ContactIndex.Contact] {
@@ -595,7 +599,7 @@ private struct GuestField: View {
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
-            if focused, !suggestions.isEmpty {
+            if focused || overSuggestions, !suggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(suggestions.enumerated()), id: \.element.email) { i, contact in
                         Button { add(contact) } label: {
@@ -623,6 +627,7 @@ private struct GuestField: View {
                 .padding(3)
                 .background(Color(nsColor: .textBackgroundColor).opacity(0.8),
                             in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .onHover { overSuggestions = $0 }
             }
         }
     }
@@ -668,6 +673,8 @@ private struct GuestField: View {
         }
         text = ""
         highlighted = 0
+        overSuggestions = false
+        focused = true
     }
 }
 
