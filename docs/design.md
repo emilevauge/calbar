@@ -451,7 +451,7 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   times, "Everyone is free" or "Busy: Ann, Bob", the people not shared, Move. Moving patches
   the times alone (`EventStore.move`, `sendUpdates=all` with guests) and ends the search.
   Done or `esc` ends it too, as does closing the panel.
-- Event actions (`EventActions`): edit, find a time, duplicate, delete, Google Calendar and, on a row,
+- Event actions (`EventActions`): edit, reschedule, duplicate, delete, Google Calendar and, on a row,
   Join, each an `ActionIcon`: 26 by 24, 13 pt, secondary (Join in the accent color), a light
   rounded square on hover (the recurring trash is a menu with the same face). At the top
   right: on the card's time line, beside its Join button, and on the top line of an expanded
