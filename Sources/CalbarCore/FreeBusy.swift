@@ -95,6 +95,14 @@ public enum FreeBusy {
         return result.filter { $0.duration >= duration }
     }
 
+    /// The first start from `after` on where `duration` fits in one of
+    /// the `free` slots.
+    public static func nextFree(after: Date, duration: TimeInterval, free: [DateInterval]) -> Date? {
+        free.sorted { $0.start < $1.start }
+            .first { max($0.start, after).addingTimeInterval(duration) <= $0.end && $0.end > after }
+            .map { max($0.start, after) }
+    }
+
     /// Who in `busy` is busy at some point of `slot`.
     public static func conflicts(_ slot: DateInterval, busy: [String: [DateInterval]]) -> [String] {
         busy.filter { _, spans in spans.contains { $0.start < slot.end && slot.start < $0.end } }

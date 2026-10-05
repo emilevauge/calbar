@@ -21,6 +21,8 @@ struct EventComposer {
     let create: (NewEvent, String) async throws -> Void
     /// The event, the edited copy, the description as shown, which occurrences.
     let update: (CalendarEvent, NewEvent, String, RecurrenceScope) async throws -> Void
+    /// Availability of these emails over this interval, asked as this account.
+    let availability: (String, [String], DateInterval) async throws -> [String: FreeBusy.Availability]
 }
 
 /// The details of an event, in a popover, laid out as the event cards:
@@ -66,6 +68,11 @@ struct EventEditor: View {
     @State private var chosenCalendar: String?
     @State private var chosenConference: String?
     @FocusState private var titleFocused: Bool
+    /// The guests' availability under their line, remembered.
+    @AppStorage("editorShowsAvailability") private var showsAvailability = true
+    @State private var availability: [String: FreeBusy.Availability] = [:]
+    @State private var availabilityLoading = false
+    @State private var availabilityError: String?
     /// `esc` with changes: asks before throwing them away.
     @State private var confirmingDiscard = false
     /// The fields as the editor opened, to tell whether anything changed.
@@ -302,6 +309,21 @@ struct EventEditor: View {
             }
             line("person.2", alignment: .top) {
                 GuestField(guests: $guests, contacts: contacts)
+                if !guests.isEmpty {
+                    Button {
+                        withAnimation(Motion.resize) { showsAvailability.toggle() }
+                    } label: {
+                        Image(systemName: "calendar.badge.clock")
+                            .foregroundStyle(showsAvailability ? Color.accentColor : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(showsAvailability ? "Hide the guests' availability" : "Find a time: the guests' availability")
+                }
+            }
+            if showsAvailability, !guests.isEmpty, !isAllDay {
+                availabilityStrip
+                    .padding(.leading, 26)
+                    .task(id: availabilityKey) { await loadAvailability() }
             }
             line("mappin.and.ellipse") {
                 TextField("Add location", text: $location)
@@ -397,6 +419,76 @@ struct EventEditor: View {
             Spacer(minLength: 0)
         }
         .frame(minHeight: 20)
+    }
+
+    // MARK: availability
+
+    /// The account that asks Google: the event's, else the chosen calendar's.
+    private var availabilityAccount: String? { original?.accountEmail ?? selected?.email }
+
+    /// The user and the guests, read again when they or the day change.
+    private var availabilityKey: String {
+        let day = Calendar.current.startOfDay(for: start).timeIntervalSince1970
+        return "\(availabilityAccount ?? "")|\(guests.map { $0.email.lowercased() }.sorted().joined(separator: ","))|\(day)"
+    }
+
+    /// Seven days from the event's, so "Next free" can look ahead.
+    private var availabilityRange: DateInterval {
+        let day = Calendar.current.startOfDay(for: start)
+        return DateInterval(start: day, end: Calendar.current.date(byAdding: .day, value: 7, to: day) ?? day)
+    }
+
+    private func loadAvailability() async {
+        guard let account = availabilityAccount else { return }
+        // Typing a guest changes the list on each chip: wait for a pause.
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        let emails = [account] + guests.map(\.email).filter { $0.lowercased() != account.lowercased() }
+        availabilityLoading = true
+        availabilityError = nil
+        do {
+            let result = try await composer.availability(account, emails, availabilityRange)
+            guard !Task.isCancelled else { return }
+            availability = result
+        } catch {
+            guard !Task.isCancelled else { return }
+            availabilityError = "Availability unavailable"
+        }
+        availabilityLoading = false
+    }
+
+    private var availabilityStrip: some View {
+        let account = (availabilityAccount ?? "").lowercased()
+        let defaults = UserDefaults.standard
+        let startHour = min(max(defaults.integer(forKey: Prefs.weekStartHourKey), 0), 23)
+        let endHour = min(max(defaults.integer(forKey: Prefs.weekEndHourKey), startHour + 1), 24)
+        var rows = [AvailabilityStrip.Row(email: account, name: "You")]
+        for guest in guests where guest.email.lowercased() != account {
+            rows.append(.init(email: guest.email.lowercased(),
+                              name: FindTimeBar.firstName(Person(email: guest.email, name: guest.name))))
+        }
+        // The event's old time keeps its guests busy in Google.
+        let own = original.map { DateInterval(start: $0.start, end: max($0.end, $0.start)) }
+        var busy: [String: [DateInterval]] = [:]
+        var unknown = Set<String>()
+        for row in rows {
+            switch availability[row.email] {
+            case .busy(let spans): busy[row.email] = own.map { FreeBusy.removing($0, from: spans) } ?? spans
+            case .unknown: unknown.insert(row.email)
+            case nil: break
+            }
+        }
+        let days = (0..<7).compactMap { Calendar.current.date(byAdding: .day, value: $0, to: availabilityRange.start) }
+        let free = availability.isEmpty ? [] : FreeBusy.commonFree(
+            busy: Array(busy.values), days: days, startHour: startHour, endHour: endHour,
+            duration: end.timeIntervalSince(start), notBefore: Date(), calendar: .current)
+        return AvailabilityStrip(rows: rows, busy: busy, unknown: unknown, free: free, start: start, end: end,
+                                 startHour: startHour, endHour: endHour, isLoading: availabilityLoading,
+                                 error: availabilityError, onPick: { picked in
+            let duration = end.timeIntervalSince(start)
+            start = picked
+            end = picked.addingTimeInterval(duration)
+        })
     }
 
     /// Every field the user can change, as one string.
