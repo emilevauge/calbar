@@ -544,7 +544,12 @@ final class EventStore: ObservableObject {
     }
 
     @Published var composing: Composing?
+    /// An editor asked from an event's card or row: the panel first shows
+    /// the week grid, as the Week button does, then opens it
+    /// (`commitComposing`), one change at a time.
+    @Published private(set) var pendingComposing: Composing?
 
+    /// A new event from the grid, already shown: the editor opens at once.
     func compose(_ mode: Composing.Mode, start: Date, end: Date) {
         findTime = nil
         askingDeleteScope = nil
@@ -552,11 +557,21 @@ final class EventStore: ObservableObject {
     }
 
     func edit(_ event: CalendarEvent) {
-        compose(.edit(event), start: event.start, end: event.end)
+        askingDeleteScope = nil
+        pendingComposing = Composing(mode: .edit(event), start: event.start, end: event.end)
     }
 
     func duplicate(_ event: CalendarEvent) {
-        compose(.duplicate(event), start: event.start, end: event.end)
+        askingDeleteScope = nil
+        pendingComposing = Composing(mode: .duplicate(event), start: event.start, end: event.end)
+    }
+
+    /// Opens the editor asked by `edit` or `duplicate`.
+    func commitComposing() {
+        guard let pending = pendingComposing else { return }
+        pendingComposing = nil
+        findTime = nil
+        withAnimation(Motion.resize) { composing = pending }
     }
 
     func endComposing() {
@@ -953,6 +968,7 @@ final class EventStore: ObservableObject {
     /// Declined events answered while the popover was open leave the list.
     func popoverDidClose() {
         composing = nil
+        pendingComposing = nil
         findTime = nil
         recentlyAnswered = recentlyAnswered.intersection(pendingAnswers)
     }

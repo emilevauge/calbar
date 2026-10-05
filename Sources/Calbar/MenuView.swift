@@ -37,7 +37,7 @@ struct MenuView: View {
         let focusID = peeking ? peekID : (other == nil ? Self.focusID(agenda, now: store.now) : nil)
 
         // Finding a time and editing an event always show the week grid.
-        let week = (viewMode == .week || store.findTime != nil || store.composing != nil) && !peeking
+        let week = (viewMode == .week || store.findTime != nil || store.composing != nil || weekForEditor) && !peeking
         let dayGrid = viewMode == .dayGrid && !peeking && !week
 
         VStack(alignment: .leading, spacing: 0) {
@@ -65,6 +65,7 @@ struct MenuView: View {
                         }
                         .frame(width: EventEditor.width)
                         .id(session.id)
+                        .transition(.opacity)
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 } else {
@@ -167,6 +168,16 @@ struct MenuView: View {
         .onChange(of: store.composing?.id) { _, id in
             if id != nil, let start = store.composing?.start { catchUp(to: start) }
             shownSession = store.composing?.id.uuidString
+            // Out in the same steps: the editor, then the grid.
+            if id == nil, weekForEditor {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    guard store.composing == nil, store.pendingComposing == nil else { return }
+                    withAnimation(Motion.resize) { weekForEditor = false }
+                }
+            }
+        }
+        .onChange(of: store.pendingComposing?.id) { _, id in
+            if id != nil { prepareEditor() }
         }
         // A day picked in the editor: the grid follows to its week.
         .onChange(of: store.composing?.start) { _, start in
@@ -304,7 +315,8 @@ struct MenuView: View {
                 }
             },
             slot: slot(days: days),
-            availability: availability(days: days)
+            availability: availability(days: days),
+            dismissCards: store.pendingComposing != nil
         )
         .task(id: "\(store.findTime?.event.id ?? "")|\(days.first?.timeIntervalSince1970 ?? 0)") {
             await store.loadAvailability(days: days)
@@ -588,6 +600,26 @@ struct MenuView: View {
     }
 
     /// Jumps to the day of `date`, counted in calendar days from today.
+    /// The week grid shown ahead of an editor asked from a card or a row.
+    @State private var weekForEditor = false
+
+    /// An editor asked from a card or row: the week grid first (already
+    /// there, or brought in as the Week button does), on the event's
+    /// week, then the editor, once the card's popover or the resize is
+    /// done.
+    private func prepareEditor() {
+        guard let pending = store.pendingComposing else { return }
+        let showingWeek = (viewMode == .week || store.findTime != nil || store.composing != nil) && !app.isPeeking
+        catchUp(to: pending.start)
+        shownSession = pending.id.uuidString
+        if !showingWeek {
+            withAnimation(Motion.resize) { weekForEditor = true }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + (showingWeek ? 0.15 : 0.3)) {
+            store.commitComposing()
+        }
+    }
+
     /// The editor or reschedule session the day offset has caught up with.
     @State private var shownSession: String?
 

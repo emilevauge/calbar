@@ -39,6 +39,8 @@ struct WeekView: View {
     /// Finding a time for an event: the guests' busy times and the free
     /// slots drawn on the grid, a click proposing to move it there.
     var availability: Availability?
+    /// An editor is about to open: the event card closes first.
+    var dismissCards = false
 
     struct Availability {
         let event: CalendarEvent
@@ -105,6 +107,9 @@ struct WeekView: View {
         }
         .onChange(of: slot != nil) {
             opened = nil
+        }
+        .onChange(of: dismissCards) { _, dismiss in
+            if dismiss { opened = nil }
         }
     }
 

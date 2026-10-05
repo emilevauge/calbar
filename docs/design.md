@@ -434,7 +434,11 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   sent with `sendUpdates=all`, which emails it to the organizer; the popover says "Propose a
   new time for …", Propose. Editing and rescheduling open on the event's week from the first
   frame (the panel uses the event's day until its day offset catches up, without animation),
-  and the card they start from closes. The panel shows
+  and the card they start from closes. Edit and duplicate go in steps
+  (`EventStore.pendingComposing`): the card's popover closes, the day list gives way to the
+  week grid as with the Week button, then 0.3 s later (0.15 s when the grid is already there)
+  the editor fades in as the panel widens; closing it goes back the same way, the editor then
+  the list. The panel shows
   the week grid on the event's week, with a bar: the event and its length, a chip per person
   (the user first, then the guests) and "Everyone"; a click on a person when everyone is shown
   shows that person alone, then adds or removes people. Availability comes from
