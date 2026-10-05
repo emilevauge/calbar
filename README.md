@@ -97,10 +97,10 @@ The `make-app.sh` script:
 2. Renders the SwiftUI app icon at 1024×1024 via `Calbar --generate-icon`, then `sips` for every size and `iconutil` for `AppIcon.icns`.
 3. Assembles `Calbar.app/Contents/{MacOS,Resources,Info.plist}` with `CFBundleIdentifier` `dev.calbar.app`, `LSUIElement` and the version.
 4. Checks that no `google-oauth*.json` file is inside the bundle.
-5. Signs the bundle with the `CALBAR_SIGN_IDENTITY` identity (default `Claudette Dev`) when it is in the keychain, ad hoc otherwise.
+5. Signs the bundle with `CALBAR_SIGN_IDENTITY`, else the first *Apple Development* certificate of the keychain, else `Claudette Dev`, else ad hoc.
 6. Registers it with LaunchServices so notifications work, then builds `Calbar.dmg`.
 
-With an ad hoc signature, every build gets a new code hash and macOS may ask again for Keychain access. A local self-signed code signing certificate keeps the same identity across builds: create one in *Keychain Access > Certificate Assistant > Create a Certificate* (type *Code Signing*), then set `CALBAR_SIGN_IDENTITY` to its name.
+Keychain items remember which app may read them by its team ID when the signature has one, by the exact build otherwise. Signed with an *Apple Development* certificate (free with an Apple ID in Xcode), *Always Allow* lasts across builds. Ad hoc or with a self-signed certificate, which has no team ID, every new build asks again, once per Keychain item.
 
 To publish a release, bump `VERSION` and `BUILD` in `make-app.sh`, run it, and attach `Calbar.dmg` to a GitHub release tagged `vX.Y.Z`. Installed copies pick it up within a day.
 

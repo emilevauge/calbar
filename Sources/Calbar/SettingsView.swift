@@ -281,6 +281,7 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
         }
         .onAppear {
+            zoom.loadClient()
             if zoomClientID.isEmpty { zoomClientID = zoom.client?.clientID ?? "" }
             if zoomSecret.isEmpty { zoomSecret = zoom.client?.clientSecret ?? "" }
         }

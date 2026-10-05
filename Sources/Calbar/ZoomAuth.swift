@@ -22,18 +22,42 @@ final class ZoomAuth: ObservableObject {
     private static let clientAccount = "client"
     private static let tokenAccount = "refresh-token"
 
+    /// Whether a refresh token is stored, kept outside the Keychain so
+    /// launching reads no Zoom item (each read may ask for the keychain).
+    private static let connectedKey = "zoomConnected"
+    private var clientLoaded = false
+
     init(http: HTTPClient = URLSession.shared) {
         self.http = http
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: Self.connectedKey) == nil {
+            // Once, from versions that did not keep the flag.
+            let stored = ((try? Keychain.read(account: Self.tokenAccount, service: Keychain.zoomService)) ?? nil) != nil
+            defaults.set(stored, forKey: Self.connectedKey)
+        }
+        isConnected = defaults.bool(forKey: Self.connectedKey)
+    }
+
+    /// The client from the Keychain, read the first time it is needed:
+    /// the settings, a sign-in, a meeting.
+    func loadClient() {
+        guard !clientLoaded else { return }
+        clientLoaded = true
         if let json = try? Keychain.read(account: Self.clientAccount, service: Keychain.zoomService),
            let data = json.data(using: .utf8) {
             client = try? JSONDecoder().decode(ZoomClient.self, from: data)
         }
-        isConnected = ((try? Keychain.read(account: Self.tokenAccount, service: Keychain.zoomService)) ?? nil) != nil
+    }
+
+    private func setConnected(_ connected: Bool) {
+        isConnected = connected
+        UserDefaults.standard.set(connected, forKey: Self.connectedKey)
     }
 
     /// Keeps what the user typed, as they type, so closing the settings
     /// loses nothing. The secret goes to the Keychain with the ID.
     func save(clientID: String, clientSecret: String) {
+        loadClient()
         let client = ZoomClient(clientID: clientID, clientSecret: clientSecret)
         guard client != self.client else { return }
         do {
@@ -60,7 +84,7 @@ final class ZoomAuth: ObservableObject {
     func disconnect() {
         Keychain.delete(account: Self.tokenAccount, service: Keychain.zoomService)
         accessToken = nil
-        isConnected = false
+        setConnected(false)
     }
 
     private func runSignIn(_ client: ZoomClient) async {
@@ -90,7 +114,7 @@ final class ZoomAuth: ObservableObject {
             let (data, response) = try await http.send(ZoomOAuth.codeExchangeRequest(
                 client: client, code: code, redirectURI: redirectURI, verifier: pkce.verifier))
             try remember(GoogleOAuth.parseTokenResponse(data: data, status: response.statusCode))
-            isConnected = true
+            setConnected(true)
             NSLog("Calbar: Zoom connected")
         } catch is CancellationError {
             return
@@ -109,6 +133,7 @@ final class ZoomAuth: ObservableObject {
 
     private func token() async throws -> String {
         if let accessToken, accessToken.expiry > Date() { return accessToken.token }
+        loadClient()
         guard let client, let refresh = try Keychain.read(account: Self.tokenAccount, service: Keychain.zoomService) else {
             throw Failure.notConnected
         }

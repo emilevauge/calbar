@@ -104,11 +104,13 @@ if [ -n "$LEAKED" ]; then
     exit 1
 fi
 
-# Signing. With a stable identity (a self-signed code signing certificate in
-# the keychain, see README) the app's designated requirement stays the same
-# from one build to the next, so macOS keeps its Keychain and notification
-# grants. Without one, ad hoc signing: the code hash changes on every build.
-SIGN_IDENTITY="${CALBAR_SIGN_IDENTITY:-Claudette Dev}"
+# Signing. An Apple Development certificate is preferred: it carries a team
+# ID, and Keychain items remember the app by it ("teamid:" partition), so
+# "Always Allow" lasts across builds. A self-signed certificate has no team
+# ID: items remember the exact build ("cdhash:"), and each new build asks
+# again, once per item. Without any identity, ad hoc signing.
+DEV_IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Apple Development: [^"]*\)".*/\1/p' | head -1)
+SIGN_IDENTITY="${CALBAR_SIGN_IDENTITY:-${DEV_IDENTITY:-Claudette Dev}}"
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$SIGN_IDENTITY\""; then
     echo "▶ Signing with \"$SIGN_IDENTITY\"…"
     codesign --force --deep --sign "$SIGN_IDENTITY" "$APP" >/dev/null

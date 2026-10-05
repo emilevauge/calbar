@@ -17,7 +17,9 @@ This document describes the current behaviour. The code is the reference when th
   calendar page once no meeting is left today.
 - UI in English only, no localization system. Dates are formatted with the `en_US` locale
   whatever the system language.
-- Distribution: a DMG on GitHub Releases, signed ad hoc or with a local self-signed identity,
+- Distribution: a DMG on GitHub Releases, signed with an Apple Development certificate when the
+  build machine has one (its team ID keeps Keychain grants across builds), else a local
+  self-signed identity or ad hoc,
   updated in place by the app. The DMG never contains a Google OAuth client: each user creates
   their own and imports its JSON file into Calbar.
 
@@ -408,7 +410,9 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   `https://emilevauge.github.io/calbar/zoom-callback/`, a static GitHub Pages page
   (`docs/zoom-callback/`) that forwards the query, code and state, to Calbar's listener on
   `http://127.0.0.1:53682` and nowhere else; the state is checked there as for Google, with
-  PKCE as well. Client and refresh token in the Keychain under `dev.calbar.app.zoom`,
+  PKCE as well. Client and refresh token in the Keychain under `dev.calbar.app.zoom`, read
+  only when needed (settings, sign-in, a meeting; whether one is stored is a `zoomConnected`
+  default, so launching reads no Zoom item),
   the refresh token replaced on every refresh since Zoom rotates it, a refused one
   disconnecting). On save with Zoom, Calbar first creates a scheduled meeting
   (`POST /users/me/meetings`, scope `meeting:write:meeting`: topic, UTC start, duration, time
