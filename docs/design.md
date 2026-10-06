@@ -383,11 +383,18 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   panel's arrow, `⌫` and `↵` shortcuts stand aside. Edit is offered on the same events as delete. The editor is filled from the event:
   title, times (an all-day event shows its day alone, "All day, 3 days"), guests but the
   user, location, the description as plain text. Editing keeps the calendar (no move) and an
-  existing video link; a recurring occurrence gets "This event | All events" instead of the
-  repetition. Save reads the event (`events.get`) and patches only what changed
-  (`EventPatch`): unchanged notes keep their HTML, kept guests keep their answers, the user
-  and meeting rooms stay; for all events the series itself is patched, its times moved by the
-  same amount from its own start. `sendUpdates=all` when there are guests before or after.
+  existing video link; a recurring occurrence shows "Recurring event" instead of the
+  repetition, and Save asks "Save the changes to:" This event, This and following, All events
+  or Cancel (`esc` cancels the question). Save reads the event (`events.get`) and patches only
+  what changed (`EventPatch`): unchanged notes keep their HTML, kept guests keep their
+  answers, the user and meeting rooms stay; for all events the series itself is patched, its
+  times moved by the same amount from its own start. This and following splits the series as
+  Google Calendar does (`RecurrenceSplit`): a copy of the series with the changes is inserted,
+  starting at the occurrence's new times, its rules without `COUNT` (which counted from the
+  first occurrence), its guests, answers and video link kept (`conferenceDataVersion=1`), then
+  the series gets `UNTIL` just before the occurrence; from the first occurrence, the whole
+  series changes instead. Moving a recurring event from Reschedule asks the same with a Move
+  menu. `sendUpdates=all` when there are guests before or after.
   Duplicate opens a new event with the same fields, a new Meet link for a Meet, in the
   event's calendar when writable.
 - Guests: chips with a remove button, then a field. Suggestions, six at most, one per email:

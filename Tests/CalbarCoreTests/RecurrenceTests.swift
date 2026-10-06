@@ -142,4 +142,27 @@ import Testing
         #expect(e.recurringEventID == "s")
         #expect(e.originalStart == TestClock.date("2026-10-01T08:00:00Z"))
     }
+
+    @Test func updateFollowingSplitsTheSeries() async throws {
+        let master = #"{"id": "s", "iCalUID": "s@google.com", "etag": "x", "summary": "Sync", "location": "Room", "start": {"dateTime": "2026-09-03T10:00:00+02:00", "timeZone": "Europe/Paris"}, "end": {"dateTime": "2026-09-03T10:30:00+02:00", "timeZone": "Europe/Paris"}, "recurrence": ["RRULE:FREQ=WEEKLY;COUNT=20;BYDAY=TH"], "attendees": [{"email": "me@x.com", "self": true, "organizer": true}, {"email": "ann@x.com", "responseStatus": "accepted"}], "conferenceData": {"conferenceId": "abc", "entryPoints": [{"entryPointType": "video", "uri": "https://meet.google.com/abc-defg-hij"}]}}"#
+        let http = StubHTTP([(200, master), (200, "{}"), (200, "{}")])
+        let ann = Attendee(person: Person(email: "ann@x.com", name: nil), response: .accepted, isOrganizer: false, isSelf: false, isOptional: false)
+        let e = occurrence(attendees: [ann])
+        var d = draft(e)
+        d.title = "Weekly sync"
+        d.start = e.start.addingTimeInterval(3600)
+        d.end = e.end.addingTimeInterval(3600)
+        try await CalendarAPI(http: http).update(token: "t", original: e, draft: d, notesText: "", scope: .following, calendar: cal)
+        #expect(http.requests.map(\.httpMethod) == ["GET", "POST", "PATCH"])
+        let new = try json(try #require(http.requests[1].httpBody))
+        #expect(new["summary"] as? String == "Weekly sync")
+        #expect(new["id"] == nil && new["iCalUID"] == nil)
+        #expect((new["start"] as? [String: String])?["dateTime"] == "2026-10-01T09:00:00Z")
+        #expect((new["start"] as? [String: String])?["timeZone"] == "Europe/Paris")
+        #expect(new["recurrence"] as? [String] == ["RRULE:FREQ=WEEKLY;BYDAY=TH"])
+        #expect((new["attendees"] as? [[String: Any]])?.count == 2)
+        #expect(http.requests[1].url?.query?.contains("conferenceDataVersion=1") == true)
+        let cut = try json(try #require(http.requests[2].httpBody))
+        #expect(cut["recurrence"] as? [String] == ["RRULE:FREQ=WEEKLY;BYDAY=TH;UNTIL=20261001T075959Z"])
+    }
 }

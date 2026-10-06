@@ -56,7 +56,7 @@ struct WeekView: View {
         let canMove: Bool
         /// Picking proposes the time to the organizer rather than moving.
         let proposes: Bool
-        let onMove: (Date) async throws -> Void
+        let onMove: (Date, RecurrenceScope) async throws -> Void
 
         var minutes: Int { max(Int(event.end.timeIntervalSince(event.start) / 60), 15) }
     }
@@ -419,8 +419,8 @@ struct WeekView: View {
                     MoveConfirm(event: availability.event, proposes: availability.proposes, start: start, end: end,
                                 busy: FreeBusy.conflicts(slot, busy: availability.busy).map { availability.names[$0] ?? FindTimeBar.firstName(Person(email: $0, name: nil)) },
                                 unknown: availability.unknown,
-                                onMove: {
-                                    try await availability.onMove(start)
+                                onMove: { scope in
+                                    try await availability.onMove(start, scope)
                                     self.draft = nil
                                 },
                                 onCancel: { self.draft = nil })

@@ -168,6 +168,10 @@ public struct CalendarAPI: Sendable {
     /// series for `.all`: reads the event, then patches what changed.
     public func update(token: String, original: CalendarEvent, draft: NewEvent, notesText: String,
                        scope: RecurrenceScope, calendar: Calendar = .current) async throws {
+        if scope == .following, let series = original.recurringEventID {
+            return try await updateFollowing(token: token, original: original, series: series, draft: draft,
+                                             notesText: notesText, calendar: calendar)
+        }
         let series = scope == .all ? original.recurringEventID : nil
         let path = eventPath(original.calendarID, series ?? original.googleEventID)
         let current = try await send("GET", path, query: [], body: nil, token: token)
@@ -177,6 +181,32 @@ public struct CalendarAPI: Sendable {
         var query = [URLQueryItem(name: "sendUpdates", value: patch.notify ? "all" : "none")]
         if patch.addsConference { query.append(URLQueryItem(name: "conferenceDataVersion", value: "1")) }
         _ = try await send("PATCH", path, query: query, body: patch.body, token: token)
+    }
+
+    /// "This and following": the series ends before the occurrence and a
+    /// copy of it, with the changes, starts at the occurrence, as Google
+    /// Calendar splits a series. From the first occurrence, the whole
+    /// series changes instead.
+    private func updateFollowing(token: String, original: CalendarEvent, series: String, draft: NewEvent,
+                                 notesText: String, calendar: Calendar) async throws {
+        let path = eventPath(original.calendarID, series)
+        let current = try await send("GET", path, query: [], body: nil, token: token)
+        let master = try JSONDecoder().decode(GoogleEvent.self, from: current)
+        let cut = original.originalStart ?? original.start
+        if let first = master.start.flatMap({ GoogleDate.parse($0, calendar: calendar) })?.date, cut <= first {
+            return try await update(token: token, original: original, draft: draft, notesText: notesText,
+                                    scope: .all, calendar: calendar)
+        }
+        let split = try RecurrenceSplit(master: current, original: original, draft: draft, notesText: notesText,
+                                        calendar: calendar)
+        var query = [URLQueryItem(name: "sendUpdates", value: split.notify ? "all" : "none")]
+        if split.hasConference { query.append(URLQueryItem(name: "conferenceDataVersion", value: "1")) }
+        // The new series first: a failure then leaves the old one whole.
+        _ = try await send("POST", "/calendars/\(FormEncoding.escape(original.calendarID))/events",
+                           query: query, body: split.newSeries, token: token)
+        let rules = Recurrence.truncate(master.recurrence ?? [], before: cut, allDay: original.isAllDay, calendar: calendar)
+        _ = try await send("PATCH", path, query: [URLQueryItem(name: "sendUpdates", value: split.notify ? "all" : "none")],
+                           body: try JSONSerialization.data(withJSONObject: ["recurrence": rules]), token: token)
     }
 
     /// A POST with a JSON body, its answer's body.

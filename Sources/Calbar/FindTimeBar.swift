@@ -204,7 +204,8 @@ struct MoveConfirm: View {
     let busy: [String]
     /// Names of the people whose calendar is not shared.
     let unknown: [String]
-    let onMove: () async throws -> Void
+    /// The occurrences to move: always this one for a single event.
+    let onMove: (RecurrenceScope) async throws -> Void
     let onCancel: () -> Void
     @State private var moving = false
     @State private var error: String?
@@ -244,28 +245,45 @@ struct MoveConfirm: View {
                     .foregroundStyle(.tertiary)
                 Spacer()
                 Button("Cancel", action: onCancel)
-                Button {
-                    moving = true
-                    error = nil
-                    Task {
-                        do {
-                            try await onMove()
-                        } catch {
-                            self.error = describeCreate(error).replacingOccurrences(
-                                of: "add the event", with: proposes ? "send the proposal" : "move the event")
+                if event.isRecurring && !proposes {
+                    if moving {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Menu("Move") {
+                            ForEach(RecurrenceScope.allCases, id: \.self) { scope in
+                                Button(scope.label) { run(scope) }
+                            }
                         }
-                        moving = false
+                        .fixedSize()
                     }
-                } label: {
-                    if moving { ProgressView().controlSize(.small) } else { Text(proposes ? "Propose" : "Move") }
+                } else {
+                    Button {
+                        run(.this)
+                    } label: {
+                        if moving { ProgressView().controlSize(.small) } else { Text(proposes ? "Propose" : "Move") }
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(moving)
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(moving)
             }
             .controlSize(.small)
         }
         .font(.system(size: 12))
         .frame(width: 280)
         .padding(14)
+    }
+
+    private func run(_ scope: RecurrenceScope) {
+        moving = true
+        error = nil
+        Task {
+            do {
+                try await onMove(scope)
+            } catch {
+                self.error = describeCreate(error).replacingOccurrences(
+                    of: "add the event", with: proposes ? "send the proposal" : "move the event")
+            }
+            moving = false
+        }
     }
 }

@@ -67,6 +67,8 @@ struct EventEditor: View {
     static let width: CGFloat = 360
     /// `esc` with changes: asks before throwing them away.
     @State private var confirmingDiscard = false
+    /// Save on a recurring event: which occurrences the change goes to.
+    @State private var askingScope = false
     /// The fields as the editor opened, to tell whether anything changed.
     @State private var initialFields = ""
 
@@ -185,7 +187,7 @@ struct EventEditor: View {
             Divider()
                 .padding(.vertical, 12)
             details
-            if error != nil || confirmingDiscard {
+            if error != nil || confirmingDiscard || askingScope {
                 Divider().padding(.vertical, 10)
                 notice
             }
@@ -278,10 +280,8 @@ struct EventEditor: View {
             }
             line("repeat") {
                 if let original, original.isRecurring {
-                    MenuField(label: scope == .all ? "Change all events" : "Change this event only") {
-                        CheckItem("Change this event only", checked: scope == .this) { scope = .this }
-                        CheckItem("Change all events", checked: scope == .all) { scope = .all }
-                    }
+                    // Which occurrences: asked on Save.
+                    Text("Recurring event")
                 } else {
                     MenuField(label: repeatRule.label(start: start)) {
                         ForEach(RepeatRule.allCases, id: \.self) { rule in
@@ -340,7 +340,24 @@ struct EventEditor: View {
     /// An error of the last save, or the question before discarding.
     @ViewBuilder
     private var notice: some View {
-        if confirmingDiscard {
+        if askingScope {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "repeat").foregroundStyle(.secondary)
+                    Text("Save the changes to:")
+                        .foregroundStyle(.primary)
+                }
+                HStack(spacing: 6) {
+                    Button("This event") { commit(.this) }
+                    Button("This and following") { commit(.following) }
+                    Button("All events") { commit(.all) }
+                    Spacer(minLength: 0)
+                    Button("Cancel") { withAnimation(Motion.resize) { askingScope = false } }
+                }
+                .controlSize(.small)
+            }
+            .font(.system(size: 12))
+        } else if confirmingDiscard {
             HStack(spacing: 8) {
                 Image(systemName: "exclamationmark.circle")
                     .foregroundStyle(.orange)
@@ -442,6 +459,10 @@ struct EventEditor: View {
     /// asks first.
     private func cancel() {
         guard !busy else { return }
+        if askingScope {
+            withAnimation(Motion.resize) { askingScope = false }
+            return
+        }
         if fields == initialFields || confirmingDiscard {
             onDone()
         } else {
@@ -464,8 +485,20 @@ struct EventEditor: View {
         return choice == "zoom" && !zoom.isConnected ? "meet" : choice
     }
 
+    /// Saves; a recurring event asks first which occurrences.
     private func save() {
+        guard !busy else { return }
+        if original?.isRecurring == true && !askingScope {
+            withAnimation(Motion.resize) { askingScope = true }
+            return
+        }
+        commit(scope)
+    }
+
+    private func commit(_ scope: RecurrenceScope) {
         guard !busy, let target = selected else { return }
+        withAnimation(Motion.resize) { askingScope = false }
+        self.scope = scope
         busy = true
         error = nil
         let choice = original?.meeting == nil ? effectiveConference : "none"
@@ -477,7 +510,6 @@ struct EventEditor: View {
         if let rule = repeatRule.rrule(start: start) { event.recurrence = [rule] }
         let original = original
         let notesText = notesText
-        let scope = scope
         Task {
             // The Zoom meeting first: its link goes into the event.
             if choice == "zoom" {

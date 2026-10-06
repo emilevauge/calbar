@@ -283,11 +283,11 @@ struct MenuView: View {
         let event = session.event
         return WeekView.Availability(event: event, busy: busy, free: free, names: names, unknown: unknown,
                                      canMove: session.canMove || session.proposes, proposes: session.proposes,
-                                     onMove: { start in
+                                     onMove: { start, scope in
             if session.proposes {
                 try await store.propose(event, start: start)
             } else {
-                try await store.move(event, to: start)
+                try await store.move(event, to: start, scope: scope)
             }
             withAnimation(Motion.resize) { store.endFindingTime() }
         })

@@ -935,14 +935,14 @@ final class EventStore: ObservableObject {
     }
 
     /// Moves the occurrence to start at `start`, same length, guests told.
-    func move(_ event: CalendarEvent, to start: Date) async throws {
+    func move(_ event: CalendarEvent, to start: Date, scope: RecurrenceScope = .this) async throws {
         let notes = HTMLText.plainText(event.notes ?? "")
         var draft = NewEvent(title: event.title == "(No title)" ? "" : event.title, start: start,
                              end: start.addingTimeInterval(event.end.timeIntervalSince(event.start)),
                              calendarID: event.calendarID, addMeet: false, location: event.location ?? "",
                              notes: notes, guests: event.attendees.filter { !$0.isSelf }.map(\.person.email))
         draft.isAllDay = event.isAllDay
-        try await update(event, to: draft, notesText: notes, scope: .this)
+        try await update(event, to: draft, notesText: notes, scope: scope)
     }
 
     /// Declined events answered while the popover was open leave the list.
