@@ -24,6 +24,8 @@ final class MeetingPeeker {
     /// the start, with the end of their alert window. In memory only.
     private var shownSoon: [String: Date] = [:]
     private var shownAtStart: [String: Date] = [:]
+    /// Keys of the reminders shown, with when they can be forgotten.
+    private var shownReminders: [String: Date] = [:]
 
     init(store: EventStore, join: JoinController) {
         self.store = store
@@ -34,6 +36,7 @@ final class MeetingPeeker {
     func update(now: Date) {
         shownSoon = shownSoon.filter { $0.value > now }
         shownAtStart = shownAtStart.filter { $0.value > now }
+        shownReminders = shownReminders.filter { $0.value > now }
         guard Prefs.notifyBeforeMeetings, !Session.isScreenLocked else { return }
         let policy = Prefs.alertPolicy
         let dismissed = join.dismissed
@@ -48,9 +51,18 @@ final class MeetingPeeker {
             return
         }
         let skip = Set(shownSoon.keys).union(shownAtStart.keys).union(dismissed)
-        if let event = NotificationPlanner.due(store.events, now: now, policy: policy, skip: skip).first,
-           show(event) {
-            shownSoon[event.occurrenceKey] = NotificationPlanner.windowEnd(event, policy: policy)
+        if let event = NotificationPlanner.due(store.events, now: now, policy: policy, skip: skip).first {
+            if show(event) {
+                shownSoon[event.occurrenceKey] = NotificationPlanner.windowEnd(event, policy: policy)
+            }
+            return
+        }
+        // The event's own reminders, as set in Google Calendar.
+        if let due = NotificationPlanner.dueReminders(store.events, now: now, policy: policy,
+                                                      skip: Set(shownReminders.keys)).first,
+           !dismissed.contains(due.event.occurrenceKey),
+           show(due.event) {
+            shownReminders[due.key] = now.addingTimeInterval(NotificationPlanner.reminderWindow + 60)
         }
     }
 }

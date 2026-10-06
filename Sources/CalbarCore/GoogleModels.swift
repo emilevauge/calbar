@@ -59,6 +59,25 @@ struct GoogleEvent: Decodable {
     let originalStartTime: Time?
     /// Only on a series itself, not on its occurrences.
     let recurrence: [String]?
+    let reminders: Reminders?
+
+    struct Reminder: Decodable {
+        let method: String?
+        let minutes: Int?
+    }
+
+    struct Reminders: Decodable {
+        let useDefault: Bool?
+        let overrides: [Reminder]?
+    }
+}
+
+extension Array where Element == GoogleEvent.Reminder {
+    /// Minutes of the pop-up reminders, sorted, without duplicates.
+    var popupMinutes: [Int] {
+        let minutes: [Int] = filter { $0.method == "popup" }.compactMap { $0.minutes }.filter { $0 >= 0 }
+        return Set(minutes).sorted()
+    }
 }
 
 struct GoogleEventList: Decodable {
@@ -75,6 +94,7 @@ struct GoogleCalendarList: Decodable {
         let selected: Bool?
         let primary: Bool?
         let accessRole: String?
+        let defaultReminders: [GoogleEvent.Reminder]?
     }
     let items: [Entry]
     let nextPageToken: String?
@@ -191,7 +211,10 @@ extension CalendarEvent {
             selfResponse: attendees.first(where: \.isSelf)?.response ?? .accepted,
             googleEventID: g.id,
             recurringEventID: g.recurringEventId,
-            originalStart: g.originalStartTime.flatMap { GoogleDate.parse($0, calendar: calendar)?.date }
+            originalStart: g.originalStartTime.flatMap { GoogleDate.parse($0, calendar: calendar)?.date },
+            reminders: g.reminders?.useDefault == false
+                ? (g.reminders?.overrides ?? []).popupMinutes
+                : source.defaultReminders ?? []
         )
     }
 }
@@ -207,7 +230,8 @@ extension CalendarInfo {
             colorHex: e.backgroundColor ?? "#4285f4",
             isPrimary: e.primary == true,
             enabled: e.primary == true,
-            canWrite: e.accessRole.map { $0 == "owner" || $0 == "writer" }
+            canWrite: e.accessRole.map { $0 == "owner" || $0 == "writer" },
+            defaultReminders: e.defaultReminders.map { $0.popupMinutes }
         )
     }
 }

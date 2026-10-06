@@ -511,6 +511,13 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   more (an absence typed from midnight to midnight over days, a trip). They are listed with
   the all-day events, in the day list as in the week view, and are never a meeting: no peek,
   no Join capsule, no countdown, no on-air glow.
+- Reminders (`CalendarEvent.reminders`, `NotificationPlanner.dueReminders`): the pop-up
+  reminders set in Google Calendar, the event's own (`reminders.overrides`, method `popup`)
+  or, with `useDefault`, its calendar's (`defaultReminders` of the calendar list), in minutes
+  before the start; email reminders are left to Google. Each opens the same peek, all-day
+  events included (an all-day event's reminder counts from its midnight: "1 day before at
+  9:00" is 900 minutes), for five minutes after its time; one within a minute of a meeting's
+  own peeks (alert window, start) is left to them. Under the same "Meeting heads-up" setting.
 - Meetings (`MeetingPeeker`, `NotificationPlanner`): no system notification. For timed, not
   declined events (not whole days), with or without a link, the popover opens in peek mode on the meeting
   twice per occurrence: when it enters its alert window, before its start, and at the start,

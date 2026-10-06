@@ -84,6 +84,10 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
     /// The time the occurrence has in its series, before any move: where
     /// "this and following" cuts the series.
     public let originalStart: Date?
+    /// Minutes before the start of its pop-up reminders, its own or its
+    /// calendar's defaults, as set in Google Calendar. Email reminders
+    /// are Google's to send.
+    public let reminders: [Int]
 
     public init(
         id: String, iCalUID: String, accountEmail: String, calendarID: String,
@@ -91,7 +95,7 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
         location: String?, notes: String?, htmlLink: URL?, organizer: Person?,
         attendees: [Attendee], attachments: [Attachment], meeting: MeetingLink?,
         selfResponse: ResponseStatus, googleEventID: String? = nil,
-        recurringEventID: String? = nil, originalStart: Date? = nil
+        recurringEventID: String? = nil, originalStart: Date? = nil, reminders: [Int] = []
     ) {
         self.id = id
         self.googleEventID = googleEventID ?? Self.googleID(fromCompositeID: id)
@@ -113,6 +117,7 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
         self.selfResponse = selfResponse
         self.recurringEventID = recurringEventID
         self.originalStart = originalStart
+        self.reminders = reminders
     }
 
     /// One occurrence of a recurring event.
@@ -121,7 +126,7 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, googleEventID, iCalUID, accountEmail, calendarID, colorHex, title, start, end, isAllDay
         case location, notes, htmlLink, organizer, attendees, attachments, meeting, selfResponse
-        case recurringEventID, originalStart
+        case recurringEventID, originalStart, reminders
     }
 
     /// Events cached before `googleEventID` existed take it from the end
@@ -149,7 +154,8 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
             selfResponse: try c.decode(ResponseStatus.self, forKey: .selfResponse),
             googleEventID: try c.decodeIfPresent(String.self, forKey: .googleEventID),
             recurringEventID: try c.decodeIfPresent(String.self, forKey: .recurringEventID),
-            originalStart: try c.decodeIfPresent(Date.self, forKey: .originalStart)
+            originalStart: try c.decodeIfPresent(Date.self, forKey: .originalStart),
+            reminders: try c.decodeIfPresent([Int].self, forKey: .reminders) ?? []
         )
     }
 
@@ -192,7 +198,8 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
                     : a
             },
             attachments: attachments, meeting: meeting, selfResponse: response,
-            googleEventID: googleEventID, recurringEventID: recurringEventID, originalStart: originalStart
+            googleEventID: googleEventID, recurringEventID: recurringEventID, originalStart: originalStart,
+            reminders: reminders
         )
     }
 
@@ -223,14 +230,19 @@ public struct CalendarInfo: Identifiable, Equatable, Codable, Sendable {
     /// The user may add events (`accessRole` owner or writer). Nil for a
     /// calendar stored before this was known: only the primary counts then.
     public var canWrite: Bool?
+    /// Minutes before the start of the calendar's default pop-up
+    /// reminders, for events that use them. Nil when not known yet.
+    public var defaultReminders: [Int]?
 
-    public init(id: String, name: String, colorHex: String, isPrimary: Bool, enabled: Bool, canWrite: Bool? = nil) {
+    public init(id: String, name: String, colorHex: String, isPrimary: Bool, enabled: Bool, canWrite: Bool? = nil,
+                defaultReminders: [Int]? = nil) {
         self.id = id
         self.name = name
         self.colorHex = colorHex
         self.isPrimary = isPrimary
         self.enabled = enabled
         self.canWrite = canWrite
+        self.defaultReminders = defaultReminders
     }
 
     /// Where a new event can go.

@@ -92,3 +92,45 @@ import Testing
         #expect(listing.timed.isEmpty)
     }
 }
+
+@Suite struct ReminderTests {
+    let policy = AlertPolicy(leadTime: 600, lingerAfterStart: 300)
+
+    func event(_ start: String, minutes: Int = 30, allDay: Bool = false, reminders: [Int]) -> CalendarEvent {
+        let base = CalendarEvent.fixture(id: "r", start: TestClock.date(start), minutes: minutes, allDay: allDay)
+        return CalendarEvent(id: base.id, iCalUID: base.iCalUID, accountEmail: base.accountEmail, calendarID: base.calendarID,
+                             colorHex: base.colorHex, title: base.title, start: base.start, end: base.end, isAllDay: allDay,
+                             location: nil, notes: nil, htmlLink: nil, organizer: nil, attendees: [], attachments: [],
+                             meeting: nil, selfResponse: .accepted, reminders: reminders)
+    }
+
+    @Test func remindersAtTheirTime() {
+        let e = event("2026-10-06T15:00:00+02:00", reminders: [10, 30, 60])
+        // 30 min before: due; 10 min before is the usual peek's.
+        let due = NotificationPlanner.dueReminders([e], now: TestClock.date("2026-10-06T14:31:00+02:00"), policy: policy, skip: [])
+        #expect(due.map(\.key) == [NotificationPlanner.reminderKey(e, minutes: 30)])
+        #expect(NotificationPlanner.dueReminders([e], now: TestClock.date("2026-10-06T14:50:30+02:00"), policy: policy, skip: []).isEmpty)
+        #expect(NotificationPlanner.dueReminders([e], now: TestClock.date("2026-10-06T14:31:00+02:00"), policy: policy,
+                                                 skip: [NotificationPlanner.reminderKey(e, minutes: 30)]).isEmpty)
+        // Past its five minutes.
+        #expect(NotificationPlanner.dueReminders([e], now: TestClock.date("2026-10-06T14:36:00+02:00"), policy: policy, skip: []).isEmpty)
+    }
+
+    @Test func allDayReminders() {
+        // 15 h before midnight: 09:00 the day before.
+        let e = event("2026-10-07T00:00:00+02:00", minutes: 24 * 60, allDay: true, reminders: [900])
+        #expect(NotificationPlanner.dueReminders([e], now: TestClock.date("2026-10-06T09:01:00+02:00"), policy: policy, skip: []).count == 1)
+    }
+
+    @Test func readsRemindersFromGoogle() throws {
+        let source = CalendarInfo(id: "me@x.com", name: "Me", colorHex: "#000", isPrimary: true, enabled: true, defaultReminders: [10])
+        let own = #"{"id": "a", "start": {"dateTime": "2026-10-06T13:00:00Z"}, "end": {"dateTime": "2026-10-06T14:00:00Z"}, "reminders": {"useDefault": false, "overrides": [{"method": "email", "minutes": 1440}, {"method": "popup", "minutes": 30}]}}"#
+        let def = #"{"id": "b", "start": {"dateTime": "2026-10-06T13:00:00Z"}, "end": {"dateTime": "2026-10-06T14:00:00Z"}, "reminders": {"useDefault": true}}"#
+        let a = try #require(CalendarEvent(google: JSONDecoder().decode(GoogleEvent.self, from: Data(own.utf8)),
+                                           accountEmail: "me@x.com", source: source, calendar: TestClock.paris))
+        let b = try #require(CalendarEvent(google: JSONDecoder().decode(GoogleEvent.self, from: Data(def.utf8)),
+                                           accountEmail: "me@x.com", source: source, calendar: TestClock.paris))
+        #expect(a.reminders == [30])
+        #expect(b.reminders == [10])
+    }
+}
