@@ -507,8 +507,12 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   at launch, keeps one registry of categories, and routes each response to the handler of the
   notification's kind (`meeting` or `update`, stored in the userInfo). Banners also show while
   Calbar is the active app.
+- Whole days (`CalendarEvent.isWholeDay`): all-day events, and timed events of 24 hours or
+  more (an absence typed from midnight to midnight over days, a trip). They are listed with
+  the all-day events, in the day list as in the week view, and are never a meeting: no peek,
+  no Join capsule, no countdown, no on-air glow.
 - Meetings (`MeetingPeeker`, `NotificationPlanner`): no system notification. For timed, not
-  declined events, with or without a link, the popover opens in peek mode on the meeting
+  declined events (not whole days), with or without a link, the popover opens in peek mode on the meeting
   twice per occurrence: when it enters its alert window, before its start, and at the start,
   until the alert window ends (so a Mac woken 2 min after the start still gets it). Only
   while the menu bar icon is in view (`AppDelegate.isOnScreen`: its window visible, not

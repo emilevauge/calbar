@@ -47,7 +47,7 @@ public struct DayListing: Equatable, Sendable {
     public static func build(events: [CalendarEvent], day: Date, calendar: Calendar) -> DayListing {
         let window = DayWindow.interval(for: day, calendar: calendar)
         let events = events.filter { DayWindow.contains($0, in: window) }.sorted { $0.start < $1.start }
-        return DayListing(allDay: events.filter(\.isAllDay), timed: events.filter { !$0.isAllDay })
+        return DayListing(allDay: events.filter(\.isWholeDay), timed: events.filter { !$0.isWholeDay })
     }
 }
 

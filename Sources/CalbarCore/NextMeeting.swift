@@ -7,7 +7,7 @@ public enum NextMeeting {
     public static func find(events: [CalendarEvent], now: Date, calendar: Calendar) -> CalendarEvent? {
         let dayEnd = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))!
         return events
-            .filter { !$0.isAllDay && $0.selfResponse != .declined && $0.start > now && $0.start < dayEnd }
+            .filter { !$0.isWholeDay && $0.selfResponse != .declined && $0.start > now && $0.start < dayEnd }
             .min { $0.start < $1.start }
     }
 
@@ -15,7 +15,7 @@ public enum NextMeeting {
     /// that ends first.
     public static func ongoing(events: [CalendarEvent], now: Date) -> CalendarEvent? {
         events
-            .filter { !$0.isAllDay && $0.selfResponse != .declined && $0.start <= now && now < $0.end }
+            .filter { !$0.isWholeDay && $0.selfResponse != .declined && $0.start <= now && now < $0.end }
             .min { $0.end < $1.end }
     }
 

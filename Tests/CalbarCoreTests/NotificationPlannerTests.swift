@@ -77,3 +77,18 @@ import Testing
     }
 
 }
+
+@Suite struct WholeDayTests {
+    @Test func longTimedEventsAreNotMeetings() {
+        let start = TestClock.date("2026-10-06T00:00:00+02:00")
+        let ooo = CalendarEvent.fixture(title: "Matt - OOO", start: start, minutes: 3 * 24 * 60)
+        #expect(ooo.isWholeDay)
+        let policy = AlertPolicy(leadTime: 600, lingerAfterStart: 300)
+        #expect(NotificationPlanner.dueAtStart([ooo], now: start.addingTimeInterval(60), policy: policy, skip: []).isEmpty)
+        #expect(NotificationPlanner.due([ooo], now: start.addingTimeInterval(-60), policy: policy, skip: []).isEmpty)
+        #expect(NextMeeting.ongoing(events: [ooo], now: start.addingTimeInterval(3600)) == nil)
+        let listing = DayListing.build(events: [ooo], day: start, calendar: TestClock.paris)
+        #expect(listing.allDay.map(\.title) == ["Matt - OOO"])
+        #expect(listing.timed.isEmpty)
+    }
+}

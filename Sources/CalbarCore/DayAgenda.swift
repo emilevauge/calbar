@@ -18,10 +18,10 @@ public struct DayAgenda: Equatable, Sendable {
         // A zero-length event is over only once `now` has passed its start.
         let isCurrent = { (e: CalendarEvent) in e.end > now || (e.start == e.end && e.start >= now) }
         return DayAgenda(
-            allDay: today.filter(\.isAllDay),
-            current: today.filter { !$0.isAllDay && isCurrent($0) },
-            past: today.filter { !$0.isAllDay && !isCurrent($0) },
-            firstTomorrow: sorted.first { !$0.isAllDay && $0.start >= tomorrow.start && $0.start < tomorrow.end }
+            allDay: today.filter(\.isWholeDay),
+            current: today.filter { !$0.isWholeDay && isCurrent($0) },
+            past: today.filter { !$0.isWholeDay && !isCurrent($0) },
+            firstTomorrow: sorted.first { !$0.isWholeDay && $0.start >= tomorrow.start && $0.start < tomorrow.end }
         )
     }
 }

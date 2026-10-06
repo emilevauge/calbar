@@ -14,7 +14,7 @@ public enum NotificationPlanner {
     ) -> [CalendarEvent] {
         events
             .filter { e in
-                !e.isAllDay
+                !e.isWholeDay
                     && e.selfResponse != .declined
                     && !skip.contains(e.occurrenceKey)
                     && now >= e.start.addingTimeInterval(-policy.leadTime)
@@ -34,7 +34,7 @@ public enum NotificationPlanner {
     ) -> [CalendarEvent] {
         events
             .filter { e in
-                !e.isAllDay
+                !e.isWholeDay
                     && e.selfResponse != .declined
                     && !skip.contains(e.occurrenceKey)
                     && now >= e.start

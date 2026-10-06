@@ -146,4 +146,9 @@ extension CalendarEvent {
     public var spansDays: Bool {
         !isAllDay && end.timeIntervalSince(start) >= 24 * 60 * 60
     }
+
+    /// All day, or timed over 24 hours or more: listed with the all-day
+    /// events, never a meeting to alert about, count down to or show as
+    /// ongoing.
+    public var isWholeDay: Bool { isAllDay || spansDays }
 }
