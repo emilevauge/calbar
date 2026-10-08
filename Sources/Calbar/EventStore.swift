@@ -934,6 +934,28 @@ final class EventStore: ObservableObject {
         await refresh()
     }
 
+    /// Which of `rooms` are free over `slot`, asked as `account`; the
+    /// edited event's own time (`own`) does not count. Nil when Google
+    /// could not tell.
+    func freeRooms(_ rooms: [String], over slot: DateInterval, as account: String,
+                   own: DateInterval?) async -> Set<String>? {
+        guard let auth, !rooms.isEmpty else { return nil }
+        var result = FreeBusy.Result()
+        do {
+            try await withAccessToken(account, auth: auth) { [api] token in
+                result = try await api.freeBusy(token: token, emails: rooms, from: slot.start, to: slot.end)
+            }
+        } catch {
+            NSLog("Calbar: reading rooms' availability failed: %@", "\(error)")
+            return nil
+        }
+        return Set(rooms.map { $0.lowercased() }.filter { room in
+            guard case .busy(let spans) = result.availability[room] else { return false }
+            let busy = own.map { FreeBusy.removing($0, from: spans) } ?? spans
+            return !busy.contains { $0.start < slot.end && slot.start < $0.end }
+        })
+    }
+
     /// Moves the occurrence to start at `start`, same length, guests told.
     func move(_ event: CalendarEvent, to start: Date, scope: RecurrenceScope = .this) async throws {
         let notes = HTMLText.plainText(event.notes ?? "")
@@ -942,6 +964,7 @@ final class EventStore: ObservableObject {
                              calendarID: event.calendarID, addMeet: false, location: event.location ?? "",
                              notes: notes, guests: event.attendees.filter { !$0.isSelf }.map(\.person.email))
         draft.isAllDay = event.isAllDay
+        draft.rooms = event.rooms.map(\.email)
         try await update(event, to: draft, notesText: notes, scope: scope)
     }
 

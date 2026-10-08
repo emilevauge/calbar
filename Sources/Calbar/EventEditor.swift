@@ -48,6 +48,11 @@ struct EventEditor: View {
     @State private var isAllDay = false
     @State private var location = ""
     @State private var guests: [ContactIndex.Contact] = []
+    /// Meeting rooms booked, as resource attendees.
+    @State private var rooms: [Person] = []
+    /// Lowercased emails of the rooms free at the event's time; nil until
+    /// read, or when Google could not tell.
+    @State private var freeRooms: Set<String>?
     @State private var notes = ""
     /// The description as the event had it, in plain text: unchanged, its
     /// HTML is kept.
@@ -101,6 +106,7 @@ struct EventEditor: View {
         _title = State(initialValue: event.title == "(No title)" ? "" : event.title)
         _isAllDay = State(initialValue: event.isAllDay)
         _location = State(initialValue: event.location ?? "")
+        _rooms = State(initialValue: event.rooms)
         _notes = State(initialValue: text)
         _guests = State(initialValue: event.attendees.filter { !$0.isSelf }
             .map { ContactIndex.Contact(email: $0.person.email, name: $0.person.name) })
@@ -302,6 +308,12 @@ struct EventEditor: View {
                 TextField("Add location", text: $location)
                     .textFieldStyle(.plain)
             }
+            if !rooms.isEmpty || !contacts.rooms.isEmpty {
+                line("door.left.hand.open", alignment: .top) {
+                    roomsField
+                }
+                .task(id: roomsKey) { await readFreeRooms() }
+            }
             line("text.alignleft", alignment: .top) {
                 TextField("Add description", text: $notes, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -437,6 +449,94 @@ struct EventEditor: View {
         .frame(minHeight: 20)
     }
 
+    // MARK: rooms
+
+    /// The rooms booked as chips, an orange one when busy then, and a menu
+    /// of the rooms seen in the events, the free ones first.
+    private var roomsField: some View {
+        let known = contacts.rooms.filter { room in !rooms.contains { $0.email.lowercased() == room.email.lowercased() } }
+        let free = known.filter { freeRooms?.contains($0.email.lowercased()) == true }
+        let busy = known.filter { freeRooms != nil && freeRooms?.contains($0.email.lowercased()) == false }
+        let unread = freeRooms == nil ? known : []
+        return VStack(alignment: .leading, spacing: 4) {
+            if !rooms.isEmpty {
+                FlowLayout(spacing: 4, lineSpacing: 4) {
+                    ForEach(rooms, id: \.email) { room in roomChip(room) }
+                }
+            }
+            if !known.isEmpty {
+                MenuField(label: rooms.isEmpty ? "Book a room" : "Add a room") {
+                    if !free.isEmpty {
+                        Section("Free") {
+                            ForEach(free, id: \.email) { room in Button(room.displayName) { book(room) } }
+                        }
+                    }
+                    if !busy.isEmpty {
+                        Section("Busy then") {
+                            ForEach(busy, id: \.email) { room in Button(room.displayName) { book(room) } }
+                        }
+                    }
+                    if !unread.isEmpty {
+                        ForEach(unread, id: \.email) { room in Button(room.displayName) { book(room) } }
+                    }
+                }
+                .help("Rooms seen in your events, with their availability at this time")
+            }
+        }
+    }
+
+    private func roomChip(_ room: Person) -> some View {
+        let busy = freeRooms.map { !$0.contains(room.email.lowercased()) } ?? false
+        return HStack(spacing: 3) {
+            if busy {
+                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+            }
+            Text(room.displayName)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            Button {
+                unbook(room)
+            } label: {
+                Image(systemName: "xmark").font(.system(size: 7, weight: .bold))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 7)
+        .frame(height: 20)
+        .background(Color.primary.opacity(0.07), in: Capsule())
+        .help(busy ? "\(room.displayName) is busy at this time" : room.email)
+    }
+
+    /// Books `room`; it names the place when none is set.
+    private func book(_ room: Person) {
+        rooms.append(room)
+        if location.trimmingCharacters(in: .whitespaces).isEmpty { location = room.displayName }
+    }
+
+    private func unbook(_ room: Person) {
+        rooms.removeAll { $0.email == room.email }
+        if location == room.displayName { location = rooms.first?.displayName ?? "" }
+    }
+
+    /// The rooms' availability is read again when the time or the rooms change.
+    private var roomsKey: String {
+        "\(start.timeIntervalSince1970)|\(end.timeIntervalSince1970)|\(availabilityAccount ?? "")|\(contacts.rooms.count)|\(rooms.count)"
+    }
+
+    private var availabilityAccount: String? { original?.accountEmail ?? selected?.email }
+
+    private func readFreeRooms() async {
+        guard let account = availabilityAccount else { return }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        let emails = Array(Set((rooms + contacts.rooms).map { $0.email.lowercased() })).prefix(50)
+        let own = original.map { DateInterval(start: $0.start, end: max($0.end, $0.start)) }
+        let result = await store.freeRooms(Array(emails), over: DateInterval(start: start, end: max(end, start)),
+                                           as: account, own: own)
+        guard !Task.isCancelled else { return }
+        freeRooms = result
+    }
+
     /// What the grid needs from the editor, as one string to watch.
     private var reportKey: String {
         "\(start.timeIntervalSince1970)|\(end.timeIntervalSince1970)|\(selected?.email ?? "")|"
@@ -451,7 +551,7 @@ struct EventEditor: View {
     /// Every field the user can change, as one string.
     private var fields: String {
         [title, "\(start.timeIntervalSince1970)", "\(end.timeIntervalSince1970)", location, notes,
-         guests.map(\.email).joined(separator: ","), repeatRule.rawValue, chosenConference ?? "", chosenCalendar ?? "",
+         guests.map(\.email).joined(separator: ","), rooms.map(\.email).joined(separator: ","), repeatRule.rawValue, chosenConference ?? "", chosenCalendar ?? "",
          scope.rawValue].joined(separator: "\u{1F}")
     }
 
@@ -507,6 +607,7 @@ struct EventEditor: View {
                              calendarID: original?.calendarID ?? target.calendar.id, addMeet: choice == "meet",
                              location: location, notes: notes, guests: guests.map(\.email))
         event.isAllDay = isAllDay
+        event.rooms = rooms.map(\.email)
         if let rule = repeatRule.rrule(start: start) { event.recurrence = [rule] }
         let original = original
         let notesText = notesText

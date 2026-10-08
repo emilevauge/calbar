@@ -397,6 +397,17 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   menu. `sendUpdates=all` when there are guests before or after.
   Duplicate opens a new event with the same fields, a new Meet link for a Meet, in the
   event's calendar when writable.
+- Rooms (`CalendarEvent.rooms`, `ContactBook.rooms`): Google Workspace meeting rooms are
+  resource calendars, booked as attendees with `resource: true` and kept apart from the
+  guests. Listing every room of an organization needs the Admin Directory API, open to
+  administrators only, so the rooms offered are those seen in the events (loaded, and the
+  primary calendars' last 60 days and next 30), most booked first. Under the location the
+  editor shows the booked rooms as chips (orange when busy at the event's time) and a "Book a
+  room" menu, the rooms free then first ("Free", "Busy then"), read with `freebusy.query` 300
+  ms after the times change (the edited event's own time out). Booking a room names the
+  location when it is empty; removing it clears the location it named. Saving adds or removes
+  the resource attendees (`NewEvent.rooms`, `EventPatch`); Google accepts or declines for the
+  room. The details list the booked rooms.
 - Guests: chips with a remove button, then a field. Suggestions, six at most, one per email:
   first the people met (`ContactIndex`: attendees and organizers of the loaded events, and in
   the background, once per launch and again after six hours, of each account's primary

@@ -57,16 +57,20 @@ public struct EventPatch {
 
         let before = Set(original.attendees.filter { !$0.isSelf }.map { $0.person.email.lowercased() })
         let after = Set(draft.guests.map { $0.lowercased() })
-        if before != after {
+        let roomsBefore = Set(original.rooms.map { $0.email.lowercased() })
+        let roomsAfter = Set(draft.rooms.map { $0.lowercased() })
+        if before != after || roomsBefore != roomsAfter {
             // Entries kept as Google has them, with their answers; the
-            // user and meeting rooms, which the editor does not list, too.
+            // user, whom the editor does not list, too.
             let existing = raw["attendees"] as? [[String: Any]] ?? []
             var list = existing.filter { a in
-                a["self"] as? Bool == true || a["resource"] as? Bool == true
-                    || after.contains((a["email"] as? String ?? "").lowercased())
+                let email = (a["email"] as? String ?? "").lowercased()
+                if a["self"] as? Bool == true { return true }
+                return a["resource"] as? Bool == true ? roomsAfter.contains(email) : after.contains(email)
             }
             let present = Set(list.compactMap { ($0["email"] as? String)?.lowercased() })
             list += draft.guests.filter { !present.contains($0.lowercased()) }.map { ["email": $0] }
+            list += draft.rooms.filter { !present.contains($0.lowercased()) }.map { ["email": $0, "resource": true] }
             json["attendees"] = list
         }
 

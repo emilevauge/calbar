@@ -20,6 +20,8 @@ public struct NewEvent: Equatable, Sendable {
     public var recurrence: [String] = []
     /// Whole days: `start` and `end` are midnights, the end excluded.
     public var isAllDay = false
+    /// Meeting room emails, booked as resource attendees.
+    public var rooms: [String] = []
 
     public init(title: String, start: Date, end: Date, calendarID: String, addMeet: Bool,
                 location: String = "", notes: String = "", guests: [String] = [],
@@ -66,7 +68,8 @@ public struct NewEvent: Equatable, Sendable {
         }
         if !place.isEmpty { json["location"] = place }
         if !text.isEmpty { json["description"] = text }
-        if !guests.isEmpty { json["attendees"] = guests.map { ["email": $0] } }
+        let attendees: [[String: Any]] = guests.map { ["email": $0] } + rooms.map { ["email": $0, "resource": true] }
+        if !attendees.isEmpty { json["attendees"] = attendees }
         if addMeet {
             json["conferenceData"] = ["createRequest": [
                 "requestId": requestID,

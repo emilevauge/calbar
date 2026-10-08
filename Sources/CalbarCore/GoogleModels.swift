@@ -214,7 +214,10 @@ extension CalendarEvent {
             originalStart: g.originalStartTime.flatMap { GoogleDate.parse($0, calendar: calendar)?.date },
             reminders: g.reminders?.useDefault == false
                 ? (g.reminders?.overrides ?? []).popupMinutes
-                : source.defaultReminders ?? []
+                : source.defaultReminders ?? [],
+            rooms: (g.attendees ?? []).filter { $0.resource == true }.compactMap { p in
+                p.email.map { Person(email: $0, name: p.displayName) }
+            }
         )
     }
 }

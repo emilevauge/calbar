@@ -36,19 +36,21 @@ import Testing
                 == ["RRULE:FREQ=DAILY;UNTIL=20260930"])
     }
 
-    func occurrence(attendees: [Attendee] = [], notes: String? = nil) -> CalendarEvent {
+    func occurrence(attendees: [Attendee] = [], notes: String? = nil, rooms: [Person] = []) -> CalendarEvent {
         CalendarEvent(
             id: "me@x.com/me@x.com/s_20261001T080000Z", iCalUID: "s@google.com", accountEmail: "me@x.com",
             calendarID: "me@x.com", colorHex: "#000", title: "Sync", start: firstThursday,
             end: firstThursday.addingTimeInterval(1800), isAllDay: false, location: "Room", notes: notes,
             htmlLink: nil, organizer: nil, attendees: attendees, attachments: [], meeting: nil,
-            selfResponse: .accepted, recurringEventID: "s", originalStart: firstThursday)
+            selfResponse: .accepted, recurringEventID: "s", originalStart: firstThursday, rooms: rooms)
     }
 
     func draft(_ e: CalendarEvent) -> NewEvent {
-        NewEvent(title: e.title, start: e.start, end: e.end, calendarID: e.calendarID, addMeet: false,
-                 location: e.location ?? "", notes: "", guests: e.attendees.filter { !$0.isSelf }.map(\.person.email),
-                 timeZone: "Europe/Paris")
+        var d = NewEvent(title: e.title, start: e.start, end: e.end, calendarID: e.calendarID, addMeet: false,
+                         location: e.location ?? "", notes: "", guests: e.attendees.filter { !$0.isSelf }.map(\.person.email),
+                         timeZone: "Europe/Paris")
+        d.rooms = e.rooms.map(\.email)
+        return d
     }
 
     func json(_ data: Data) throws -> [String: Any] {
@@ -72,7 +74,7 @@ import Testing
         let me = Attendee(person: Person(email: "me@x.com", name: nil), response: .accepted, isOrganizer: true, isSelf: true, isOptional: false)
         let ann = Attendee(person: Person(email: "ann@x.com", name: nil), response: .accepted, isOrganizer: false, isSelf: false, isOptional: false)
         let bob = Attendee(person: Person(email: "bob@x.com", name: nil), response: .declined, isOrganizer: false, isSelf: false, isOptional: false)
-        let e = occurrence(attendees: [me, ann, bob])
+        let e = occurrence(attendees: [me, ann, bob], rooms: [Person(email: "room@resource.calendar.google.com", name: "Room")])
         var d = draft(e)
         d.guests = ["ann@x.com", "cy@x.com"]
         let current = #"{"attendees": [{"email": "me@x.com", "self": true, "organizer": true}, {"email": "ann@x.com", "responseStatus": "accepted"}, {"email": "bob@x.com", "responseStatus": "declined"}, {"email": "room@resource.calendar.google.com", "resource": true}]}"#
@@ -164,5 +166,21 @@ import Testing
         #expect(http.requests[1].url?.query?.contains("conferenceDataVersion=1") == true)
         let cut = try json(try #require(http.requests[2].httpBody))
         #expect(cut["recurrence"] as? [String] == ["RRULE:FREQ=WEEKLY;BYDAY=TH;UNTIL=20261001T075959Z"])
+    }
+
+    @Test func roomsAddedAndRemoved() throws {
+        let room = Person(email: "a@resource.calendar.google.com", name: "Rome")
+        let e = occurrence(rooms: [room])
+        var d = draft(e)
+        d.rooms = ["b@resource.calendar.google.com"]
+        let current = #"{"attendees": [{"email": "me@x.com", "self": true}, {"email": "a@resource.calendar.google.com", "resource": true, "responseStatus": "accepted"}]}"#
+        let body = try json(EventPatch(original: e, draft: d, notesText: "", current: Data(current.utf8), series: false, calendar: cal).body)
+        let list = try #require(body["attendees"] as? [[String: Any]])
+        #expect(list.compactMap { $0["email"] as? String } == ["me@x.com", "b@resource.calendar.google.com"])
+        #expect(list.last?["resource"] as? Bool == true)
+        var n = NewEvent(title: "x", start: firstThursday, end: firstThursday.addingTimeInterval(1800), calendarID: "me", addMeet: false)
+        n.rooms = ["b@resource.calendar.google.com"]
+        let created = try json(n.body())
+        #expect((created["attendees"] as? [[String: Any]])?.first?["resource"] as? Bool == true)
     }
 }

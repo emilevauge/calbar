@@ -88,6 +88,9 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
     /// calendar's defaults, as set in Google Calendar. Email reminders
     /// are Google's to send.
     public let reminders: [Int]
+    /// Meeting rooms booked for it: attendees with `resource: true`,
+    /// left out of `attendees`.
+    public let rooms: [Person]
 
     public init(
         id: String, iCalUID: String, accountEmail: String, calendarID: String,
@@ -95,7 +98,7 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
         location: String?, notes: String?, htmlLink: URL?, organizer: Person?,
         attendees: [Attendee], attachments: [Attachment], meeting: MeetingLink?,
         selfResponse: ResponseStatus, googleEventID: String? = nil,
-        recurringEventID: String? = nil, originalStart: Date? = nil, reminders: [Int] = []
+        recurringEventID: String? = nil, originalStart: Date? = nil, reminders: [Int] = [], rooms: [Person] = []
     ) {
         self.id = id
         self.googleEventID = googleEventID ?? Self.googleID(fromCompositeID: id)
@@ -118,6 +121,7 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
         self.recurringEventID = recurringEventID
         self.originalStart = originalStart
         self.reminders = reminders
+        self.rooms = rooms
     }
 
     /// One occurrence of a recurring event.
@@ -126,7 +130,7 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, googleEventID, iCalUID, accountEmail, calendarID, colorHex, title, start, end, isAllDay
         case location, notes, htmlLink, organizer, attendees, attachments, meeting, selfResponse
-        case recurringEventID, originalStart, reminders
+        case recurringEventID, originalStart, reminders, rooms
     }
 
     /// Events cached before `googleEventID` existed take it from the end
@@ -155,7 +159,8 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
             googleEventID: try c.decodeIfPresent(String.self, forKey: .googleEventID),
             recurringEventID: try c.decodeIfPresent(String.self, forKey: .recurringEventID),
             originalStart: try c.decodeIfPresent(Date.self, forKey: .originalStart),
-            reminders: try c.decodeIfPresent([Int].self, forKey: .reminders) ?? []
+            reminders: try c.decodeIfPresent([Int].self, forKey: .reminders) ?? [],
+            rooms: try c.decodeIfPresent([Person].self, forKey: .rooms) ?? []
         )
     }
 
@@ -199,7 +204,7 @@ public struct CalendarEvent: Identifiable, Equatable, Codable, Sendable {
             },
             attachments: attachments, meeting: meeting, selfResponse: response,
             googleEventID: googleEventID, recurringEventID: recurringEventID, originalStart: originalStart,
-            reminders: reminders
+            reminders: reminders, rooms: rooms
         )
     }
 

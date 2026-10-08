@@ -49,6 +49,12 @@ struct EventDetail: View {
                         .multilineTextAlignment(.leading)
                 }
             }
+            if !event.rooms.isEmpty {
+                line("door.left.hand.open") {
+                    Text(event.rooms.map(\.displayName).joined(separator: ", "))
+                        .lineLimit(2)
+                }
+            }
             if let organizer = event.organizer, !event.attendees.contains(where: \.isOrganizer) {
                 line("person.crop.circle") { Text("Organized by \(organizer.displayName)") }
             }
