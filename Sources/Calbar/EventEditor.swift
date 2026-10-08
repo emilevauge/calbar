@@ -46,6 +46,8 @@ struct EventEditor: View {
     @State private var start: Date
     @State private var end: Date
     @State private var isAllDay = false
+    /// The times before "All day" was checked, back when unchecked.
+    @State private var timedRange: (start: Date, end: Date)?
     @State private var location = ""
     @State private var guests: [ContactIndex.Contact] = []
     /// Meeting rooms booked, as resource attendees.
@@ -161,7 +163,10 @@ struct EventEditor: View {
         // changes the times on a click.
         .onChange(of: reportKey) { report() }
         .onChange(of: store.composing?.start) { _, new in
-            if let new, new != start { start = new }
+            guard let new, new != start else { return }
+            start = new
+            // A time picked on the grid: no longer all day.
+            if isAllDay, new != Calendar.current.startOfDay(for: new) { isAllDay = false }
         }
         .onChange(of: store.composing?.end) { _, new in
             if let new, new != end { end = new }
@@ -189,6 +194,12 @@ struct EventEditor: View {
             }
             times
                 .padding(.top, 10)
+                .padding(.leading, 13)
+            Toggle("All day", isOn: allDayBinding)
+                .toggleStyle(.checkbox)
+                .controlSize(.small)
+                .font(.system(size: 12))
+                .padding(.top, 8)
                 .padding(.leading, 13)
             Divider()
                 .padding(.vertical, 12)
@@ -552,7 +563,7 @@ struct EventEditor: View {
     private var fields: String {
         [title, "\(start.timeIntervalSince1970)", "\(end.timeIntervalSince1970)", location, notes,
          guests.map(\.email).joined(separator: ","), rooms.map(\.email).joined(separator: ","), repeatRule.rawValue, chosenConference ?? "", chosenCalendar ?? "",
-         scope.rawValue].joined(separator: "\u{1F}")
+         scope.rawValue, "\(isAllDay)"].joined(separator: "\u{1F}")
     }
 
     /// `esc`: closes when nothing changed or on a second `esc`, otherwise
@@ -568,6 +579,30 @@ struct EventEditor: View {
         } else {
             withAnimation(Motion.resize) { confirmingDiscard = true }
         }
+    }
+
+    /// Checked: whole days from the start's day through the end's. Unchecked:
+    /// the times it had, or 9:00 for 30 minutes.
+    private var allDayBinding: Binding<Bool> {
+        Binding(get: { isAllDay }, set: { on in
+            guard on != isAllDay else { return }
+            let cal = Calendar.current
+            if on {
+                timedRange = (start, end)
+                let first = cal.startOfDay(for: start)
+                let lastDay = cal.startOfDay(for: max(end.addingTimeInterval(-1), start))
+                start = first
+                end = cal.date(byAdding: .day, value: 1, to: lastDay) ?? first.addingTimeInterval(86_400)
+            } else if let saved = timedRange, cal.isDate(saved.start, inSameDayAs: start) {
+                start = saved.start
+                end = saved.end
+            } else {
+                let nine = cal.date(bySettingHour: 9, minute: 0, second: 0, of: start) ?? start
+                start = nine
+                end = nine.addingTimeInterval(30 * 60)
+            }
+            isAllDay = on
+        })
     }
 
     /// Changing the day moves both ends, keeping the hours and the length.

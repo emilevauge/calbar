@@ -183,4 +183,17 @@ import Testing
         let created = try json(n.body())
         #expect((created["attendees"] as? [[String: Any]])?.first?["resource"] as? Bool == true)
     }
+
+    @Test func switchingToAllDayClearsTheTime() throws {
+        let e = occurrence()
+        var d = draft(e)
+        d.isAllDay = true
+        d.start = cal.startOfDay(for: e.start)
+        d.end = d.start.addingTimeInterval(86_400)
+        let body = try json(EventPatch(original: e, draft: d, notesText: "", current: Data("{}".utf8), series: false, calendar: cal).body)
+        let start = try #require(body["start"] as? [String: Any])
+        #expect(start["date"] as? String == "2026-10-01")
+        #expect(start["dateTime"] is NSNull)
+        #expect(start["timeZone"] is NSNull)
+    }
 }

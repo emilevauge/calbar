@@ -23,7 +23,8 @@ public struct EventPatch {
 
         if draft.summary != original.title { json["summary"] = draft.summary }
 
-        if draft.start != original.start || draft.end != original.end {
+        let switchesKind = draft.isAllDay != original.isAllDay
+        if draft.start != original.start || draft.end != original.end || switchesKind {
             struct Times: Decodable { let start: GoogleEvent.Time? }
             if series, let masterStart = try? JSONDecoder().decode(Times.self, from: current).start
                 .flatMap({ GoogleDate.parse($0, calendar: calendar) })?.date {
@@ -36,6 +37,20 @@ public struct EventPatch {
             } else {
                 json["start"] = draft.time(draft.start, calendar: calendar)
                 json["end"] = draft.time(draft.end, calendar: calendar)
+            }
+        }
+        // PATCH merges `start` and `end`: switching between a day and a
+        // time clears the other form, or Google would get both.
+        if switchesKind {
+            for key in ["start", "end"] {
+                guard var time = json[key] as? [String: Any] else { continue }
+                if draft.isAllDay {
+                    time["dateTime"] = NSNull()
+                    time["timeZone"] = NSNull()
+                } else {
+                    time["date"] = NSNull()
+                }
+                json[key] = time
             }
         }
 

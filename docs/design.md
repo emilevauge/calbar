@@ -366,7 +366,12 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   current one; a divider, then "esc to cancel", Cancel and Save. The day opens the same
   month calendar as the header (`DayPicker`); a time opens a scrolling list of quarter hours
   (`TimeList`) centered on the current one, the end times with the duration each gives
-  ("15:30 1 h 15 min", up to 24 hours). A new start keeps the duration, a new day both hours;
+  ("15:30 1 h 15 min", up to 24 hours). An "All day" checkbox under the times makes it whole
+  days, from the start's day through the end's; unchecked, the times it had come back (9:00
+  for 30 minutes otherwise), and a time picked on the grid unchecks it. Switching an event
+  between a time and whole days clears the other form in the patch (`dateTime` and `timeZone`
+  or `date` sent as null), since PATCH merges `start` and `end`. A new start keeps the
+  duration, a new day both hours;
   the title (focused, "(No title)" when left blank), then the lines: the calendar (the writable calendars, `accessRole` owner or
   writer, of the accounts with the write scope, grouped by account, primary first; the last one
   used is remembered), "Google Meet" (remembered, on by default), the repetition

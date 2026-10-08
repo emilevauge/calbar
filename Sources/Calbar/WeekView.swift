@@ -377,7 +377,9 @@ struct WeekView: View {
             if today {
                 nowLine(day, minuteHeight: minuteHeight)
             }
-            if let slot, draft == nil, Calendar.current.isDate(slot.start, inSameDayAs: day) {
+            // An all-day event has no slot on the hours.
+            if let slot, draft == nil, slot.end.timeIntervalSince(slot.start) < 86_400,
+               Calendar.current.isDate(slot.start, inSameDayAs: day) {
                 slotGhost(slot, day: day, minuteHeight: minuteHeight)
             }
             if let draft, Calendar.current.isDate(draft.day, inSameDayAs: day) {
