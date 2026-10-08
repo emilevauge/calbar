@@ -100,6 +100,10 @@ final class DayStartOpener {
         // Checked again: the user may have opened it, or locked the screen.
         guard shouldOpen() else { return }
         open()
+        // The popover shows after a hop (it is fitted to its content
+        // first): checked right away, it is never shown yet, the day was
+        // never marked, and every wake opened it again.
+        try? await Task.sleep(for: .milliseconds(500))
         if isPopoverShown() {
             Prefs.lastDayStartOpen = DayStartPolicy.dayKey(for: Date(), calendar: .current)
             NSLog("Calbar: popover opened at day start")
