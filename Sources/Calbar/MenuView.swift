@@ -91,6 +91,14 @@ struct MenuView: View {
         // change of content, the content stays put under the arrow
         // instead of sliding to the middle.
         .frame(maxHeight: .infinity, alignment: .top)
+        // A peek shows while another app is active: the popover's material
+        // then turns nearly see-through. An opaque window background keeps
+        // it readable over anything.
+        .background {
+            if peeking {
+                Color(nsColor: .windowBackgroundColor).padding(-20)
+            }
+        }
         .focusable()
         .focusEffectDisabled()
         .focused($focused)
