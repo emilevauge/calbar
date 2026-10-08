@@ -149,6 +149,7 @@ final class AppDelegate: NSObject, ObservableObject {
             forName: NSPopover.didCloseNotification, object: p, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
+                self?.stopWatchingOutsideClicks()
                 self?.peekWatch?.cancel()
                 self?.isPeeking = false
                 self?.peekTarget = nil
@@ -301,6 +302,7 @@ final class AppDelegate: NSObject, ObservableObject {
             }
             (popover.contentViewController as? PopoverHost<MenuView>)?.fitPopover()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            self?.watchOutsideClicks()
             then()
         }
     }
@@ -374,6 +376,28 @@ final class AppDelegate: NSObject, ObservableObject {
             return event
         }
         return join.queue(now: now).primary ?? NextMeeting.focus(events: store.events, now: now, calendar: .current)
+    }
+
+    /// Clicks in other apps. A transient popover closes on a click outside
+    /// only while Calbar is the active app; a peek, or a popover left
+    /// behind by a menu, is not, and would stay open.
+    private var outsideClicks: Any?
+
+    private func watchOutsideClicks() {
+        guard outsideClicks == nil else { return }
+        outsideClicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.popover?.isShown == true else { return }
+                // A click on the menu bar icon is the icon's to handle.
+                if let frame = self.statusItem?.button?.window?.frame, frame.contains(NSEvent.mouseLocation) { return }
+                self.closePopover()
+            }
+        }
+    }
+
+    private func stopWatchingOutsideClicks() {
+        if let outsideClicks { NSEvent.removeMonitor(outsideClicks) }
+        outsideClicks = nil
     }
 
     /// Grows the peeking popover to the whole day and gives it the keyboard.

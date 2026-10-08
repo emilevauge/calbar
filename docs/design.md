@@ -536,6 +536,11 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   events included (an all-day event's reminder counts from its midnight: "1 day before at
   9:00" is 900 minutes), for five minutes after its time; one within a minute of a meeting's
   own peeks (alert window, start) is left to them. Under the same "Meeting heads-up" setting.
+- Closing on a click outside: the popover is transient, but a transient popover only closes
+  on a click outside while Calbar is the active app; a peek, opened without the focus, or a
+  popover left behind by a menu, would stay. While it is shown, a global monitor of mouse
+  downs in other apps closes it (`AppDelegate.watchOutsideClicks`), a click on the menu bar
+  icon excepted, which toggles it.
 - Meetings (`MeetingPeeker`, `NotificationPlanner`): no system notification. For timed, not
   declined events (not whole days), with or without a link, the popover opens in peek mode on the meeting
   twice per occurrence: when it enters its alert window, before its start, and at the start,
