@@ -282,6 +282,7 @@ final class AppDelegate: NSObject, ObservableObject {
     func showPopover() {
         if isPeeking { return expandPeek() }
         guard let popover, let button = statusItem?.button, !popover.isShown else { return }
+        popover.behavior = .transient
         hoverPeek.cancel()
         NSApp.activate(ignoringOtherApps: true)
         present(popover, from: button) {
@@ -301,8 +302,21 @@ final class AppDelegate: NSObject, ObservableObject {
                 return
             }
             (popover.contentViewController as? PopoverHost<MenuView>)?.fitPopover()
+            let wasActive = NSApp.isActive
+            let peeking = self?.isPeeking == true
+            // A transient popover closes when Calbar deactivates; a peek is
+            // closed by its own timer and the outside clicks instead.
+            popover.behavior = peeking ? .applicationDefined : .transient
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             self?.watchOutsideClicks()
+            // Showing a popover activates the app, and the keyboard would
+            // leave the app in use: a peek gives it back once shown.
+            if peeking && !wasActive {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    guard self?.isPeeking == true else { return }
+                    NSApp.deactivate()
+                }
+            }
             then()
         }
     }
@@ -408,6 +422,7 @@ final class AppDelegate: NSObject, ObservableObject {
         withAnimation(Motion.resize) {
             isPeeking = false
         }
+        popover?.behavior = .transient
         NSApp.activate(ignoringOtherApps: true)
         popover?.contentViewController?.view.window?.makeKey()
     }
