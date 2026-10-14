@@ -46,6 +46,9 @@ struct EventEditor: View {
     @State private var start: Date
     @State private var end: Date
     @State private var isAllDay = false
+    /// The title last filled in from the guests: replaced as they change,
+    /// until the user types their own.
+    @State private var autoTitle = ""
     /// The times before "All day" was checked, back when unchecked.
     @State private var timedRange: (start: Date, end: Date)?
     @State private var location = ""
@@ -162,6 +165,8 @@ struct EventEditor: View {
         // The grid draws the times and the guests' availability, and
         // changes the times on a click.
         .onChange(of: reportKey) { report() }
+        // A new meeting with guests is named after them: "Nicolas / Emile".
+        .onChange(of: guests.map(\.email)) { fillTitle() }
         .onChange(of: store.composing?.start) { _, new in
             guard let new, new != start else { return }
             start = new
@@ -552,6 +557,13 @@ struct EventEditor: View {
     private var reportKey: String {
         "\(start.timeIntervalSince1970)|\(end.timeIntervalSince1970)|\(selected?.email ?? "")|"
             + guests.map(\.email).joined(separator: ",")
+    }
+
+    private func fillTitle() {
+        guard case .create = mode, title.isEmpty || title == autoTitle, let me = selected?.email else { return }
+        let name = guests.isEmpty ? "" : NewEvent.autoTitle(guests: guests.map { ($0.email, $0.name) }, me: me)
+        title = name
+        autoTitle = name
     }
 
     private func report() {

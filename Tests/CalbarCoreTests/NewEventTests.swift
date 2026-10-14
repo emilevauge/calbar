@@ -72,4 +72,10 @@ import Testing
             == ["a@example.com", "b@example.org", "c@x.io"])
         #expect(NewEvent.guests(from: "").isEmpty)
     }
+
+    @Test func autoTitle() {
+        #expect(NewEvent.autoTitle(guests: [("nicolas.mengin@x.com", nil)], me: "emile.vauge@x.com") == "Nicolas / Emile")
+        #expect(NewEvent.autoTitle(guests: [("g@x.com", "Gérald Croës"), ("ann_lee@x.com", nil)], me: "emile@x.com")
+                == "Gérald / Ann / Emile")
+    }
 }

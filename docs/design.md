@@ -372,7 +372,9 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   between a time and whole days clears the other form in the patch (`dateTime` and `timeZone`
   or `date` sent as null), since PATCH merges `start` and `end`. A new start keeps the
   duration, a new day both hours;
-  the title (focused, "(No title)" when left blank), then the lines: the calendar (the writable calendars, `accessRole` owner or
+  the title (focused, "(No title)" when left blank; a new event with guests is named after
+  them, "Nicolas / Emile", their first names then the user's, kept up to date as guests come
+  and go until the user types a title of their own, `NewEvent.autoTitle`), then the lines: the calendar (the writable calendars, `accessRole` owner or
   writer, of the accounts with the write scope, grouped by account, primary first; the last one
   used is remembered), "Google Meet" (remembered, on by default), the repetition
   (`RepeatRule`: does not repeat, daily, every weekday, weekly on the start's day, every 2
@@ -437,8 +439,9 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   (`docs/zoom-callback/`) that forwards the query, code and state, to Calbar's listener on
   `http://127.0.0.1:53682` and nowhere else; the state is checked there as for Google, with
   PKCE as well. Client and refresh token in the Keychain under `dev.calbar.app.zoom`, read
-  only when needed (settings, sign-in, a meeting; whether one is stored is a `zoomConnected`
-  default, so launching reads no Zoom item),
+  only when needed (settings, sign-in, a meeting; whether one is stored is a `zoomTokenStored`
+  default, so launching reads no Zoom item; set once from the Keychain, and not when that
+  read fails, which would otherwise hide Zoom),
   the refresh token replaced on every refresh since Zoom rotates it, a refused one
   disconnecting). On save with Zoom, Calbar first creates a scheduled meeting
   (`POST /users/me/meetings`, scope `meeting:write:meeting`: topic, UTC start, duration, time

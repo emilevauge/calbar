@@ -47,6 +47,22 @@ public struct NewEvent: Equatable, Sendable {
             .filter { $0.contains("@") && $0.contains(".") && seen.insert($0.lowercased()).inserted }
     }
 
+    /// "Nicolas / Emile" for a meeting with guests: their first names,
+    /// then the user's, as the team names one-to-ones.
+    public static func autoTitle(guests: [(email: String, name: String?)], me: String) -> String {
+        (guests.map { firstName(email: $0.email, name: $0.name) } + [firstName(email: me, name: nil)])
+            .joined(separator: " / ")
+    }
+
+    /// The first word of the name, else of the email's local part
+    /// ("emile.vauge@x.com" gives "Emile").
+    public static func firstName(email: String, name: String?) -> String {
+        if let name, let word = name.split(separator: " ").first, !word.contains("@") { return String(word) }
+        let local = email.split(separator: "@").first.map(String.init) ?? email
+        let word = local.split(whereSeparator: { ".-_+".contains($0) }).first.map(String.init) ?? local
+        return word.prefix(1).uppercased() + word.dropFirst()
+    }
+
     /// "(No title)" for a blank title, like Google Calendar.
     public var summary: String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)

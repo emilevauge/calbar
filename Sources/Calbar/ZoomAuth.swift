@@ -24,18 +24,28 @@ final class ZoomAuth: ObservableObject {
 
     /// Whether a refresh token is stored, kept outside the Keychain so
     /// launching reads no Zoom item (each read may ask for the keychain).
-    private static let connectedKey = "zoomConnected"
+    /// A new key: the first one could hold a false "not connected", from a
+    /// Keychain read refused while macOS asked for access.
+    private static let connectedKey = "zoomTokenStored"
     private var clientLoaded = false
 
     init(http: HTTPClient = URLSession.shared) {
         self.http = http
         let defaults = UserDefaults.standard
         if defaults.object(forKey: Self.connectedKey) == nil {
-            // Once, from versions that did not keep the flag.
-            let stored = ((try? Keychain.read(account: Self.tokenAccount, service: Keychain.zoomService)) ?? nil) != nil
-            defaults.set(stored, forKey: Self.connectedKey)
+            // Once, from versions that did not keep the flag. A failed read
+            // (access refused, keychain locked) is not "no token": nothing
+            // is stored then, and the next launch asks again.
+            do {
+                let stored = try Keychain.read(account: Self.tokenAccount, service: Keychain.zoomService) != nil
+                defaults.set(stored, forKey: Self.connectedKey)
+                isConnected = stored
+            } catch {
+                isConnected = true
+            }
+        } else {
+            isConnected = defaults.bool(forKey: Self.connectedKey)
         }
-        isConnected = defaults.bool(forKey: Self.connectedKey)
     }
 
     /// The client from the Keychain, read the first time it is needed:
