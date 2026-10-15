@@ -193,9 +193,13 @@ struct MenuView: View {
             let shown = weekDays(DayWindow.day(offset: dayOffset, from: store.now, calendar: .current))
             if !shown.contains(where: { Calendar.current.isDate($0, inSameDayAs: start) }) { show(day: start) }
         }
+        // Each opening starts on today's list: not the week, nor the
+        // day's hour grid, whatever was shown last.
         .onChange(of: app.popoverCloseCount) {
             showToday()
             showEnded = false
+            viewMode = .day
+            weekForEditor = false
         }
         .onChange(of: store.requestedEventID) {
             applyRequestedEvent()

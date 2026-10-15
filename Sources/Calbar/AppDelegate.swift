@@ -93,7 +93,7 @@ final class AppDelegate: NSObject, ObservableObject {
         setupPopover()
         join.onOpenCalbar = { [weak self] event in
             self?.store.requestedEventID = event.id
-            self?.showPopover()
+            self?.showPopover(reason: "join capsule")
         }
         join.onChange = { [weak self] in self?.refreshIndicators() }
         peeker.show = { [weak self] event in self?.peek(on: event, for: MeetingPeeker.duration) ?? false }
@@ -102,7 +102,7 @@ final class AppDelegate: NSObject, ObservableObject {
         let dayStart = DayStartOpener(
             store: store,
             isPopoverShown: { [weak self] in self?.popover?.isShown == true },
-            open: { [weak self] in self?.showPopover() }
+            open: { [weak self] in self?.showPopover(reason: "day start") }
         )
         dayStart.start()
         self.dayStart = dayStart
@@ -275,13 +275,14 @@ final class AppDelegate: NSObject, ObservableObject {
         } else if popover?.isShown == true {
             closePopover()
         } else {
-            showPopover()
+            showPopover(reason: sender == nil ? "shortcut" : "click")
         }
     }
 
-    func showPopover() {
+    func showPopover(reason: String = "click") {
         if isPeeking { return expandPeek() }
         guard let popover, let button = statusItem?.button, !popover.isShown else { return }
+        NSLog("Calbar: popover opened (%@)", reason)
         popover.behavior = .transient
         hoverPeek.cancel()
         NSApp.activate(ignoringOtherApps: true)

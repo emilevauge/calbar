@@ -56,12 +56,18 @@ final class HoverPeek {
     private func pointerEntered() {
         isInside = true
         guard !suppressed else { return }
+        // The icon can come under a still pointer: it changes width (a
+        // countdown, the Join capsule), or the menu bar lays out again
+        // after a wake. Only a pointer that moved onto it counts.
+        let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .mouseMoved)
+        guard idle < 0.3 else { return }
         cancel()
         pending = Task { [weak self] in
             try? await Task.sleep(for: Self.delay)
-            guard !Task.isCancelled else { return }
-            self?.pending = nil
-            self?.peek()
+            guard !Task.isCancelled, let self, self.isInside else { return }
+            self.pending = nil
+            NSLog("Calbar: peek on hover")
+            self.peek()
         }
     }
 

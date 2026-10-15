@@ -44,6 +44,7 @@ final class MeetingPeeker {
         if let event = NotificationPlanner.dueAtStart(store.events, now: now, policy: policy,
                                                       skip: Set(shownAtStart.keys).union(dismissed)).first {
             if show(event) {
+                NSLog("Calbar: peek at a meeting's start")
                 let end = NotificationPlanner.windowEnd(event, policy: policy)
                 shownAtStart[event.occurrenceKey] = end
                 shownSoon[event.occurrenceKey] = end
@@ -53,6 +54,7 @@ final class MeetingPeeker {
         let skip = Set(shownSoon.keys).union(shownAtStart.keys).union(dismissed)
         if let event = NotificationPlanner.due(store.events, now: now, policy: policy, skip: skip).first {
             if show(event) {
+                NSLog("Calbar: peek before a meeting")
                 shownSoon[event.occurrenceKey] = NotificationPlanner.windowEnd(event, policy: policy)
             }
             return
@@ -62,6 +64,7 @@ final class MeetingPeeker {
                                                       skip: Set(shownReminders.keys)).first,
            !dismissed.contains(due.event.occurrenceKey),
            show(due.event) {
+            NSLog("Calbar: peek for a reminder (%@)", due.key.components(separatedBy: "#").last ?? "")
             shownReminders[due.key] = now.addingTimeInterval(NotificationPlanner.reminderWindow + 60)
         }
     }

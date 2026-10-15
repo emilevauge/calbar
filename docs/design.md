@@ -554,6 +554,12 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   timer, the pointer rule and the outside clicks. Expanding it, or a click on the icon, goes
   back to `.transient` and activates Calbar. Over another active app the popover's material
   turns nearly see-through, so a peek gets an opaque window background color.
+- Every opening starts on today's list, whatever view (week, day grid) was shown last.
+- Hover peeks need a pointer that moved onto the icon (`CGEventSource` mouse-moved idle time
+  under 0.3 s at the entry): the icon also comes under a still pointer when it changes width
+  (a countdown, the Join capsule) or when the menu bar lays out again after a wake, and that
+  opened peeks out of the blue. Each opening is logged with its reason (click, shortcut, day
+  start, join capsule, hover, before a meeting, at its start, a reminder).
 - Closing on a click outside: the popover is transient, but a transient popover only closes
   on a click outside while Calbar is the active app; a peek, opened without the focus, or a
   popover left behind by a menu, would stay. While it is shown, a global monitor of mouse
