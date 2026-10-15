@@ -78,6 +78,10 @@ struct WeekView: View {
         /// A new time for `availability`'s event, not a new event.
         var moving = false
     }
+    /// When the press on the grid began: a click creates nothing, a drag
+    /// or a press held `holdDelay` does.
+    @State private var pressStart: Date?
+    static let holdDelay: TimeInterval = 0.4
     /// The all-day row shows every event instead of two per day.
     @State private var allDayUnfolded = false
     @Environment(\.colorScheme) private var scheme
@@ -310,7 +314,23 @@ struct WeekView: View {
                             let r = NewEvent.range(from: value.startLocation.y / minuteHeight,
                                                    to: value.location.y / minuteHeight,
                                                    dragThreshold: 8 / minuteHeight)
-                            draft = Draft(day: day, start: r.start, end: r.end, editing: false)
+                            let moved = abs(value.location.y - value.startLocation.y) >= 8
+                            if pressStart == nil {
+                                // A new press: a held one becomes a selection
+                                // after a moment, even without moving.
+                                let started = Date()
+                                pressStart = started
+                                DispatchQueue.main.asyncAfter(deadline: .now() + Self.holdDelay) {
+                                    guard pressStart == started, draft == nil else { return }
+                                    draft = Draft(day: day, start: r.start, end: r.end, editing: false)
+                                }
+                            }
+                            // Creating needs a drag or a held press: a plain
+                            // click on the grid does nothing. While editing,
+                            // a click moves the event at once.
+                            if moved || slot != nil || draft != nil {
+                                draft = Draft(day: day, start: r.start, end: r.end, editing: false)
+                            }
                         }
                         .onEnded { value in
                             if let availability {
@@ -328,8 +348,11 @@ struct WeekView: View {
                                 }
                                 return
                             }
+                            let held = pressStart.map { Date().timeIntervalSince($0) >= Self.holdDelay } ?? false
+                            pressStart = nil
                             guard let onSelect else { return }
                             draft = nil
+                            if slot == nil, !held, abs(value.location.y - value.startLocation.y) < 8 { return }
                             var r = NewEvent.range(from: value.startLocation.y / minuteHeight,
                                                    to: value.location.y / minuteHeight,
                                                    dragThreshold: 8 / minuteHeight)

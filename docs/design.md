@@ -342,7 +342,9 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   grid, pressing on an empty slot (outside the blocks) and dragging, up or down, marks out a
   ghost block that follows the pointer, labelled "10:00-11:30", from the quarter hour under the
   press to the quarter hour past the pointer (`NewEvent.range`, 15 min at least, within the
-  day); a plain click makes it 30 minutes. On release the editor opens beside the week grid
+  day). A plain click creates nothing (it is too easy to make by mistake): a drag, or a press
+  held 0.4 s, which shows the ghost then and gives 30 minutes without a drag. On release the
+  editor opens beside the week grid
   (`EventStore.Composing`), the panel widening by its 360 pt, the day grid switching to the
   week. Blocks and the ghost are placed with padding, not `offset`, which moves the drawing but
   not the frame a popover anchors on. While the editor is open the grid is its time picker: the
