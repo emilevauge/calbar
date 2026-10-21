@@ -22,7 +22,7 @@ public enum AlertPlanner {
         dismissed: Set<String>
     ) -> [CalendarEvent] {
         events.filter { e in
-            !e.isWholeDay
+            !e.isWholeDay && e.outOfOffice == nil
                 && e.selfResponse != .declined
                 && !dismissed.contains(e.occurrenceKey)
                 && now >= e.start.addingTimeInterval(-policy.leadTime)

@@ -75,6 +75,9 @@ func describeCreate(_ error: Error) -> String {
         return "Google refused to add the event (403)."
     case APIError.http(404, _):
         return "This calendar no longer exists."
+    case APIError.http(400, let body):
+        // Google says why, as for an absence outside Google Workspace.
+        return googleMessage(body).map { "Google refused: \($0)" } ?? describe(error)
     case is URLError, is APIError, OAuthError.invalidGrant:
         return describe(error)
     default:
@@ -94,4 +97,13 @@ func describeZoom(_ error: Error) -> String {
     default:
         return "Could not create the Zoom meeting."
     }
+}
+
+/// The `error.message` of a Google API answer.
+func googleMessage(_ body: String) -> String? {
+    struct Envelope: Decodable {
+        struct Body: Decodable { let message: String? }
+        let error: Body
+    }
+    return (try? JSONDecoder().decode(Envelope.self, from: Data(body.utf8)))?.error.message
 }

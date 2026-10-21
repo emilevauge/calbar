@@ -60,6 +60,12 @@ struct GoogleEvent: Decodable {
     /// Only on a series itself, not on its occurrences.
     let recurrence: [String]?
     let reminders: Reminders?
+    let outOfOfficeProperties: OutOfOfficeProperties?
+
+    struct OutOfOfficeProperties: Decodable {
+        let autoDeclineMode: String?
+        let declineMessage: String?
+    }
 
     struct Reminder: Decodable {
         let method: String?
@@ -217,7 +223,11 @@ extension CalendarEvent {
                 : source.defaultReminders ?? [],
             rooms: (g.attendees ?? []).filter { $0.resource == true }.compactMap { p in
                 p.email.map { Person(email: $0, name: p.displayName) }
-            }
+            },
+            outOfOffice: g.eventType == "outOfOffice"
+                ? OutOfOffice(decline: g.outOfOfficeProperties?.autoDeclineMode.flatMap(OutOfOffice.Decline.init(rawValue:)) ?? .none,
+                              message: g.outOfOfficeProperties?.declineMessage ?? "")
+                : nil
         )
     }
 }

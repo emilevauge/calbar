@@ -23,7 +23,8 @@ public struct EventPatch {
 
         if draft.summary != original.title { json["summary"] = draft.summary }
 
-        let switchesKind = draft.isAllDay != original.isAllDay
+        // An absence keeps its times, whole days or not.
+        let switchesKind = draft.outOfOffice == nil && draft.isAllDay != original.isAllDay
         if draft.start != original.start || draft.end != original.end || switchesKind {
             struct Times: Decodable { let start: GoogleEvent.Time? }
             if series, let masterStart = try? JSONDecoder().decode(Times.self, from: current).start
@@ -98,6 +99,9 @@ public struct EventPatch {
         }
 
         if !draft.recurrence.isEmpty && !original.isRecurring { json["recurrence"] = draft.recurrence }
+        if let absence = draft.outOfOffice, original.outOfOffice != nil, absence != original.outOfOffice {
+            json["outOfOfficeProperties"] = absence.properties
+        }
 
         notify = !before.isEmpty || !after.isEmpty
         body = try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])

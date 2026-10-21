@@ -28,10 +28,24 @@ struct EventDetail: View {
         .foregroundStyle(.secondary)
     }
 
+    static func absenceText(_ decline: OutOfOffice.Decline) -> String {
+        switch decline {
+        case .none: "Out of office"
+        case .newOnly: "Out of office, declining new invitations"
+        case .all: "Out of office, declining every meeting"
+        }
+    }
+
     private var lines: some View {
         VStack(alignment: .leading, spacing: 8) {
             if event.canRespond {
                 RSVPSection(event: event)
+            }
+            if let absence = event.outOfOffice {
+                line("calendar.badge.minus") {
+                    Text(Self.absenceText(absence.decline))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             if showsMeetingLink, let meeting = event.meeting {
                 line("video") {

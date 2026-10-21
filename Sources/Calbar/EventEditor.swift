@@ -46,6 +46,8 @@ struct EventEditor: View {
     @State private var start: Date
     @State private var end: Date
     @State private var isAllDay = false
+    /// An absence rather than an event, and what Google declines during it.
+    @State private var absence: OutOfOffice?
     /// The title last filled in from the guests: replaced as they change,
     /// until the user types their own.
     @State private var autoTitle = ""
@@ -110,7 +112,8 @@ struct EventEditor: View {
         notesText = text
         guard let event else { return }
         _title = State(initialValue: event.title == "(No title)" ? "" : event.title)
-        _isAllDay = State(initialValue: event.isAllDay)
+        _isAllDay = State(initialValue: event.isAllDay || (event.outOfOffice != nil && Self.wholeDays(event.start, event.end)))
+        _absence = State(initialValue: event.outOfOffice)
         _location = State(initialValue: event.location ?? "")
         _rooms = State(initialValue: event.rooms)
         _notes = State(initialValue: text)
@@ -142,8 +145,38 @@ struct EventEditor: View {
             ?? calendars.first
     }
 
+    /// Where the event goes: for an absence, the main calendar of the
+    /// selected one's account.
+    private var target: WritableCalendar? {
+        guard absence != nil, let selected, !selected.calendar.isPrimary else { return selected }
+        return composer.calendars.first { $0.email == selected.email && $0.calendar.isPrimary } ?? selected
+    }
+
+    /// Event or absence. An absence starts on whole days, as in Google
+    /// Calendar, and names itself.
+    private var kindBinding: Binding<Bool> {
+        Binding(get: { absence != nil }, set: { on in
+            guard on != (absence != nil) else { return }
+            withAnimation(Motion.resize) {
+                absence = on ? OutOfOffice() : nil
+                if on {
+                    if !isAllDay { allDayBinding.wrappedValue = true }
+                    if title.isEmpty || title == autoTitle { title = ""; autoTitle = "" }
+                } else {
+                    fillTitle()
+                }
+            }
+        })
+    }
+
+    /// From one midnight to another.
+    static func wholeDays(_ start: Date, _ end: Date) -> Bool {
+        let cal = Calendar.current
+        return end > start && cal.startOfDay(for: start) == start && cal.startOfDay(for: end) == end
+    }
+
     var body: some View {
-        let color = Color(hex: original?.colorHex ?? selected?.calendar.colorHex ?? "#4285f4")
+        let color = Color(hex: original?.colorHex ?? target?.calendar.colorHex ?? "#4285f4")
         Group {
             if composer.calendars.isEmpty {
                 Text("No calendar to add to. Reconnect your account in Settings to create events.")
@@ -190,11 +223,23 @@ struct EventEditor: View {
     /// an icon each, then Cancel and Save.
     private func form(_ color: Color) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            // The kind of an existing event cannot change at Google.
+            if original == nil {
+                Picker("", selection: kindBinding) {
+                    Text("Event").tag(false)
+                    Text("Out of office").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                .fixedSize()
+                .padding(.bottom, 12)
+            }
             HStack(alignment: .center, spacing: 9) {
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(color)
                     .frame(width: 4, height: 20)
-                TextField(original == nil ? "New event" : "Title", text: $title)
+                TextField(absence != nil ? "Out of office" : original == nil ? "New event" : "Title", text: $title)
                     .textFieldStyle(.plain)
                     .font(.system(size: 17, weight: .semibold))
                     .focused($titleFocused)
@@ -270,16 +315,18 @@ struct EventEditor: View {
 
     private var details: some View {
         VStack(alignment: .leading, spacing: 9) {
-            line(color: Color(hex: selected?.calendar.colorHex ?? "#888888")) {
+            line(color: Color(hex: target?.calendar.colorHex ?? "#888888")) {
                 if let original {
                     // Moving an event to another calendar is not supported.
                     Text(selected?.calendar.name ?? original.calendarID)
                 } else {
-                    MenuField(label: selected?.calendar.name ?? "Calendar") {
-                        ForEach(Self.byAccount(composer.calendars), id: \.0) { email, list in
+                    MenuField(label: target?.calendar.name ?? "Calendar") {
+                        // An absence goes on an account's main calendar.
+                        ForEach(Self.byAccount(composer.calendars.filter { absence == nil || $0.calendar.isPrimary }),
+                                id: \.0) { email, list in
                             Section(email) {
                                 ForEach(list) { item in
-                                    CheckItem(item.calendar.name, checked: item.id == selected?.id) {
+                                    CheckItem(item.calendar.name, checked: item.id == target?.id) {
                                         chosenCalendar = item.id
                                         calendarID = item.id
                                     }
@@ -289,6 +336,49 @@ struct EventEditor: View {
                     }
                 }
             }
+            if absence != nil {
+                absenceLines
+            } else {
+                meetingLines
+            }
+        }
+        .font(.system(size: 12))
+    }
+
+    /// What Google declines during the absence, and the message it sends.
+    @ViewBuilder
+    private var absenceLines: some View {
+        let decline = absence?.decline ?? .none
+        line("calendar.badge.minus") {
+            MenuField(label: decline.label) {
+                ForEach(OutOfOffice.Decline.allCases, id: \.self) { choice in
+                    CheckItem(choice.label, checked: choice == decline) { absence?.decline = choice }
+                }
+            }
+            .help("Which meetings during the absence Google declines for you")
+        }
+        if decline != .none {
+            line("text.bubble", alignment: .top) {
+                TextField("Message", text: Binding(get: { absence?.message ?? "" },
+                                                   set: { absence?.message = $0 }), axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...4)
+            }
+        }
+        if original?.isRecurring != true {
+            line("repeat") {
+                MenuField(label: repeatRule.label(start: start)) {
+                    ForEach(RepeatRule.allCases, id: \.self) { rule in
+                        CheckItem(rule.label(start: start), checked: rule == repeatRule) { repeatRule = rule }
+                        if rule == .none { Divider() }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var meetingLines: some View {
             line("video") {
                 if let meeting = original?.meeting {
                     Text(meeting.provider.displayName)
@@ -338,8 +428,6 @@ struct EventEditor: View {
                     .textFieldStyle(.plain)
                     .lineLimit(1...6)
             }
-        }
-        .font(.system(size: 12))
     }
 
     /// What the grid shows of the guests: free slots, or who is busy at
@@ -559,11 +647,11 @@ struct EventEditor: View {
     /// What the grid needs from the editor, as one string to watch.
     private var reportKey: String {
         "\(start.timeIntervalSince1970)|\(end.timeIntervalSince1970)|\(isAllDay)|\(selected?.email ?? "")|"
-            + guests.map(\.email).joined(separator: ",")
+            + guests.map(\.email).joined(separator: ",") + "|\(absence != nil)"
     }
 
     private func fillTitle() {
-        guard case .create = mode, title.isEmpty || title == autoTitle, let me = selected?.email else { return }
+        guard case .create = mode, absence == nil, title.isEmpty || title == autoTitle, let me = selected?.email else { return }
         let name = guests.isEmpty ? "" : NewEvent.autoTitle(guests: guests.map { ($0.email, $0.name) }, me: me)
         title = name
         autoTitle = name
@@ -571,14 +659,14 @@ struct EventEditor: View {
 
     private func report() {
         store.composingChanged(start: start, end: end, allDay: isAllDay, account: original?.accountEmail ?? selected?.email,
-                               guests: guests.map { ($0.email, $0.name) })
+                               guests: absence == nil ? guests.map { ($0.email, $0.name) } : [])
     }
 
     /// Every field the user can change, as one string.
     private var fields: String {
         [title, "\(start.timeIntervalSince1970)", "\(end.timeIntervalSince1970)", location, notes,
          guests.map(\.email).joined(separator: ","), rooms.map(\.email).joined(separator: ","), repeatRule.rawValue, chosenConference ?? "", chosenCalendar ?? "",
-         scope.rawValue, "\(isAllDay)"].joined(separator: "\u{1F}")
+         scope.rawValue, "\(isAllDay)", absence.map { "\($0.decline.rawValue)\($0.message)" } ?? ""].joined(separator: "\u{1F}")
     }
 
     /// `esc`: closes when nothing changed or on a second `esc`, otherwise
@@ -646,7 +734,7 @@ struct EventEditor: View {
     }
 
     private func commit(_ scope: RecurrenceScope) {
-        guard !busy, let target = selected else { return }
+        guard !busy, let target else { return }
         withAnimation(Motion.resize) { askingScope = false }
         self.scope = scope
         busy = true
@@ -658,12 +746,19 @@ struct EventEditor: View {
                              location: location, notes: notes, guests: guests.map(\.email))
         event.isAllDay = isAllDay
         event.rooms = rooms.map(\.email)
+        if let absence {
+            // Only what an absence has; the rest of the form is hidden.
+            event = NewEvent(title: title.isEmpty ? "Out of office" : title, start: event.start, end: event.end,
+                             calendarID: event.calendarID, addMeet: false)
+            event.isAllDay = isAllDay
+            event.outOfOffice = absence
+        }
         if let rule = repeatRule.rrule(start: start) { event.recurrence = [rule] }
         let original = original
         let notesText = notesText
         Task {
             // The Zoom meeting first: its link goes into the event.
-            if choice == "zoom" {
+            if choice == "zoom" && absence == nil {
                 do {
                     event.zoom = try await zoom.createMeeting(topic: event.summary, start: event.start,
                                                               end: event.end, agenda: notes)

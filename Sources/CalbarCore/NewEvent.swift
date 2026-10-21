@@ -22,6 +22,10 @@ public struct NewEvent: Equatable, Sendable {
     public var isAllDay = false
     /// Meeting room emails, booked as resource attendees.
     public var rooms: [String] = []
+    /// An absence rather than an event: no guests, place or call, and
+    /// always times, since Google refuses an all-day one (whole days go
+    /// from midnight to midnight).
+    public var outOfOffice: OutOfOffice?
 
     public init(title: String, start: Date, end: Date, calendarID: String, addMeet: Bool,
                 location: String = "", notes: String = "", guests: [String] = [],
@@ -76,6 +80,11 @@ public struct NewEvent: Equatable, Sendable {
         json["start"] = time(start)
         json["end"] = time(end)
         if !recurrence.isEmpty { json["recurrence"] = recurrence }
+        if let outOfOffice {
+            json["eventType"] = "outOfOffice"
+            json["outOfOfficeProperties"] = outOfOffice.properties
+            return try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
+        }
         var place = location.trimmingCharacters(in: .whitespacesAndNewlines)
         var text = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         if let zoom {
@@ -98,7 +107,7 @@ public struct NewEvent: Equatable, Sendable {
     /// A start or end in Google's form: a day for an all-day event, else
     /// a time with the zone, which recurring events need.
     func time(_ date: Date, calendar: Calendar = .current) -> [String: String] {
-        isAllDay ? ["date": GoogleDate.day(date, calendar: calendar)]
+        isAllDay && outOfOffice == nil ? ["date": GoogleDate.day(date, calendar: calendar)]
                  : ["dateTime": GoogleDate.rfc3339(date), "timeZone": timeZone]
     }
 

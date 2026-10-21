@@ -703,3 +703,22 @@ update script. OAuth sign-in, the UI and the update itself are tested by hand.
 - Creating or editing events, other than answering an invitation.
 - Answering every occurrence of a recurring meeting at once, and adding a note to an answer.
 - Other calendar providers (iCloud, Outlook).
+
+## Out of office
+
+- `OutOfOffice` (`Sources/CalbarCore/OutOfOffice.swift`): an event of Google's `outOfOffice`
+  type and its `outOfOfficeProperties`: what Google declines during it (`declineNone`,
+  `declineOnlyNewConflictingInvitations`, `declineAllConflictingInvitations`, the last one
+  also declining the meetings already planned) and the message sent with each decline.
+- Parsed on every event (`CalendarEvent.outOfOffice`). An absence is never a meeting: no
+  countdown, alert or notification of its start (`NextMeeting`, `AlertPlanner`,
+  `NotificationPlanner`). Its card has a line "Out of office, declining new invitations" (or
+  "every meeting").
+- The editor of a new event has an "Event | Out of office" switch on top; an existing event
+  keeps its kind, which Google cannot change. An absence starts on whole days, titles itself
+  "Out of office" when left blank, goes to the main calendar of the chosen account (only main
+  calendars are listed), and has instead of the call, guests, place, rooms and description a
+  menu of what to decline, the message, and the repetition. Google refuses an all-day absence:
+  whole days are sent as times from midnight to midnight, and an absence from midnight to
+  midnight opens as whole days. Changing what it declines patches `outOfOfficeProperties`
+  alone. A refusal (an account outside Google Workspace) shows Google's own message.
