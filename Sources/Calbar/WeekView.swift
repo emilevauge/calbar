@@ -218,7 +218,7 @@ struct WeekView: View {
                 // Anywhere on the area, folded or not, over the bars and the
                 // "+N" row too: only the "+N" buttons keep their clicks.
                 .contentShape(Rectangle())
-                .gesture(allDaySelection, isEnabled: selecting)
+                .gesture(allDaySelection(bars: bars.filter { $0.row < shownRows }, rowHeight: rowHeight), isEnabled: selecting)
                 .padding(.bottom, 4)
             }
         }
@@ -235,22 +235,31 @@ struct WeekView: View {
 
     /// A click on a day, or a drag across days, marks out a new all-day
     /// event over them.
-    private var allDaySelection: some Gesture {
+    /// A press on a bar opens its card instead, unless editing.
+    private func allDaySelection(bars: [WeekLayout.Bar], rowHeight: CGFloat) -> some Gesture {
         let columns = days.count
         let columnWidth = columnWidth
         func column(_ x: CGFloat) -> Int {
             min(max(Int((x - Self.gutter) / max(columnWidth, 1)), 0), columns - 1)
         }
+        let editing = slot != nil
+        func onBar(_ point: CGPoint) -> Bool {
+            guard !editing, point.x >= Self.gutter else { return false }
+            let row = Int(point.y / rowHeight), day = column(point.x)
+            return bars.contains { $0.row == row && $0.first <= day && day <= $0.last }
+        }
         return DragGesture(minimumDistance: 0, coordinateSpace: .local)
             .onChanged { value in
+                guard !onBar(value.startLocation) else { return }
                 let a = column(value.startLocation.x)
                 let b = column(value.location.x)
                 allDayDraft = min(a, b)...max(a, b)
             }
             .onEnded { value in
+                allDayDraft = nil
+                guard !onBar(value.startLocation) else { return }
                 let a = column(value.startLocation.x)
                 let b = column(value.location.x)
-                allDayDraft = nil
                 let first = days[min(a, b)]
                 let last = days[max(a, b)]
                 let end = Calendar.current.date(byAdding: .day, value: 1, to: last) ?? last.addingTimeInterval(86_400)
@@ -302,7 +311,10 @@ struct WeekView: View {
         let color = Color(hex: event.colorHex)
         let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
         let time = !event.isAllDay && !bar.continuesBefore ? ", \(AgendaFormat.clock(event.start, .current))" : ""
-        return HStack(spacing: 0) {
+        return Button {
+            opened = event.id
+        } label: {
+            HStack(spacing: 0) {
             if bar.continuesBefore {
                 Image(systemName: "chevron.left").font(.system(size: 7, weight: .bold)).padding(.trailing, 3)
             }
@@ -313,15 +325,27 @@ struct WeekView: View {
                 Image(systemName: "chevron.right").font(.system(size: 7, weight: .bold))
             }
         }
-        .font(.caption2)
-        .lineLimit(1)
-        .padding(.horizontal, 5)
-        .background {
-            shape.fill(Color(nsColor: .textBackgroundColor))
-            shape.fill(color.opacity(scheme == .dark ? 0.42 : 0.30))
-            shape.strokeBorder(color.opacity(0.55), lineWidth: 0.5)
+            .font(.caption2)
+            .lineLimit(1)
+            .padding(.horizontal, 5)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                shape.fill(Color(nsColor: .textBackgroundColor))
+                shape.fill(color.opacity(scheme == .dark ? 0.42 : 0.30))
+                shape.strokeBorder(color.opacity(0.55), lineWidth: 0.5)
+            }
+            .contentShape(shape)
         }
+        .buttonStyle(.plain)
+        // Editing or finding a time: clicks go to the row under it.
+        .allowsHitTesting(availability == nil && slot == nil)
         .help("\(event.title)\n\(AgendaFormat.timeRange(event, calendar: .current))")
+        .popover(isPresented: Binding(get: { opened == event.id }, set: { shown in
+            guard !shown else { return }
+            opened = nil
+        }), arrowEdge: .bottom) {
+            card(event)
+        }
     }
 
     // MARK: grid
@@ -621,6 +645,26 @@ struct WeekView: View {
         .allowsHitTesting(false)
     }
 
+    /// An event's card, in a popover from its block or bar.
+    private func card(_ event: CalendarEvent) -> some View {
+        EventRow(event: event, now: now, selected: false, expanded: true, isPast: event.end <= now,
+                 showsRelative: Calendar.current.isDateInToday(event.start), isFocus: true,
+                 onToggle: {}, onJoin: { onJoin(event) })
+            .frame(width: 360)
+            .padding(.vertical, 6)
+            // ⌫ in the open card deletes the event (⌘Z in the panel undoes).
+            .focusable()
+            .focusEffectDisabled()
+            .onKeyPress { press in
+                let store = AppDelegate.shared.store
+                guard MenuView.isDeleteKey(press), store.composing == nil else { return .ignored }
+                guard store.canDelete(event) else { NSSound.beep(); return .handled }
+                opened = nil
+                withAnimation(Motion.resize) { store.deleteFromKey(event) }
+                return .handled
+            }
+    }
+
     private func block(_ p: WeekLayout.Placement, height: CGFloat) -> some View {
         let event = p.event
         let color = Color(hex: event.colorHex)
@@ -681,22 +725,7 @@ struct WeekView: View {
             opened = nil
         }),
                  arrowEdge: .trailing) {
-            EventRow(event: event, now: now, selected: false, expanded: true, isPast: past,
-                     showsRelative: Calendar.current.isDateInToday(event.start), isFocus: true,
-                     onToggle: {}, onJoin: { onJoin(event) })
-                .frame(width: 360)
-                .padding(.vertical, 6)
-                // ⌫ in the open card deletes the event (⌘Z in the panel undoes).
-                .focusable()
-                .focusEffectDisabled()
-                .onKeyPress { press in
-                    let store = AppDelegate.shared.store
-                    guard MenuView.isDeleteKey(press), store.composing == nil else { return .ignored }
-                    guard store.canDelete(event) else { NSSound.beep(); return .handled }
-                    opened = nil
-                    withAnimation(Motion.resize) { store.deleteFromKey(event) }
-                    return .handled
-                }
+            card(event)
         }
     }
 }

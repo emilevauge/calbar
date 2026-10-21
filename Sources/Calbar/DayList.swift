@@ -65,6 +65,8 @@ struct AllDayStrip: View {
     let events: [CalendarEvent]
     @State private var width: CGFloat = 0
     @State private var unfolded = false
+    /// The event whose card is open.
+    @State private var opened: String?
 
     private static let font = NSFont.systemFont(ofSize: 11, weight: .medium)
     private static let spacing: CGFloat = 4
@@ -96,18 +98,37 @@ struct AllDayStrip: View {
 
     private func chip(_ event: CalendarEvent) -> some View {
         let color = Color(hex: event.colorHex)
-        return HStack(spacing: 4) {
-            Circle()
-                .fill(color)
-                .frame(width: 5, height: 5)
-            Text(event.title)
-                .lineLimit(1)
+        return Button {
+            opened = event.id
+        } label: {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 5, height: 5)
+                Text(event.title)
+                    .lineLimit(1)
+            }
+            .font(Font(Self.font))
+            .padding(.horizontal, Self.padding)
+            .frame(height: 18)
+            .background(color.opacity(0.14), in: Capsule())
+            .contentShape(Capsule())
         }
-        .font(Font(Self.font))
-        .padding(.horizontal, Self.padding)
-        .frame(height: 18)
-        .background(color.opacity(0.14), in: Capsule())
+        .buttonStyle(.plain)
         .help(event.title)
+        // Its card, to edit, duplicate or delete it, as a grid block's.
+        .popover(isPresented: Binding(get: { opened == event.id }, set: { shown in
+            if !shown { opened = nil }
+        }), arrowEdge: .bottom) {
+            EventRow(event: event, now: Date(), selected: false, expanded: true, isPast: event.end <= Date(),
+                     showsRelative: false, isFocus: true, onToggle: {}, onJoin: {
+                         guard let link = event.meeting else { return }
+                         AppDelegate.shared.closePopover()
+                         MeetingOpener.open(link)
+                     })
+                .frame(width: 360)
+                .padding(.vertical, 6)
+        }
     }
 
     private func moreChip(_ count: Int) -> some View {
