@@ -410,8 +410,11 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   the series gets `UNTIL` just before the occurrence; from the first occurrence, the whole
   series changes instead. Moving a recurring event from Reschedule asks the same with a Move
   menu. `sendUpdates=all` when there are guests before or after.
-  Duplicate opens a new event with the same fields, a new Meet link for a Meet, in the
-  event's calendar when writable.
+  Duplicate opens a new event with the same fields, in the event's calendar when writable.
+  A copy of a Meet or Zoom meeting gets a new one of the same kind (Meet when Zoom is not
+  connected): `MeetingCleanup` takes the old link out of the location and the old
+  invitation lines (links, "Join Zoom Meeting", meeting id, passcode, Meet's phone lines)
+  out of the description. Other links (Teams, Webex...) stay as they were.
 - Rooms (`CalendarEvent.rooms`, `ContactBook.rooms`): Google Workspace meeting rooms are
   resource calendars, booked as attendees with `resource: true` and kept apart from the
   guests. Listing every room of an organization needs the Admin Directory API, open to

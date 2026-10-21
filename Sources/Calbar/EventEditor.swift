@@ -122,9 +122,16 @@ struct EventEditor: View {
         let own = composer.calendars.first { $0.email == event.accountEmail && $0.calendar.id == event.calendarID }
         _chosenCalendar = State(initialValue: own?.id)
         if case .duplicate = mode {
-            // A new Meet link for a copy of a Meet; other links stay in the
-            // copied location or description.
-            _chosenConference = State(initialValue: event.meeting?.provider == .meet ? "meet" : "none")
+            // A copy of a Meet or Zoom meeting gets a new meeting of its
+            // own, the old link and invitation taken out; other links stay
+            // in the copied location or description.
+            if let provider = event.meeting?.provider, MeetingCleanup.regenerates(provider) {
+                _chosenConference = State(initialValue: provider == .zoom ? "zoom" : "meet")
+                _location = State(initialValue: MeetingCleanup.location(event.location ?? "", removing: provider))
+                _notes = State(initialValue: MeetingCleanup.notes(text, removing: provider))
+            } else {
+                _chosenConference = State(initialValue: "none")
+            }
         } else {
             _chosenConference = State(initialValue: "none")
         }
