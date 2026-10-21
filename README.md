@@ -22,7 +22,7 @@ Calbar does not ship with a Google OAuth client: on first launch, it asks you to
 
 ## Features
 
-- **Today's agenda**: every event of the day from all connected Google accounts, merged and deduplicated in one list. Browse other days with the arrows in the header, and come back with Today.
+- **Today's agenda**: every event of the day from all connected Google accounts, merged and deduplicated in one list. Browse other days with the arrows in the header, and come back to today with the arrow that replaces the selected Day or Week.
 - **Expandable details**: guests with their RSVP status, location, attached Drive documents and the event description.
 - **Reply to invitations**: answer Yes, Maybe or No from the expanded event, or right-click any event row. The organizer gets the usual Google notification. Accounts connected before this feature must reconnect once ("Reconnect to reply").
 - **Discord meetings**: a Discord channel or event link (`discord.com/channels/...`) in the location or description gets a Join button that opens it in the Discord app.

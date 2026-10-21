@@ -193,7 +193,7 @@ struct WeekView: View {
                     ZStack(alignment: .topLeading) {
                         Color.clear.frame(height: height)
                         if selecting {
-                            allDayTarget(height: height)
+                            allDayLabel
                         }
                         if let marked {
                             allDayGhost(marked, height: height)
@@ -215,45 +215,47 @@ struct WeekView: View {
                         }
                     }
                 }
+                // Anywhere on the area, folded or not, over the bars and the
+                // "+N" row too: only the "+N" buttons keep their clicks.
+                .contentShape(Rectangle())
+                .gesture(allDaySelection, isEnabled: selecting)
                 .padding(.bottom, 4)
             }
         }
     }
 
-    /// Behind the bars: "all-day" in the gutter, and a click or a drag
-    /// across days marks out a new all-day event.
-    private func allDayTarget(height: CGFloat) -> some View {
+    /// "all-day" in the gutter, while the area creates events.
+    private var allDayLabel: some View {
+        Text("all-day")
+            .font(.system(size: 9))
+            .foregroundStyle(.tertiary)
+            .frame(width: Self.gutter - 6, height: 16, alignment: .trailing)
+            .help("Click or drag across days for an all-day event")
+    }
+
+    /// A click on a day, or a drag across days, marks out a new all-day
+    /// event over them.
+    private var allDaySelection: some Gesture {
         let columns = days.count
+        let columnWidth = columnWidth
         func column(_ x: CGFloat) -> Int {
             min(max(Int((x - Self.gutter) / max(columnWidth, 1)), 0), columns - 1)
         }
-        return Color.clear
-            .frame(width: width, height: height)
-            .overlay(alignment: .topLeading) {
-                Text("all-day")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: Self.gutter - 6, height: 16, alignment: .trailing)
+        return DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .onChanged { value in
+                let a = column(value.startLocation.x)
+                let b = column(value.location.x)
+                allDayDraft = min(a, b)...max(a, b)
             }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                    .onChanged { value in
-                        let a = column(value.startLocation.x)
-                        let b = column(value.location.x)
-                        allDayDraft = min(a, b)...max(a, b)
-                    }
-                    .onEnded { value in
-                        let a = column(value.startLocation.x)
-                        let b = column(value.location.x)
-                        allDayDraft = nil
-                        let first = days[min(a, b)]
-                        let last = days[max(a, b)]
-                        let end = Calendar.current.date(byAdding: .day, value: 1, to: last) ?? last.addingTimeInterval(86_400)
-                        onSelectAllDay?(first, end)
-                    }
-            )
-            .help("Click or drag across days for an all-day event")
+            .onEnded { value in
+                let a = column(value.startLocation.x)
+                let b = column(value.location.x)
+                allDayDraft = nil
+                let first = days[min(a, b)]
+                let last = days[max(a, b)]
+                let end = Calendar.current.date(byAdding: .day, value: 1, to: last) ?? last.addingTimeInterval(86_400)
+                onSelectAllDay?(first, end)
+            }
     }
 
     /// The days of the all-day event being created or edited.

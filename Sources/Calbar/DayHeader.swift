@@ -2,8 +2,8 @@ import SwiftUI
 import CalbarCore
 
 /// Top bar of the popover: the day or week title with a caption below it,
-/// and on the right Today, away from it, then the previous and next
-/// buttons around the Day | Week switch.
+/// and on the right the previous and next buttons around the Day | Week
+/// switch.
 struct DayHeader<Info: View>: View {
     let day: Date
     let isToday: Bool
@@ -28,23 +28,9 @@ struct DayHeader<Info: View>: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
-            // Away from today: back in one click.
-            if !isToday {
-                Button(action: onToday) {
-                    Text("Today")
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 8)
-                        .frame(height: 24)
-                        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(mode.isDay ? "Back to today" : "Back to this week")
-                .transition(.opacity)
-            }
             HStack(spacing: 0) {
                 IconButton("chevron.left", tooltip: mode.isDay ? "Previous day" : "Previous week") { onChange(-1) }
-                ModeSwitch(mode: $mode)
+                ModeSwitch(mode: $mode, isToday: isToday, onToday: onToday)
                 IconButton("chevron.right", tooltip: mode.isDay ? "Next day" : "Next week") { onChange(1) }
             }
             .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -97,15 +83,18 @@ enum ViewMode: String {
 
 /// "Day | Week", small enough to sit between the arrows. Clicking Day
 /// while it is selected switches the day between its list and an hour
-/// grid; a small icon tells which.
+/// grid; a small icon tells which. Away from today, the selected one is
+/// an icon that goes back to today, or to this week.
 private struct ModeSwitch: View {
     @Binding var mode: ViewMode
+    let isToday: Bool
+    let onToday: () -> Void
     /// The day layout to come back to from the week.
     @AppStorage("lastDayMode") private var lastDay: ViewMode = .day
 
     var body: some View {
         HStack(spacing: 0) {
-            segment(selected: mode.isDay, help: dayHelp) {
+            segment(selected: mode.isDay, help: dayHelp, back: mode.isDay && !isToday) {
                 HStack(spacing: 3) {
                     Text("Day")
                     if mode.isDay {
@@ -114,6 +103,7 @@ private struct ModeSwitch: View {
                     }
                 }
             } action: {
+                guard isToday || !mode.isDay else { return onToday() }
                 let next: ViewMode = switch mode {
                 case .day: .dayGrid
                 case .dayGrid: .day
@@ -122,9 +112,11 @@ private struct ModeSwitch: View {
                 lastDay = next
                 withAnimation(Motion.resize) { mode = next }
             }
-            segment(selected: mode == .week, help: "Show the week") {
+            segment(selected: mode == .week, help: mode == .week && !isToday ? "Back to this week" : "Show the week",
+                    back: mode == .week && !isToday) {
                 Text("Week")
             } action: {
+                guard isToday || mode != .week else { return onToday() }
                 withAnimation(Motion.resize) { mode = .week }
             }
         }
@@ -132,17 +124,27 @@ private struct ModeSwitch: View {
     }
 
     private var dayHelp: String {
-        switch mode {
+        if !isToday && mode.isDay { return "Back to today" }
+        return switch mode {
         case .day: "Show the day as an hour grid"
         case .dayGrid: "Show the day as a list"
         case .week: "Show one day"
         }
     }
 
-    private func segment<Label: View>(selected: Bool, help: String, @ViewBuilder label: () -> Label,
+    /// `back`: the label gives way to a back-to-today icon, same width.
+    private func segment<Label: View>(selected: Bool, help: String, back: Bool = false,
+                                      @ViewBuilder label: () -> Label,
                                       action: @escaping () -> Void) -> some View {
         Button(action: action) {
             label()
+                .opacity(back ? 0 : 1)
+                .overlay {
+                    if back {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                }
                 .font(.caption.weight(selected ? .semibold : .regular))
                 .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                 .padding(.horizontal, 8)

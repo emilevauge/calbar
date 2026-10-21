@@ -271,8 +271,9 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   calendar in a popover, drawn in code (the graphical `DatePicker` cannot change the year but
   month by month): month arrows, a menu on the year (10 years back, 5 ahead), the days from the
   user's first weekday with today circled and the shown day filled, and "Today". Picking a day
-  shows it; "Today" goes back to today. No focus ring. Away from today (or this week), a
-  "Today" button left of the arrows goes back to it. The popover goes back to today every time it closes.
+  shows it; "Today" goes back to today. No focus ring. Away from today (or this week), the
+  selected segment of the Day | Week switch shows a back arrow instead of its label, same
+  width, and goes back to today (or this week); its list/grid toggle waits for today. The popover goes back to today every time it closes.
 - Today: all-day events as small colored chips on one line (those that do not fit fold into a
   "+N" chip, which unfolds them all on wrapped lines, with a chevron to fold them back), then ongoing
   and upcoming timed events, then "N ended earlier", folded, which unfolds the past events
@@ -312,7 +313,8 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   week. Longer and earlier bars take the first free row. Two rows, then a "+N" under each day
   with hidden bars, which unfolds every row; a chevron folds them back. While events can be
   created the area keeps at least one row, labelled "all-day" in the gutter: a click on a day,
-  or a drag across days, opens the editor on a new all-day event over those days (or makes the
+  or a drag across days, anywhere on the area (on a bar, folded or not; the "+N" buttons keep
+  their clicks), opens the editor on a new all-day event over those days (or makes the
   edited event all day over them); the picked days show as an accent bar. The hours from
   "Week view from" to "Week view until" (9 and 19 by default) fill the visible height; the grid
   covers the whole day and opens scrolled to the first one. Timed events are opaque blocks (a
