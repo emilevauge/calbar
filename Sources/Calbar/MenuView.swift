@@ -263,7 +263,8 @@ struct MenuView: View {
             onShowDay: { _ in withAnimation(Motion.resize) { viewMode = .day } },
             onJoin: join,
             width: 380,
-            onSelect: { start, end in store.compose(.create, start: start, end: end) }
+            onSelect: { start, end in store.compose(.create, start: start, end: end) },
+            onSelectAllDay: { start, end in store.compose(.create, start: start, end: end, allDay: true) }
         )
     }
 
@@ -276,7 +277,7 @@ struct MenuView: View {
             startHour: min(max(weekStartHour, 0), 23), endHour: min(max(weekEndHour, weekStartHour + 1), 24),
             duration: max(session.end.timeIntervalSince(session.start), 15 * 60), notBefore: store.now, calendar: .current)
         return WeekView.Slot(start: session.start, end: session.end, eventID: session.original?.id,
-                             busy: busy, free: free, hasGuests: session.people.count > 1)
+                             isAllDay: session.isAllDay, busy: busy, free: free, hasGuests: session.people.count > 1)
     }
 
     /// What the grid draws while finding a time.
@@ -324,6 +325,14 @@ struct MenuView: View {
                 } else {
                     app.contacts.prepare()
                     store.compose(.create, start: start, end: end)
+                }
+            },
+            onSelectAllDay: store.findTime != nil ? nil : { start, end in
+                if store.composing != nil {
+                    store.setComposingTimes(start: start, end: end, allDay: true)
+                } else {
+                    app.contacts.prepare()
+                    store.compose(.create, start: start, end: end, allDay: true)
                 }
             },
             slot: slot(days: days),

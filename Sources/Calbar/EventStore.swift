@@ -501,6 +501,8 @@ final class EventStore: ObservableObject {
         let mode: Mode
         var start: Date
         var end: Date
+        /// Whole days: drawn on the grid's all-day row.
+        var isAllDay = false
         /// Lowercased guest emails, the user's account first.
         var people: [String] = []
         /// First names for the conflicts line, "You" for the user.
@@ -545,20 +547,20 @@ final class EventStore: ObservableObject {
     @Published private(set) var pendingComposing: Composing?
 
     /// A new event from the grid, already shown: the editor opens at once.
-    func compose(_ mode: Composing.Mode, start: Date, end: Date) {
+    func compose(_ mode: Composing.Mode, start: Date, end: Date, allDay: Bool = false) {
         findTime = nil
         askingDeleteScope = nil
-        withAnimation(Motion.resize) { composing = Composing(mode: mode, start: start, end: end) }
+        withAnimation(Motion.resize) { composing = Composing(mode: mode, start: start, end: end, isAllDay: allDay) }
     }
 
     func edit(_ event: CalendarEvent) {
         askingDeleteScope = nil
-        pendingComposing = Composing(mode: .edit(event), start: event.start, end: event.end)
+        pendingComposing = Composing(mode: .edit(event), start: event.start, end: event.end, isAllDay: event.isAllDay)
     }
 
     func duplicate(_ event: CalendarEvent) {
         askingDeleteScope = nil
-        pendingComposing = Composing(mode: .duplicate(event), start: event.start, end: event.end)
+        pendingComposing = Composing(mode: .duplicate(event), start: event.start, end: event.end, isAllDay: event.isAllDay)
     }
 
     /// Opens the editor asked by `edit` or `duplicate`.
@@ -574,10 +576,12 @@ final class EventStore: ObservableObject {
     }
 
     /// From the editor: its times, account and guests.
-    func composingChanged(start: Date, end: Date, account: String?, guests: [(email: String, name: String?)]) {
+    func composingChanged(start: Date, end: Date, allDay: Bool, account: String?,
+                          guests: [(email: String, name: String?)]) {
         guard var session = composing else { return }
         session.start = start
         session.end = end
+        session.isAllDay = allDay
         session.account = account
         var people: [String] = []
         /// First names for the conflicts line, "You" for the user.
@@ -629,9 +633,10 @@ final class EventStore: ObservableObject {
     }
 
     /// From the grid: new times for the editor.
-    func setComposingTimes(start: Date, end: Date) {
+    func setComposingTimes(start: Date, end: Date, allDay: Bool = false) {
         composing?.start = start
         composing?.end = end
+        composing?.isAllDay = allDay
     }
 
     /// Reads the guests' availability over `days`, unless already read.

@@ -22,6 +22,9 @@ struct WeekView: View {
     /// A slot selected on the grid, by a click or a drag: a new event, or
     /// new times for the one being edited. None: no selecting.
     var onSelect: ((Date, Date) -> Void)?
+    /// Days picked on the all-day row, by a click or a drag across days:
+    /// the first one, and the day after the last.
+    var onSelectAllDay: ((Date, Date) -> Void)?
     /// The event being created or edited beside the grid: its times, and
     /// its guests' availability.
     var slot: Slot?
@@ -31,6 +34,8 @@ struct WeekView: View {
         let end: Date
         /// The edited event, drawn faded at its old time.
         let eventID: String?
+        /// Whole days: drawn on the all-day row, not on the hours.
+        var isAllDay = false
         let busy: [String: [DateInterval]]
         let free: [DateInterval]
         /// No guests: no availability to draw.
@@ -84,6 +89,8 @@ struct WeekView: View {
     static let holdDelay: TimeInterval = 0.4
     /// The all-day row shows every event instead of two per day.
     @State private var allDayUnfolded = false
+    /// Days marked out on the all-day row, as column indices, while dragged.
+    @State private var allDayDraft: ClosedRange<Int>?
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -169,11 +176,28 @@ struct WeekView: View {
         let shownRows = allDayUnfolded ? rowCount : min(rowCount, limit)
         let hidden = WeekLayout.hidden(bars, rows: limit, days: days.count)
         let rowHeight: CGFloat = 18
+        let selecting = onSelectAllDay != nil && availability == nil
+        // Days of the event being edited, when it is all day.
+        let slotDays: ClosedRange<Int>? = slot.flatMap { slot in
+            guard slot.isAllDay else { return nil }
+            let covered = days.indices.filter { days[$0] < slot.end && slot.start < days[$0].addingTimeInterval(86_400) }
+            guard let first = covered.first, let last = covered.last else { return nil }
+            return first...last
+        }
+        let marked = allDayDraft ?? slotDays
+        // An empty row stays a row to click on while creating is possible.
+        let height = CGFloat(max(shownRows, selecting ? 1 : 0)) * rowHeight
         return Group {
-            if !bars.isEmpty {
+            if !bars.isEmpty || selecting {
                 VStack(alignment: .leading, spacing: 2) {
                     ZStack(alignment: .topLeading) {
-                        Color.clear.frame(height: CGFloat(shownRows) * rowHeight)
+                        Color.clear.frame(height: height)
+                        if selecting {
+                            allDayTarget(height: height)
+                        }
+                        if let marked {
+                            allDayGhost(marked, height: height)
+                        }
                         ForEach(bars.filter { $0.row < shownRows }, id: \.event.occurrenceKey) { bar in
                             allDayBar(bar)
                                 .frame(width: CGFloat(bar.last - bar.first + 1) * columnWidth - 4, height: rowHeight - 2)
@@ -194,6 +218,52 @@ struct WeekView: View {
                 .padding(.bottom, 4)
             }
         }
+    }
+
+    /// Behind the bars: "all-day" in the gutter, and a click or a drag
+    /// across days marks out a new all-day event.
+    private func allDayTarget(height: CGFloat) -> some View {
+        let columns = days.count
+        func column(_ x: CGFloat) -> Int {
+            min(max(Int((x - Self.gutter) / max(columnWidth, 1)), 0), columns - 1)
+        }
+        return Color.clear
+            .frame(width: width, height: height)
+            .overlay(alignment: .topLeading) {
+                Text("all-day")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: Self.gutter - 6, height: 16, alignment: .trailing)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onChanged { value in
+                        let a = column(value.startLocation.x)
+                        let b = column(value.location.x)
+                        allDayDraft = min(a, b)...max(a, b)
+                    }
+                    .onEnded { value in
+                        let a = column(value.startLocation.x)
+                        let b = column(value.location.x)
+                        allDayDraft = nil
+                        let first = days[min(a, b)]
+                        let last = days[max(a, b)]
+                        let end = Calendar.current.date(byAdding: .day, value: 1, to: last) ?? last.addingTimeInterval(86_400)
+                        onSelectAllDay?(first, end)
+                    }
+            )
+            .help("Click or drag across days for an all-day event")
+    }
+
+    /// The days of the all-day event being created or edited.
+    private func allDayGhost(_ range: ClosedRange<Int>, height: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
+        return shape.fill(Color.accentColor.opacity(0.25))
+            .overlay(shape.strokeBorder(Color.accentColor, lineWidth: 1))
+            .frame(width: CGFloat(range.count) * columnWidth - 4, height: max(height - 2, 16))
+            .offset(x: Self.gutter + CGFloat(range.lowerBound) * columnWidth + 2)
+            .allowsHitTesting(false)
     }
 
     /// "+N" under a day while folded, a chevron on every day while unfolded.
@@ -401,7 +471,7 @@ struct WeekView: View {
                 nowLine(day, minuteHeight: minuteHeight)
             }
             // An all-day event has no slot on the hours.
-            if let slot, draft == nil, slot.end.timeIntervalSince(slot.start) < 86_400,
+            if let slot, draft == nil, !slot.isAllDay, slot.end.timeIntervalSince(slot.start) < 86_400,
                Calendar.current.isDate(slot.start, inSameDayAs: day) {
                 slotGhost(slot, day: day, minuteHeight: minuteHeight)
             }

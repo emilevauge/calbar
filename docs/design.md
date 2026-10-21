@@ -271,7 +271,8 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   calendar in a popover, drawn in code (the graphical `DatePicker` cannot change the year but
   month by month): month arrows, a menu on the year (10 years back, 5 ahead), the days from the
   user's first weekday with today circled and the shown day filled, and "Today". Picking a day
-  shows it; "Today" goes back to today. No focus ring. The popover goes back to today every time it closes.
+  shows it; "Today" goes back to today. No focus ring. Away from today (or this week), a
+  "Today" button left of the arrows goes back to it. The popover goes back to today every time it closes.
 - Today: all-day events as small colored chips on one line (those that do not fit fold into a
   "+N" chip, which unfolds them all on wrapped lines, with a chevron to fold them back), then ongoing
   and upcoming timed events, then "N ended earlier", folded, which unfolds the past events
@@ -309,7 +310,10 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   (`spansDays`, not in the grid) as one bar across the days they cover, clipped to the week
   with a chevron on a side that continues, "Trip to Lyon, 08:00" for a timed one starting this
   week. Longer and earlier bars take the first free row. Two rows, then a "+N" under each day
-  with hidden bars, which unfolds every row; a chevron folds them back. The hours from
+  with hidden bars, which unfolds every row; a chevron folds them back. While events can be
+  created the area keeps at least one row, labelled "all-day" in the gutter: a click on a day,
+  or a drag across days, opens the editor on a new all-day event over those days (or makes the
+  edited event all day over them); the picked days show as an accent bar. The hours from
   "Week view from" to "Week view until" (9 and 19 by default) fill the visible height; the grid
   covers the whole day and opens scrolled to the first one. Timed events are opaque blocks (a
   text background base under the calendar color, 30 % in light mode, 42 % in dark) with a

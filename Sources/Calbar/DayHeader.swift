@@ -2,8 +2,8 @@ import SwiftUI
 import CalbarCore
 
 /// Top bar of the popover: the day or week title with a caption below it,
-/// and on the right the previous and next buttons around the Day | Week
-/// switch.
+/// and on the right Today, away from it, then the previous and next
+/// buttons around the Day | Week switch.
 struct DayHeader<Info: View>: View {
     let day: Date
     let isToday: Bool
@@ -28,6 +28,20 @@ struct DayHeader<Info: View>: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
+            // Away from today: back in one click.
+            if !isToday {
+                Button(action: onToday) {
+                    Text("Today")
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 8)
+                        .frame(height: 24)
+                        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(mode.isDay ? "Back to today" : "Back to this week")
+                .transition(.opacity)
+            }
             HStack(spacing: 0) {
                 IconButton("chevron.left", tooltip: mode.isDay ? "Previous day" : "Previous week") { onChange(-1) }
                 ModeSwitch(mode: $mode)

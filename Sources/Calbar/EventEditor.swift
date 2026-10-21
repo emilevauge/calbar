@@ -87,6 +87,7 @@ struct EventEditor: View {
         switch session.mode {
         case .create:
             self.init(mode: .create, start: session.start, end: session.end, composer: composer, onDone: onDone)
+            _isAllDay = State(initialValue: session.isAllDay)
         case .edit(let event):
             self.init(mode: .edit(event), start: session.start, end: session.end, composer: composer,
                       onDone: onDone, from: event)
@@ -170,8 +171,10 @@ struct EventEditor: View {
         .onChange(of: store.composing?.start) { _, new in
             guard let new, new != start else { return }
             start = new
-            // A time picked on the grid: no longer all day.
-            if isAllDay, new != Calendar.current.startOfDay(for: new) { isAllDay = false }
+        }
+        // Picked on the grid's all-day row, or on its hours.
+        .onChange(of: store.composing?.isAllDay) { _, new in
+            if let new, new != isAllDay { isAllDay = new }
         }
         .onChange(of: store.composing?.end) { _, new in
             if let new, new != end { end = new }
@@ -555,7 +558,7 @@ struct EventEditor: View {
 
     /// What the grid needs from the editor, as one string to watch.
     private var reportKey: String {
-        "\(start.timeIntervalSince1970)|\(end.timeIntervalSince1970)|\(selected?.email ?? "")|"
+        "\(start.timeIntervalSince1970)|\(end.timeIntervalSince1970)|\(isAllDay)|\(selected?.email ?? "")|"
             + guests.map(\.email).joined(separator: ",")
     }
 
@@ -567,7 +570,7 @@ struct EventEditor: View {
     }
 
     private func report() {
-        store.composingChanged(start: start, end: end, account: original?.accountEmail ?? selected?.email,
+        store.composingChanged(start: start, end: end, allDay: isAllDay, account: original?.accountEmail ?? selected?.email,
                                guests: guests.map { ($0.email, $0.name) })
     }
 
