@@ -84,6 +84,8 @@ import Testing
 }
 
 @Suite struct SelfUpdateScriptTests {
+    let requirement = #"identifier "dev.calbar.app" and anchor apple generic and certificate leaf[subject.CN] = "Apple Development: me (X)""#
+
     @Test func quotesForTheShell() {
         #expect(SelfUpdateScript.quote("/Applications/Calbar.app") == "'/Applications/Calbar.app'")
         #expect(SelfUpdateScript.quote("it's") == #"'it'\''s'"#)
@@ -92,22 +94,36 @@ import Testing
     @Test func scriptSwapsWithBackupAndRelaunches() {
         let script = SelfUpdateScript.make(
             bundlePath: "/Users/me/Apps/My 'Calbar'.app", dmgPath: "/tmp/u/Calbar.dmg",
-            workDir: "/tmp/u", pid: 4242
+            workDir: "/tmp/u", pid: 4242, requirement: requirement
         )
         #expect(script.hasPrefix("#!/bin/zsh\n"))
         #expect(script.contains(#"BUNDLE='/Users/me/Apps/My '\''Calbar'\''.app'"#))
         #expect(script.contains(#"BACKUP='/Users/me/Apps/My '\''Calbar'\''.app.calbar-update-backup'"#))
         #expect(script.contains("kill -0 4242"))
+        #expect(script.contains("kill -9 4242"))
         #expect(script.contains(#"mv "$BACKUP" "$BUNDLE""#))
+        #expect(!script.contains("set -e"))
         #expect(script.contains("xattr -dr com.apple.quarantine"))
         #expect(script.hasSuffix(#"rm -rf "$WORK""#))
     }
 
     @Test func scriptChecksTheNewAppBeforeRemovingTheOldOne() throws {
         let script = SelfUpdateScript.make(bundlePath: "/Applications/Calbar.app", dmgPath: "/tmp/u/Calbar.dmg",
-                                           workDir: "/tmp/u", pid: 1)
-        let check = try #require(script.range(of: #"[ ! -x "$NEW/Contents/MacOS/Calbar" ]"#))
+                                           workDir: "/tmp/u", pid: 1, requirement: requirement)
+        let check = try #require(script.range(of: #"[ -x "$NEW/Contents/MacOS/Calbar" ]"#))
+        let signature = try #require(script.range(
+            of: "codesign --verify --deep --strict -R=" + SelfUpdateScript.quote(requirement) + #" "$NEW""#))
         let move = try #require(script.range(of: #"mv "$BUNDLE" "$BACKUP""#))
         #expect(check.lowerBound < move.lowerBound)
+        #expect(signature.lowerBound < move.lowerBound)
+    }
+
+    @Test func everyCriticalStepRestoresAndRelaunchesOnFailure() {
+        let script = SelfUpdateScript.make(bundlePath: "/Applications/Calbar.app", dmgPath: "/tmp/u/Calbar.dmg",
+                                           workDir: "/tmp/u", pid: 1, requirement: requirement)
+        #expect(script.contains("fail() {"))
+        #expect(script.contains(#"hdiutil attach -nobrowse -readonly -mountpoint "$MOUNT" "$DMG" || fail"#))
+        #expect(script.contains(#"mv "$BUNDLE" "$BACKUP" || fail"#))
+        #expect(script.contains(#"|| fail "signature does not match the installed app""#))
     }
 }

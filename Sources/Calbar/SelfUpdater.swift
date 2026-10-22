@@ -1,11 +1,14 @@
 import AppKit
 import CalbarCore
+import Security
 
 /// Installs an update from its DMG, adapted from Claudette. The app cannot
 /// replace its own bundle while it runs, so it downloads the DMG, writes
 /// the helper script of `SelfUpdateScript` next to it, starts the script
 /// detached and quits. The script swaps the bundle, keeping a backup until
 /// the copy succeeded, removes the quarantine flag and relaunches Calbar.
+/// The script refuses a new app that does not satisfy the running app's
+/// designated requirement, so a tampered release is never installed.
 @MainActor
 enum SelfUpdater {
     enum Failure: Error, CustomStringConvertible {
@@ -15,6 +18,7 @@ enum SelfUpdater {
         case download(Int?)
         case staging
         case spawn
+        case unsigned
 
         var description: String {
             switch self {
@@ -24,6 +28,7 @@ enum SelfUpdater {
             case .download(let status): "The download failed (HTTP \(status.map(String.init) ?? "?"))."
             case .staging: "The installer could not be prepared."
             case .spawn: "The installer could not be started."
+            case .unsigned: "This copy of Calbar is not signed, so an update could not be verified."
             }
         }
     }
@@ -44,6 +49,24 @@ enum SelfUpdater {
         }
     }
 
+    /// The running app's designated requirement: its bundle id and the
+    /// certificate it is signed with. Nil for an unsigned or ad hoc build,
+    /// which then cannot update itself.
+    static func designatedRequirement() -> String? {
+        var code: SecCode?
+        var staticCode: SecStaticCode?
+        var requirement: SecRequirement?
+        var text: CFString?
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code,
+              SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode,
+              SecCodeCopyDesignatedRequirement(staticCode, [], &requirement) == errSecSuccess, let requirement,
+              SecRequirementCopyString(requirement, [], &text) == errSecSuccess, let text
+        else { return nil }
+        let string = text as String
+        // Ad hoc signatures only pin their own hash: no update could match.
+        return string.contains("cdhash") ? nil : string
+    }
+
     private static func install(dmgURL: URL) async throws {
         // A dev binary has no bundle to replace. A bundle launched from
         // the DMG or Downloads runs from a read-only translocated copy.
@@ -52,6 +75,7 @@ enum SelfUpdater {
         guard !bundlePath.contains("/AppTranslocation/") else { throw Failure.translocated }
         let parent = (bundlePath as NSString).deletingLastPathComponent
         guard FileManager.default.isWritableFile(atPath: parent) else { throw Failure.notWritable }
+        guard let requirement = designatedRequirement() else { throw Failure.unsigned }
 
         let workDir = (NSTemporaryDirectory() as NSString).appendingPathComponent("calbar-update-\(UUID().uuidString)")
         do {
@@ -73,7 +97,8 @@ enum SelfUpdater {
         let scriptPath = (workDir as NSString).appendingPathComponent("install.sh")
         let script = SelfUpdateScript.make(
             bundlePath: bundlePath, dmgPath: dmgPath, workDir: workDir,
-            pid: ProcessInfo.processInfo.processIdentifier
+            pid: ProcessInfo.processInfo.processIdentifier,
+            requirement: requirement
         )
         do {
             try script.write(toFile: scriptPath, atomically: true, encoding: .utf8)
