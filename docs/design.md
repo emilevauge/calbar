@@ -319,7 +319,8 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   "Week view from" to "Week view until" (9 and 19 by default) fill the visible height; the grid
   covers the whole day and opens scrolled to the first one. Timed events are opaque blocks (a
   text background base under the calendar color, 30 % in light mode, 42 % in dark) with a
-  hairline border and a leading bar, 1 pt apart, title and start time. Their text uses the label
+  hairline border and a leading bar, 1 pt apart, title and start time followed by the calendar's
+  name, cut at the end when too long (also on the tooltip). Their text uses the label
   color at a set opacity, not `.secondary`, which on the popover material is vibrant and can
   vanish against the block; events that overlap split their
   group into lanes, each taking the first free one (back to back is no overlap); an event across

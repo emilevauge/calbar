@@ -339,7 +339,7 @@ struct WeekView: View {
         .buttonStyle(.plain)
         // Editing or finding a time: clicks go to the row under it.
         .allowsHitTesting(availability == nil && slot == nil)
-        .help("\(event.title)\n\(AgendaFormat.timeRange(event, calendar: .current))")
+        .help(([event.title, AgendaFormat.timeRange(event, calendar: .current)] + [AppDelegate.shared.accounts.calendarName(event)].compactMap { $0 }).joined(separator: "\n"))
         .popover(isPresented: Binding(get: { opened == event.id }, set: { shown in
             guard !shown else { return }
             opened = nil
@@ -683,10 +683,19 @@ struct WeekView: View {
                     // would break in the middle.
                     .lineLimit(height > 30 && p.lanes == 1 ? 2 : 1)
                 if height > 30 {
-                    Text(AgendaFormat.clock(event.start, .current))
-                        .font(.system(size: 9.5))
-                        .monospacedDigit()
-                        .foregroundStyle(Self.ink(0.6))
+                    // The calendar after the time, cut when too long.
+                    HStack(spacing: 4) {
+                        Text(AgendaFormat.clock(event.start, .current))
+                            .monospacedDigit()
+                            .layoutPriority(1)
+                        if let name = AppDelegate.shared.accounts.calendarName(event) {
+                            Text(name)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                    }
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(Self.ink(0.6))
                 }
             }
             .padding(.leading, 5)
@@ -719,7 +728,7 @@ struct WeekView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(Self.ink(past || declined ? 0.55 : 1))
-        .help("\(event.title)\n\(AgendaFormat.timeRange(event, calendar: .current))")
+        .help(([event.title, AgendaFormat.timeRange(event, calendar: .current)] + [AppDelegate.shared.accounts.calendarName(event)].compactMap { $0 }).joined(separator: "\n"))
         .popover(isPresented: Binding(get: { opened == event.id }, set: { shown in
             guard !shown else { return }
             opened = nil

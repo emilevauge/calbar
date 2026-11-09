@@ -53,6 +53,11 @@ final class AccountStore: ObservableObject {
         account(email)?.calendars.first { $0.id == calendarID }?.enabled ?? false
     }
 
+    /// The name of `event`'s calendar, as the user sees it in Google.
+    func calendarName(_ event: CalendarEvent) -> String? {
+        account(event.accountEmail)?.calendars.first { $0.id == event.calendarID }?.name
+    }
+
     func alertsOn(calendarID: String, email: String) -> Bool {
         account(email)?.calendars.first { $0.id == calendarID }?.alertsOn ?? true
     }
