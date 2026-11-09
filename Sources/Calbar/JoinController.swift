@@ -23,12 +23,12 @@ final class JoinController {
 
     /// Current alerts, dismissed ones left out, with or without a link.
     func due(now: Date) -> [CalendarEvent] {
-        AlertPlanner.due(store.events, now: now, policy: Prefs.alertPolicy, dismissed: dismissed)
+        AlertPlanner.due(store.alertEvents, now: now, policy: Prefs.alertPolicy, dismissed: dismissed)
     }
 
     /// Due meetings with a link, earliest first.
     func queue(now: Date) -> JoinQueue {
-        JoinQueue(events: store.events, now: now, policy: Prefs.alertPolicy, dismissed: dismissed)
+        JoinQueue(events: store.alertEvents, now: now, policy: Prefs.alertPolicy, dismissed: dismissed)
     }
 
     func join(_ event: CalendarEvent) {

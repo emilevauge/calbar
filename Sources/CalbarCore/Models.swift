@@ -244,6 +244,11 @@ public struct CalendarInfo: Identifiable, Equatable, Codable, Sendable {
     /// Minutes before the start of the calendar's default pop-up
     /// reminders, for events that use them. Nil when not known yet.
     public var defaultReminders: [Int]?
+    /// Its events count down in the icon, notify and peek. Nil, as stored
+    /// before the choice existed: on.
+    public var alerts: Bool?
+
+    public var alertsOn: Bool { alerts ?? true }
 
     public init(id: String, name: String, colorHex: String, isPrimary: Bool, enabled: Bool, canWrite: Bool? = nil,
                 defaultReminders: [Int]? = nil) {

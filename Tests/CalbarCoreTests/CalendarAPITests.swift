@@ -64,7 +64,9 @@ final class StubHTTP: HTTPClient, @unchecked Sendable {
     }
 
     @Test func mergeKeepsUserChoice() {
-        let previous = [CalendarInfo(id: "a", name: "A", colorHex: "#000000", isPrimary: true, enabled: false)]
+        var a = CalendarInfo(id: "a", name: "A", colorHex: "#000000", isPrimary: true, enabled: false)
+        a.alerts = false
+        let previous = [a]
         let fresh = [
             CalendarInfo(id: "a", name: "A renamed", colorHex: "#111111", isPrimary: true, enabled: true),
             CalendarInfo(id: "b", name: "B", colorHex: "#222222", isPrimary: false, enabled: true),
@@ -72,6 +74,12 @@ final class StubHTTP: HTTPClient, @unchecked Sendable {
         let merged = CalendarInfo.merge(fresh: fresh, previous: previous)
         #expect(merged.map(\.name) == ["A renamed", "B"])
         #expect(merged.map(\.enabled) == [false, true])
+        #expect(merged.map(\.alertsOn) == [false, true])
+    }
+
+    @Test func storedCalendarsAlertByDefault() throws {
+        let json = ##"{"id": "a", "name": "A", "colorHex": "#000000", "isPrimary": true, "enabled": true}"##
+        #expect(try JSONDecoder().decode(CalendarInfo.self, from: Data(json.utf8)).alertsOn)
     }
 
     @Test func formEncodingEscapesReservedCharacters() {

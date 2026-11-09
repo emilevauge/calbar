@@ -621,7 +621,9 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
   reconnect to reply to invitations", or "Signed out · reconnect to see events" in red),
   "Reconnect" when the account is read only or signed out, and a trash button that removes it.
   Below, the calendars folded under a "Calendars" row that reads "2 of 14 shown", with a toggle
-  each. Then a card with "Add a Google account…" or the sign-in progress with "Cancel", and the
+  each to show it and a bell to its right for its alerts (`CalendarInfo.alerts`, on by default,
+  kept across refreshes): a calendar with its bell off is shown but never counted down in the
+  icon, never in the join capsule, and never notified or peeked (`EventStore.alertEvents`). Then a card with "Add a Google account…" or the sign-in progress with "Cancel", and the
   last sign-in error; its footer gives the OAuth client ID, shortened, with "Import…" or
   "Replace…".
 - Alerts: "Alert before" (1 to 60 min, default 10), "Keep after the start" (0 to 30 min, default

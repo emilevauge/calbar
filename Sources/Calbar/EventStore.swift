@@ -57,6 +57,12 @@ final class EventStore: ObservableObject {
         visible(rawEvents)
     }
 
+    /// Events of the calendars whose alerts are on: the countdown, the
+    /// capsule, notifications and peeks use these.
+    var alertEvents: [CalendarEvent] {
+        events.filter { accounts.alertsOn(calendarID: $0.calendarID, email: $0.accountEmail) }
+    }
+
     private func visible(_ raw: [CalendarEvent]) -> [CalendarEvent] {
         let enabled = raw.filter {
             accounts.isEnabled(calendarID: $0.calendarID, email: $0.accountEmail) && !isBeingDeleted($0)

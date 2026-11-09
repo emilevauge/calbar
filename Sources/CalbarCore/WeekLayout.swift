@@ -30,12 +30,12 @@ public enum WeekLayout {
     /// added when the week is not in the current one.
     public static func title(_ days: [Date], now: Date, calendar: Calendar) -> String {
         guard let first = days.first, let last = days.last else { return "" }
-        let english = Locale(identifier: "en_US")
+        // In the calendar's zone, not the system's: the days are its midnights.
+        var style = Date.FormatStyle(locale: Locale(identifier: "en_US"), calendar: calendar, timeZone: calendar.timeZone)
         let sameMonth = calendar.isDate(first, equalTo: last, toGranularity: .month)
-        let start = first.formatted(.dateTime.month(.abbreviated).day().locale(english))
-        let end = sameMonth
-            ? last.formatted(.dateTime.day().locale(english))
-            : last.formatted(.dateTime.month(.abbreviated).day().locale(english))
+        let start = first.formatted(style.month(.abbreviated).day())
+        style = style.day()
+        let end = sameMonth ? last.formatted(style) : last.formatted(style.month(.abbreviated))
         var text = "\(start) - \(end)"
         if calendar.component(.year, from: last) != calendar.component(.year, from: now) {
             text += ", \(calendar.component(.year, from: last))"

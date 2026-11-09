@@ -41,7 +41,7 @@ final class MeetingPeeker {
         let policy = Prefs.alertPolicy
         let dismissed = join.dismissed
         // The start of a meeting comes first: it is the more urgent.
-        if let event = NotificationPlanner.dueAtStart(store.events, now: now, policy: policy,
+        if let event = NotificationPlanner.dueAtStart(store.alertEvents, now: now, policy: policy,
                                                       skip: Set(shownAtStart.keys).union(dismissed)).first {
             if show(event) {
                 NSLog("Calbar: peek at a meeting's start")
@@ -52,7 +52,7 @@ final class MeetingPeeker {
             return
         }
         let skip = Set(shownSoon.keys).union(shownAtStart.keys).union(dismissed)
-        if let event = NotificationPlanner.due(store.events, now: now, policy: policy, skip: skip).first {
+        if let event = NotificationPlanner.due(store.alertEvents, now: now, policy: policy, skip: skip).first {
             if show(event) {
                 NSLog("Calbar: peek before a meeting")
                 shownSoon[event.occurrenceKey] = NotificationPlanner.windowEnd(event, policy: policy)
@@ -60,7 +60,7 @@ final class MeetingPeeker {
             return
         }
         // The event's own reminders, as set in Google Calendar.
-        if let due = NotificationPlanner.dueReminders(store.events, now: now, policy: policy,
+        if let due = NotificationPlanner.dueReminders(store.alertEvents, now: now, policy: policy,
                                                       skip: Set(shownReminders.keys)).first,
            !dismissed.contains(due.event.occurrenceKey),
            show(due.event) {

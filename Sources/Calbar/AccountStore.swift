@@ -53,6 +53,16 @@ final class AccountStore: ObservableObject {
         account(email)?.calendars.first { $0.id == calendarID }?.enabled ?? false
     }
 
+    func alertsOn(calendarID: String, email: String) -> Bool {
+        account(email)?.calendars.first { $0.id == calendarID }?.alertsOn ?? true
+    }
+
+    func setAlerts(_ on: Bool, calendarID: String, email: String) {
+        guard let i = index(email),
+              let j = accounts[i].calendars.firstIndex(where: { $0.id == calendarID }) else { return }
+        accounts[i].calendars[j].alerts = on
+    }
+
     func upsert(email: String, grantedScopes: [String]?) {
         if let i = index(email) {
             accounts[i].needsReconnect = false

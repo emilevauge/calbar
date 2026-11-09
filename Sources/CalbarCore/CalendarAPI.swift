@@ -249,13 +249,16 @@ public struct CalendarAPI: Sendable {
 }
 
 extension CalendarInfo {
-    /// Fresh calendar list from Google, keeping the user's on/off choice
-    /// for calendars already known.
+    /// Fresh calendar list from Google, keeping the user's choices (shown,
+    /// alerts) for calendars already known.
     public static func merge(fresh: [CalendarInfo], previous: [CalendarInfo]) -> [CalendarInfo] {
-        let known = Dictionary(previous.map { ($0.id, $0.enabled) }, uniquingKeysWith: { a, _ in a })
+        let known = Dictionary(previous.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         return fresh.map { info in
             var info = info
-            if let enabled = known[info.id] { info.enabled = enabled }
+            if let old = known[info.id] {
+                info.enabled = old.enabled
+                info.alerts = old.alerts
+            }
             return info
         }
     }

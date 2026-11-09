@@ -184,7 +184,7 @@ final class AppDelegate: NSObject, ObservableObject {
 
     private func indicatorState(now: Date) -> (badge: MenuBarBadge, queue: JoinQueue, style: CapsuleStyle?) {
         let badge = MenuBarBadge.compute(
-            events: store.events,
+            events: store.alertEvents,
             now: now,
             leadTime: Prefs.alertPolicy.leadTime,
             calendar: .current,
@@ -206,7 +206,7 @@ final class AppDelegate: NSObject, ObservableObject {
         }
         guard let button = statusItem?.button else { return }
         let dark = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        let onAir = NextMeeting.ongoing(events: store.events, now: store.now) != nil
+        let onAir = NextMeeting.ongoing(events: store.alertEvents, now: store.now) != nil
         let render = Render(badge: state.badge, join: capsule, dark: dark, onAir: onAir)
         guard render != lastRender else { return }
         lastRender = render
@@ -390,7 +390,7 @@ final class AppDelegate: NSObject, ObservableObject {
         if let peekTarget, let event = store.events.first(where: { $0.occurrenceKey == peekTarget }) {
             return event
         }
-        return join.queue(now: now).primary ?? NextMeeting.focus(events: store.events, now: now, calendar: .current)
+        return join.queue(now: now).primary ?? NextMeeting.focus(events: store.alertEvents, now: now, calendar: .current)
     }
 
     /// Clicks in other apps. A transient popover closes on a click outside
