@@ -249,6 +249,20 @@ public struct CalendarInfo: Identifiable, Equatable, Codable, Sendable {
     public var alerts: Bool?
 
     public var alertsOn: Bool { alerts ?? true }
+    /// A colleague's calendar added in Calbar by its email, read directly:
+    /// not in the account's Google calendar list, kept across refreshes.
+    public var isAdded: Bool?
+
+    /// A colleague's calendar: shown, never alerting, read only.
+    public static func colleague(_ email: String, name: String?) -> CalendarInfo {
+        let palette = ["#7986cb", "#33b679", "#8e24aa", "#e67c73", "#f6bf26", "#039be5", "#616161"]
+        let hash = email.lowercased().unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xffff }
+        var info = CalendarInfo(id: email.lowercased(), name: name ?? email.lowercased(), colorHex: palette[hash % palette.count],
+                                isPrimary: false, enabled: true, canWrite: false)
+        info.alerts = false
+        info.isAdded = true
+        return info
+    }
 
     public init(id: String, name: String, colorHex: String, isPrimary: Bool, enabled: Bool, canWrite: Bool? = nil,
                 defaultReminders: [Int]? = nil) {

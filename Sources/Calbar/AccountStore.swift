@@ -63,6 +63,16 @@ final class AccountStore: ObservableObject {
         accounts[i].calendars[j].alerts = on
     }
 
+    func addCalendar(_ info: CalendarInfo, email: String) {
+        guard let i = index(email), !accounts[i].calendars.contains(where: { $0.id == info.id }) else { return }
+        accounts[i].calendars.append(info)
+    }
+
+    func removeCalendar(_ calendarID: String, email: String) {
+        guard let i = index(email) else { return }
+        accounts[i].calendars.removeAll { $0.id == calendarID && $0.isAdded == true }
+    }
+
     func upsert(email: String, grantedScopes: [String]?) {
         if let i = index(email) {
             accounts[i].needsReconnect = false

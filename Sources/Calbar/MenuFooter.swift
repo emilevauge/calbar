@@ -13,6 +13,7 @@ struct MenuFooter<Settings: View>: View {
     @ViewBuilder let settings: () -> Settings
 
     @State private var showingSettings = false
+    @State private var showingCalendars = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 2) {
@@ -25,6 +26,13 @@ struct MenuFooter<Settings: View>: View {
             } label: {
                 GoogleCalendarIcon(size: 14)
                     .foregroundStyle(.secondary)
+            }
+
+            IconButton("calendar", tooltip: "Calendars") {
+                showingCalendars.toggle()
+            }
+            .popover(isPresented: $showingCalendars, arrowEdge: .trailing) {
+                CalendarsPanel()
             }
 
             IconButton("gearshape", tooltip: "Settings") {

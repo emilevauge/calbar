@@ -77,6 +77,14 @@ final class StubHTTP: HTTPClient, @unchecked Sendable {
         #expect(merged.map(\.alertsOn) == [false, true])
     }
 
+    @Test func mergeKeepsAddedColleagues() {
+        let ann = CalendarInfo.colleague("Ann@x.com", name: "Ann")
+        let me = CalendarInfo(id: "me@x.com", name: "Me", colorHex: "#000000", isPrimary: true, enabled: true)
+        let merged = CalendarInfo.merge(fresh: [me], previous: [me, ann])
+        #expect(merged.map(\.id) == ["me@x.com", "ann@x.com"])
+        #expect(!ann.alertsOn && !ann.isWritable && ann.enabled)
+    }
+
     @Test func storedCalendarsAlertByDefault() throws {
         let json = ##"{"id": "a", "name": "A", "colorHex": "#000000", "isPrimary": true, "enabled": true}"##
         #expect(try JSONDecoder().decode(CalendarInfo.self, from: Data(json.utf8)).alertsOn)

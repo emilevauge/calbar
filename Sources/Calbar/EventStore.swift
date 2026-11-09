@@ -57,6 +57,36 @@ final class EventStore: ObservableObject {
         visible(rawEvents)
     }
 
+    enum AddFailure: LocalizedError {
+        case notShared, alreadyShown
+        var errorDescription: String? {
+            switch self {
+            case .notShared: "This calendar is not shared with you."
+            case .alreadyShown: "This calendar is already in the list."
+            }
+        }
+    }
+
+    /// Adds a colleague's calendar to `account` once Google lets the
+    /// account read it, then fetches its events.
+    func addColleague(_ email: String, name: String?, to account: String) async throws {
+        let info = CalendarInfo.colleague(email, name: name)
+        guard accounts.account(account)?.calendars.contains(where: { $0.id == info.id }) == false else {
+            throw AddFailure.alreadyShown
+        }
+        guard let auth else { return }
+        let token = try await auth.accessToken(for: account)
+        let today = DayWindow.interval(for: now, calendar: .current)
+        do {
+            _ = try await api.events(token: token, source: info, accountEmail: account,
+                                     from: today.start, to: today.end, calendar: .current)
+        } catch APIError.http(let status, _) where status == 404 || status == 403 {
+            throw AddFailure.notShared
+        }
+        accounts.addCalendar(info, email: account)
+        await refresh()
+    }
+
     /// Events of the calendars whose alerts are on: the countdown, the
     /// capsule, notifications and peeks use these.
     var alertEvents: [CalendarEvent] {
