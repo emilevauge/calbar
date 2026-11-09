@@ -52,7 +52,7 @@ struct CalendarPicker: View {
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .help("Remove this colleague's calendar")
+                            .help("Remove this calendar")
                         }
                     }
                 }
@@ -61,37 +61,44 @@ struct CalendarPicker: View {
     }
 }
 
-/// From the panel's footer: every account's calendars, to show, mute or
-/// remove, and a colleague's calendar to add by email.
+/// From the panel's footer: a field on top to add someone's calendar,
+/// then every account's calendars, to show, mute or remove.
 struct CalendarsPanel: View {
     @ObservedObject var accounts = AppDelegate.shared.accounts
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(accounts.accounts) { account in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(account.email)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        CalendarPicker(account: account)
-                        ColleagueField(account: account.email)
+        VStack(alignment: .leading, spacing: 0) {
+            AddCalendarField(accounts: accounts.accounts.map(\.email))
+                .padding(14)
+                // Its suggestions float over the list below.
+                .zIndex(1)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(accounts.accounts) { account in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(account.email)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            CalendarPicker(account: account)
+                        }
                     }
                 }
+                .padding(14)
             }
-            .padding(14)
         }
         .frame(width: 320)
-        .frame(maxHeight: 460)
+        // Room for the six floating suggestions, however few calendars.
+        .frame(minHeight: 300, maxHeight: 460, alignment: .top)
         .fixedSize(horizontal: false, vertical: true)
     }
 }
 
-/// A colleague, picked as a guest is in the editor (people met, Google
-/// contacts and directory), added once Google lets the account read that
-/// calendar.
-private struct ColleagueField: View {
-    let account: String
+/// Someone, picked as a guest is in the editor (people met, Google
+/// contacts and directory), whose calendar is added once Google lets an
+/// account read it: the account of the same domain, else the first one.
+private struct AddCalendarField: View {
+    let accounts: [String]
     @ObservedObject private var contacts = AppDelegate.shared.contacts
     @State private var picked: [ContactIndex.Contact] = []
     @State private var busy = false
@@ -105,7 +112,7 @@ private struct ColleagueField: View {
                     ProgressView().controlSize(.mini)
                     Text("Adding \(picked.first?.name ?? picked.first?.email ?? "")…").foregroundStyle(.secondary)
                 } else {
-                    GuestField(guests: $picked, contacts: contacts, placeholder: "Add a colleague's calendar")
+                    GuestField(guests: $picked, contacts: contacts, placeholder: "Add someone's calendar", floating: true)
                 }
             }
             if let error {
@@ -113,20 +120,23 @@ private struct ColleagueField: View {
             }
         }
         .font(.system(size: 12))
-        .padding(.top, 2)
         .onAppear { contacts.prepare() }
         .onChange(of: picked) { _, new in
-            if let colleague = new.first { add(colleague) }
+            if let person = new.first { add(person) }
         }
     }
 
-    private func add(_ colleague: ContactIndex.Contact) {
-        guard !busy else { return }
+    private func add(_ person: ContactIndex.Contact) {
+        let domain = { (email: String) in email.split(separator: "@").last.map { $0.lowercased() } }
+        guard !busy, let account = accounts.first(where: { domain($0) == domain(person.email) }) ?? accounts.first else {
+            picked = []
+            return
+        }
         busy = true
         error = nil
         Task {
             do {
-                try await AppDelegate.shared.store.addColleague(colleague.email, name: colleague.name, to: account)
+                try await AppDelegate.shared.store.addSharedCalendar(person.email, name: person.name, to: account)
             } catch {
                 self.error = (error as? LocalizedError)?.errorDescription ?? describe(error)
             }

@@ -67,10 +67,10 @@ final class EventStore: ObservableObject {
         }
     }
 
-    /// Adds a colleague's calendar to `account` once Google lets the
+    /// Adds someone's calendar to `account` once Google lets the
     /// account read it, then fetches its events.
-    func addColleague(_ email: String, name: String?, to account: String) async throws {
-        let info = CalendarInfo.colleague(email, name: name)
+    func addSharedCalendar(_ email: String, name: String?, to account: String) async throws {
+        let info = CalendarInfo.shared(email, name: name)
         guard accounts.account(account)?.calendars.contains(where: { $0.id == info.id }) == false else {
             throw AddFailure.alreadyShown
         }

@@ -815,6 +815,9 @@ struct GuestField: View {
     @ObservedObject var contacts: ContactBook
     /// The empty field's prompt.
     var placeholder = "Add guests"
+    /// Suggestions float over what follows the field instead of pushing
+    /// it down: the field's container must sit above it (`zIndex`).
+    var floating = false
     @State private var text = ""
     @State private var highlighted = 0
     /// Google matches for `remoteQuery`.
@@ -881,6 +884,15 @@ struct GuestField: View {
                     guests.removeLast()
                     return .handled
                 }
+                .overlay(alignment: .topLeading) {
+                    if floating, focused || overSuggestions, !suggestions.isEmpty {
+                        suggestionList
+                            .background(Color(nsColor: .windowBackgroundColor),
+                                        in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
+                            .alignmentGuide(.top) { $0[.top] - 22 }
+                    }
+                }
             // Same condition as the list: a line that left on focus loss
             // would move the list under the pointer mid-click.
             if focused || overSuggestions, contacts.needsReconnectForGoogle, text.count >= 2 {
@@ -888,38 +900,42 @@ struct GuestField: View {
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
-            if focused || overSuggestions, !suggestions.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(suggestions.enumerated()), id: \.element.email) { i, contact in
-                        HStack(spacing: 6) {
-                            Avatar(person: Person(email: contact.email, name: contact.name), response: .accepted)
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(contact.name ?? contact.email)
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
-                                if contact.name != nil {
-                                    Text(contact.email).lineLimit(1)
-                                }
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(i == highlighted ? Color.accentColor.opacity(0.18) : .clear,
-                                    in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                        .contentShape(Rectangle())
-                        // On release wherever the pointer is: a button
-                        // drops a click released outside it.
-                        .gesture(DragGesture(minimumDistance: 0).onEnded { _ in add(contact) })
-                        .onHover { if $0 { highlighted = i } }
-                    }
-                }
-                .padding(3)
-                .background(Color(nsColor: .textBackgroundColor).opacity(0.8),
-                            in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                .onHover { overSuggestions = $0 }
+            if !floating, focused || overSuggestions, !suggestions.isEmpty {
+                suggestionList
+                    .background(Color(nsColor: .textBackgroundColor).opacity(0.8),
+                                in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
         }
+    }
+
+    private var suggestionList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(suggestions.enumerated()), id: \.element.email) { i, contact in
+                HStack(spacing: 6) {
+                    Avatar(person: Person(email: contact.email, name: contact.name), response: .accepted)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(contact.name ?? contact.email)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        if contact.name != nil {
+                            Text(contact.email).lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(i == highlighted ? Color.accentColor.opacity(0.18) : .clear,
+                            in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .contentShape(Rectangle())
+                // On release wherever the pointer is: a button
+                // drops a click released outside it.
+                .gesture(DragGesture(minimumDistance: 0).onEnded { _ in add(contact) })
+                .onHover { if $0 { highlighted = i } }
+            }
+        }
+        .padding(3)
+        .onHover { overSuggestions = $0 }
     }
 
     private func chip(_ guest: ContactIndex.Contact) -> some View {

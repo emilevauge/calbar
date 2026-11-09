@@ -254,7 +254,7 @@ extension CalendarInfo {
     public static func merge(fresh: [CalendarInfo], previous: [CalendarInfo]) -> [CalendarInfo] {
         let known = Dictionary(previous.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let listed = Set(fresh.map(\.id))
-        // Colleagues' calendars added in Calbar are not in Google's list.
+        // Calendars added in Calbar by email are not in Google's list.
         let added = previous.filter { $0.isAdded == true && !listed.contains($0.id) }
         return fresh.map { info in
             var info = info

@@ -626,14 +626,16 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
   icon, never in the join capsule, and never notified or peeked (`EventStore.alertEvents`).
 - The panel's key shortcuts (arrows, return, ⌫, ⌘Z) step aside while a text field has the
   keyboard (`MenuView.isTyping`), as in the calendars panel's popover.
-- Calendars panel (`CalendarsPanel`, the calendar icon of the footer, beside Settings): each
-  account's calendars with the same toggle and bell, and a field "Add a colleague's calendar"
-  with the editor's guest suggestions (`GuestField`). On a pick Calbar reads that calendar's events for today with the account's token
+- Calendars panel (`CalendarsPanel`, the calendar icon of the footer, beside Settings): on
+  top a field "Add someone's calendar" with the editor's guest suggestions (`GuestField`,
+  `floating`: the suggestions float over the list, opaque with a shadow), then each account's
+  calendars with the same toggle and bell. On a pick Calbar uses the account of the person's
+  domain, else the first one, and reads that calendar's events for today with its token
   (`calendar.readonly` reads any calendar shared with the account, no new scope): a 403 or 404
   shows "This calendar is not shared with you." The calendar is then added to the account
-  (`CalendarInfo.colleague`: named after the contact when known, a color from the email,
-  alerts off, read only, `isAdded`), kept by `merge` although Google's calendar list does not
-  have it, and fetched like the others. A minus button removes it. A meeting the user also has
+  (`CalendarInfo.shared`: named after the contact when known, a color from the email, alerts
+  off, read only, `isAdded`), kept by `merge` although Google's calendar list does not have
+  it, and fetched like the others. A minus button removes it. A meeting the user also has
   keeps the copy of the user's own calendar (`EventMerger`). Then a card with "Add a Google account…" or the sign-in progress with "Cancel", and the
   last sign-in error; its footer gives the OAuth client ID, shortened, with "Import…" or
   "Replace…".
