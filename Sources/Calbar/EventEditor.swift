@@ -810,9 +810,11 @@ struct EventEditor: View {
 /// people met and Google (contacts, other contacts, directory): `↑` `↓` move,
 /// `↵` or `tab` picks, `,` or `↵` adds a typed email, `⌫` in the empty
 /// field removes the last chip.
-private struct GuestField: View {
+struct GuestField: View {
     @Binding var guests: [ContactIndex.Contact]
     @ObservedObject var contacts: ContactBook
+    /// The empty field's prompt.
+    var placeholder = "Add guests"
     @State private var text = ""
     @State private var highlighted = 0
     /// Google matches for `remoteQuery`.
@@ -840,7 +842,7 @@ private struct GuestField: View {
                     ForEach(guests, id: \.email) { guest in chip(guest) }
                 }
             }
-            TextField(guests.isEmpty ? "Add guests" : "Add more", text: $text)
+            TextField(guests.isEmpty ? placeholder : "Add more", text: $text)
                 .textFieldStyle(.plain)
                 .focused($focused)
                 .onChange(of: text) { _, new in

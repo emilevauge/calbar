@@ -103,24 +103,24 @@ struct MenuView: View {
         .focusEffectDisabled()
         .focused($focused)
         .onKeyPress(.downArrow) {
-            guard store.composing == nil else { return .ignored }
+            guard store.composing == nil, !Self.isTyping else { return .ignored }
             selectedIndex = min(selectedIndex + 1, max(rows.count - 1, 0))
             return .handled
         }
         .onKeyPress(.upArrow) {
-            guard store.composing == nil else { return .ignored }
+            guard store.composing == nil, !Self.isTyping else { return .ignored }
             selectedIndex = max(selectedIndex - 1, 0)
             return .handled
         }
         // Up and down move the selection; left and right change the day,
         // or the week in the week view.
         .onKeyPress(.leftArrow) {
-            guard store.composing == nil else { return .ignored }
+            guard store.composing == nil, !Self.isTyping else { return .ignored }
             step(-1)
             return .handled
         }
         .onKeyPress(.rightArrow) {
-            guard store.composing == nil else { return .ignored }
+            guard store.composing == nil, !Self.isTyping else { return .ignored }
             step(1)
             return .handled
         }
@@ -128,7 +128,7 @@ struct MenuView: View {
         // macOS sends backspace as DEL (U+007F), which `.delete` (U+0008)
         // does not match: test the characters.
         .onKeyPress { press in
-            guard Self.isDeleteKey(press), store.composing == nil, !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
+            guard Self.isDeleteKey(press), store.composing == nil, !Self.isTyping, !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
             let event = rows[selectedIndex]
             guard store.canDelete(event) else { NSSound.beep(); return .handled }
             withAnimation(Motion.resize) { store.deleteFromKey(event) }
@@ -136,7 +136,7 @@ struct MenuView: View {
             return .handled
         }
         .onKeyPress(characters: ["z"]) { press in
-            guard press.modifiers.contains(.command), store.lastDeleted != nil else { return .ignored }
+            guard press.modifiers.contains(.command), store.lastDeleted != nil, !Self.isTyping else { return .ignored }
             withAnimation(Motion.resize) { store.undoDelete() }
             return .handled
         }
@@ -155,7 +155,7 @@ struct MenuView: View {
             return .handled
         }
         .onKeyPress(keys: [.return]) { press in
-            guard store.composing == nil, !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
+            guard store.composing == nil, !Self.isTyping, !week, !dayGrid, rows.indices.contains(selectedIndex) else { return .ignored }
             let event = rows[selectedIndex]
             if press.modifiers.contains(.command) {
                 join(event)
@@ -604,6 +604,10 @@ struct MenuView: View {
     }
 
     /// Backspace or forward delete, whatever character macOS sends for it.
+    /// A text field has the keyboard, in the panel or one of its popovers
+    /// (the calendars panel, a picker): its keys are not shortcuts.
+    static var isTyping: Bool { NSApp.keyWindow?.firstResponder is NSText }
+
     static func isDeleteKey(_ press: KeyPress) -> Bool {
         press.key == .delete || press.key == .deleteForward
             || press.characters == "\u{7F}" || press.characters == "\u{08}" || press.characters == "\u{F728}"

@@ -624,9 +624,11 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
   each to show it and a bell to its right for its alerts (`CalendarInfo.alerts`, on by default,
   kept across refreshes): a calendar with its bell off is shown but never counted down in the
   icon, never in the join capsule, and never notified or peeked (`EventStore.alertEvents`).
+- The panel's key shortcuts (arrows, return, ⌫, ⌘Z) step aside while a text field has the
+  keyboard (`MenuView.isTyping`), as in the calendars panel's popover.
 - Calendars panel (`CalendarsPanel`, the calendar icon of the footer, beside Settings): each
-  account's calendars with the same toggle and bell, and a field "Add a colleague's calendar
-  (email)". On return Calbar reads that calendar's events for today with the account's token
+  account's calendars with the same toggle and bell, and a field "Add a colleague's calendar"
+  with the editor's guest suggestions (`GuestField`). On a pick Calbar reads that calendar's events for today with the account's token
   (`calendar.readonly` reads any calendar shared with the account, no new scope): a 403 or 404
   shows "This calendar is not shared with you." The calendar is then added to the account
   (`CalendarInfo.colleague`: named after the contact when known, a color from the email,

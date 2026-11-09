@@ -87,22 +87,26 @@ struct CalendarsPanel: View {
     }
 }
 
-/// A colleague's email, added on return once Google lets the account read
-/// that calendar.
+/// A colleague, picked as a guest is in the editor (people met, Google
+/// contacts and directory), added once Google lets the account read that
+/// calendar.
 private struct ColleagueField: View {
     let account: String
-    @State private var email = ""
+    @ObservedObject private var contacts = AppDelegate.shared.contacts
+    @State private var picked: [ContactIndex.Contact] = []
     @State private var busy = false
     @State private var error: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: "person.crop.circle.badge.plus").foregroundStyle(.secondary)
-                TextField("Add a colleague's calendar (email)", text: $email)
-                    .textFieldStyle(.plain)
-                    .onSubmit(add)
-                if busy { ProgressView().controlSize(.mini) }
+                if busy {
+                    ProgressView().controlSize(.mini)
+                    Text("Adding \(picked.first?.name ?? picked.first?.email ?? "")…").foregroundStyle(.secondary)
+                } else {
+                    GuestField(guests: $picked, contacts: contacts, placeholder: "Add a colleague's calendar")
+                }
             }
             if let error {
                 Text(error).font(.caption).foregroundStyle(.red)
@@ -110,25 +114,23 @@ private struct ColleagueField: View {
         }
         .font(.system(size: 12))
         .padding(.top, 2)
+        .onAppear { contacts.prepare() }
+        .onChange(of: picked) { _, new in
+            if let colleague = new.first { add(colleague) }
+        }
     }
 
-    private func add() {
-        let address = email.trimmingCharacters(in: .whitespaces)
-        guard !busy, NewEvent.guests(from: address).count == 1 else {
-            error = address.isEmpty ? nil : "Type an email address."
-            return
-        }
-        let app = AppDelegate.shared
-        let name = app.contacts.index.search(address).first { $0.email.lowercased() == address.lowercased() }?.name
+    private func add(_ colleague: ContactIndex.Contact) {
+        guard !busy else { return }
         busy = true
         error = nil
         Task {
             do {
-                try await app.store.addColleague(address, name: name, to: account)
-                email = ""
+                try await AppDelegate.shared.store.addColleague(colleague.email, name: colleague.name, to: account)
             } catch {
                 self.error = (error as? LocalizedError)?.errorDescription ?? describe(error)
             }
+            picked = []
             busy = false
         }
     }
