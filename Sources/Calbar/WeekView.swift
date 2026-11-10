@@ -65,7 +65,13 @@ struct WeekView: View {
 
         var minutes: Int { max(Int(event.end.timeIntervalSince(event.start) / 60), 15) }
     }
-    static let gutter: CGFloat = 40
+    @AppStorage(Prefs.homeTimeZoneKey) private var homeTimeZone = ""
+    /// Home, when away from it in another time zone: each hour also
+    /// shows its home time.
+    private var home: TimeZone? {
+        HomeClock.away(home: homeTimeZone, current: .current, at: days.first ?? Date())
+    }
+    private var gutter: CGFloat { home == nil ? 40 : 74 }
     static let hourHeight: CGFloat = 44
     @State private var opened: String?
     /// The slot of a new event while it is dragged out, then while its
@@ -131,13 +137,13 @@ struct WeekView: View {
         Color(nsColor: .labelColor).opacity(opacity)
     }
 
-    private var columnWidth: CGFloat { (width - Self.gutter - 8) / CGFloat(max(days.count, 1)) }
+    private var columnWidth: CGFloat { (width - gutter - 8) / CGFloat(max(days.count, 1)) }
 
     // MARK: headers
 
     private var dayHeaders: some View {
         HStack(spacing: 0) {
-            Color.clear.frame(width: Self.gutter)
+            Color.clear.frame(width: gutter)
             ForEach(days, id: \.self) { day in
                 let today = Calendar.current.isDateInToday(day)
                 Button { onShowDay(day) } label: {
@@ -201,13 +207,13 @@ struct WeekView: View {
                         ForEach(bars.filter { $0.row < shownRows }, id: \.event.occurrenceKey) { bar in
                             allDayBar(bar)
                                 .frame(width: CGFloat(bar.last - bar.first + 1) * columnWidth - 4, height: rowHeight - 2)
-                                .offset(x: Self.gutter + CGFloat(bar.first) * columnWidth + 2,
+                                .offset(x: gutter + CGFloat(bar.first) * columnWidth + 2,
                                         y: CGFloat(bar.row) * rowHeight)
                         }
                     }
                     if rowCount > limit {
                         HStack(spacing: 0) {
-                            Color.clear.frame(width: Self.gutter, height: 1)
+                            Color.clear.frame(width: gutter, height: 1)
                             ForEach(Array(hidden.enumerated()), id: \.offset) { _, count in
                                 moreButton(count)
                                     .frame(width: columnWidth, alignment: .leading)
@@ -229,7 +235,7 @@ struct WeekView: View {
         Text("all-day")
             .font(.system(size: 9))
             .foregroundStyle(.tertiary)
-            .frame(width: Self.gutter - 6, height: 16, alignment: .trailing)
+            .frame(width: gutter - 6, height: 16, alignment: .trailing)
             .help("Click or drag across days for an all-day event")
     }
 
@@ -240,11 +246,11 @@ struct WeekView: View {
         let columns = days.count
         let columnWidth = columnWidth
         func column(_ x: CGFloat) -> Int {
-            min(max(Int((x - Self.gutter) / max(columnWidth, 1)), 0), columns - 1)
+            min(max(Int((x - gutter) / max(columnWidth, 1)), 0), columns - 1)
         }
         let editing = slot != nil
         func onBar(_ point: CGPoint) -> Bool {
-            guard !editing, point.x >= Self.gutter else { return false }
+            guard !editing, point.x >= gutter else { return false }
             let row = Int(point.y / rowHeight), day = column(point.x)
             return bars.contains { $0.row == row && $0.first <= day && day <= $0.last }
         }
@@ -273,7 +279,7 @@ struct WeekView: View {
         return shape.fill(Color.accentColor.opacity(0.25))
             .overlay(shape.strokeBorder(Color.accentColor, lineWidth: 1))
             .frame(width: CGFloat(range.count) * columnWidth - 4, height: max(height - 2, 16))
-            .offset(x: Self.gutter + CGFloat(range.lowerBound) * columnWidth + 2)
+            .offset(x: gutter + CGFloat(range.lowerBound) * columnWidth + 2)
             .allowsHitTesting(false)
     }
 
@@ -357,13 +363,21 @@ struct WeekView: View {
             VStack(spacing: 0) {
                 ForEach(0..<24, id: \.self) { hour in
                     HStack(alignment: .top, spacing: 0) {
-                        Text(String(format: "%02d:00", hour))
-                            .font(.caption2)
-                            .monospacedDigit()
-                            .foregroundStyle(.tertiary)
-                            .frame(width: Self.gutter - 6, alignment: .trailing)
-                            // Under its line, so the first visible hour is not cut.
-                            .padding(.top, 2)
+                        HStack(spacing: 4) {
+                            if let home, let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0,
+                                                                            of: days.first ?? Date()) {
+                                Text(HomeClock.label(date, in: home))
+                                    .foregroundStyle(.secondary)
+                                    .help("At home, \(HomeClock.name(home, at: date))")
+                            }
+                            Text(String(format: "%02d:00", hour))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .font(.caption2)
+                        .monospacedDigit()
+                        .frame(width: gutter - 6, alignment: .trailing)
+                        // Under its line, so the first visible hour is not cut.
+                        .padding(.top, 2)
                         VStack { Divider() }
                             .padding(.leading, 6)
                     }
@@ -372,7 +386,7 @@ struct WeekView: View {
                 }
             }
             HStack(spacing: 0) {
-                Color.clear.frame(width: Self.gutter)
+                Color.clear.frame(width: gutter)
                 ForEach(Array(days.enumerated()), id: \.offset) { index, day in
                     column(day, content: contents[index])
                         .frame(width: columnWidth, height: hourHeight * 24, alignment: .topLeading)

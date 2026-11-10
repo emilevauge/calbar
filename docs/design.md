@@ -317,7 +317,11 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   event's card, as a block does, except while editing; the "+N" buttons keep their clicks), opens the editor on a new all-day event over those days (or makes the
   edited event all day over them); the picked days show as an accent bar. The hours from
   "Week view from" to "Week view until" (9 and 19 by default) fill the visible height; the grid
-  covers the whole day and opens scrolled to the first one. Timed events are opaque blocks (a
+  covers the whole day and opens scrolled to the first one. Away from home ("Home" in the
+  settings) in a zone whose time differs (`HomeClock.away`, offsets compared, so Berlin is not
+  away from Paris), the gutter widens from 40 to 74 pt and each hour shows the home time
+  ("15:00", "19:30" for a half-hour zone) before the local one, the zone on its tooltip. A
+  system time zone change resets the cached zone and refreshes. Timed events are opaque blocks (a
   text background base under the calendar color, 30 % in light mode, 42 % in dark) with a
   hairline border and a leading bar, 1 pt apart, title and start time followed by the calendar's
   name, cut at the end when too long (also on the tooltip). Their text uses the label
@@ -647,8 +651,11 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
 - Display: "Show declined events" (off), "Week view from" (0 to 23, default 09:00) and "Week
   view until" (1 to 24, default 19:00), "Week view days": one toggle per weekday from the
   user's first weekday (at least one stays on) with "Mon-Fri" and "All" presets, stored as
-  `Calendar` weekday numbers ("23456"). Footer "The week view shows these days and hours;
-  scroll for the rest of the day."
+  `Calendar` weekday numbers ("23456"). "Home": a time zone menu, "None" first (the default,
+  stored as ""), then every known zone as "Paris (GMT+1)", by offset; with "None", a "Here"
+  button picks the current zone. Footer "The week view shows these days and hours; scroll for
+  the rest of the day. Away from home, in another time zone, it also shows the home time of
+  each hour."
 - Global shortcut: "Open Calbar", default `⌃⌥M`. Recorded by `ShortcutRecorder`: click, type the
   shortcut, `esc` cancels, `delete` clears. It needs a modifier besides Shift, or a function key.
   `KeyboardShortcuts.Recorder` is not used: its placeholder reads the package's resource bundle

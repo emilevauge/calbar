@@ -88,6 +88,16 @@ final class AppDelegate: NSObject, ObservableObject {
         LegacyMacal.trashOldApp()
         NotificationHub.shared.start()
         UpdateChecker.startPeriodicCheck()
+        // After a flight: days, times and the home clock follow the new zone.
+        NotificationCenter.default.addObserver(
+            forName: .NSSystemTimeZoneDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            NSTimeZone.resetSystemTimeZone()
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                Task { await self.store.refresh() }
+            }
+        }
 
         setupStatusItem()
         setupPopover()
