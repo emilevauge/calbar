@@ -28,4 +28,23 @@ public enum HomeClock {
         let offset = seconds == 0 ? "" : minutes == 0 ? "\(sign)\(hours)" : String(format: "%@%d:%02d", sign, hours, minutes)
         return "\(city) (GMT\(offset))"
     }
+
+    /// "CET", "EST": `abbreviation(for:)` gives "GMT+1" for Paris in
+    /// most locales, so a "GMT" answer is looked up in macOS's table,
+    /// among the zones of the same region with the same time.
+    public static func abbreviation(_ zone: TimeZone, at date: Date) -> String {
+        let given = zone.abbreviation(for: date) ?? zone.identifier
+        guard given.hasPrefix("GMT"), given != "GMT" else { return given }
+        let region = zone.identifier.split(separator: "/").first
+        let dst = zone.isDaylightSavingTime(for: date)
+        let matches = TimeZone.abbreviationDictionary.filter { _, identifier in
+            guard let other = TimeZone(identifier: identifier) else { return false }
+            return identifier.split(separator: "/").first == region
+                && other.secondsFromGMT(for: date) == zone.secondsFromGMT(for: date)
+                && other.isDaylightSavingTime(for: date) == dst
+        }.keys
+        // Both CET and CEST name Paris: summer time is the longer one.
+        let pick = dst ? matches.max { ($0.count, $0) < ($1.count, $1) } : matches.min { ($0.count, $0) < ($1.count, $1) }
+        return pick ?? given
+    }
 }

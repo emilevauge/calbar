@@ -78,17 +78,19 @@ struct WeekView: View {
     @ViewBuilder private var zoneTitles: some View {
         if let home {
             HStack(spacing: 4) {
-                Text(TimeZone.current.abbreviation() ?? "")
+                Text(HomeClock.abbreviation(.current, at: days.first ?? Date()))
                     .fontWeight(.bold)
                     .foregroundStyle(.secondary)
                     .frame(width: Self.clockWidth, alignment: .trailing)
                     .help("Here, \(HomeClock.name(.current, at: Date()))")
-                Text(home.abbreviation() ?? "")
+                Text(HomeClock.abbreviation(home, at: days.first ?? Date()))
                     .foregroundStyle(.tertiary)
                     .frame(width: Self.clockWidth, alignment: .trailing)
                     .help("At home, \(HomeClock.name(home, at: Date()))")
             }
             .font(.caption2)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
             .frame(width: gutter - 6, alignment: .trailing)
             .padding(.trailing, 6)
         }

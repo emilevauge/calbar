@@ -26,5 +26,12 @@ struct HomeClockTests {
         #expect(HomeClock.name(TimeZone(identifier: "Asia/Kolkata")!, at: date) == "Kolkata (GMT+5:30)")
         #expect(HomeClock.name(TimeZone(identifier: "America/New_York")!, at: date) == "New York (GMT-5)")
     }
-}
 
+    @Test func abbreviations() {
+        let summer = Date(timeIntervalSince1970: 1_783_000_000) // July 2026
+        #expect(HomeClock.abbreviation(paris, at: date) == "CET")
+        #expect(HomeClock.abbreviation(paris, at: summer) == "CEST")
+        #expect(HomeClock.abbreviation(TimeZone(identifier: "Europe/Berlin")!, at: date) == "CET")
+        #expect(HomeClock.abbreviation(TimeZone(identifier: "America/Denver")!, at: date) == "MST")
+    }
+}

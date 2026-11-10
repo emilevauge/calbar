@@ -321,8 +321,9 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   settings) in a zone whose time differs (`HomeClock.away`, offsets compared, so Berlin is not
   away from Paris), the gutter widens from 40 to 74 pt and each hour shows the local time in bold,
   then the home time ("15:00", "19:30" for a half-hour zone) beside the grid. Both columns
-  are titled with the zone's abbreviation from macOS ("EST", "CET", or "GMT+1" when it has
-  none), in a row of their own under the all-day
+  are titled with the zone's abbreviation on one line (`HomeClock.abbreviation`: macOS's, and
+  when it is "GMT+1", the key of `TimeZone.abbreviationDictionary` for a zone of the same
+  region with the same offset and summer time, so "CET" or "CEST"), in a row of their own under the all-day
   area, just over the hours, the zone on its tooltip. A
   system time zone change resets the cached zone and refreshes. Timed events are opaque blocks (a
   text background base under the calendar color, 30 % in light mode, 42 % in dark) with a
