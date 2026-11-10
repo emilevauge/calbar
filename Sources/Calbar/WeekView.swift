@@ -91,8 +91,6 @@ struct WeekView: View {
             .font(.caption2)
             .frame(width: gutter - 6, alignment: .trailing)
             .padding(.trailing, 6)
-        } else {
-            Color.clear.frame(width: gutter)
         }
     }
     static let hourHeight: CGFloat = 44
@@ -127,10 +125,12 @@ struct WeekView: View {
             // One day already has its title in the popover header.
             if days.count > 1 {
                 dayHeaders
-            } else if home != nil {
-                zoneTitles.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 2)
             }
             allDayRow(contents)
+            // Over the hour columns, under "all-day".
+            if home != nil {
+                zoneTitles.frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 2)
+            }
             Divider()
             ScrollViewReader { proxy in
                 ScrollView {
@@ -168,7 +168,7 @@ struct WeekView: View {
 
     private var dayHeaders: some View {
         HStack(spacing: 0) {
-            zoneTitles
+            Color.clear.frame(width: gutter)
             ForEach(days, id: \.self) { day in
                 let today = Calendar.current.isDateInToday(day)
                 Button { onShowDay(day) } label: {
