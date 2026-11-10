@@ -321,9 +321,8 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   settings) in a zone whose time differs (`HomeClock.away`, offsets compared, so Berlin is not
   away from Paris), the gutter widens from 40 to 74 pt and each hour shows the local time in bold,
   then the home time ("15:00", "19:30" for a half-hour zone) beside the grid. Both columns
-  are titled with an IATA city code (`AirportCode`: "NYC", "PAR", from the home city then the
-  zone's city, else the zone abbreviation), in the day headers row, or a row of its own for one
-  day, the zone on its tooltip. A
+  are titled with the zone's abbreviation from macOS ("EST", "CET", or "GMT+1" when it has
+  none), in the day headers row, or a row of its own for one day, the zone on its tooltip. A
   system time zone change resets the cached zone and refreshes. Timed events are opaque blocks (a
   text background base under the calendar color, 30 % in light mode, 42 % in dark) with a
   hairline border and a leading bar, 1 pt apart, title and start time followed by the calendar's

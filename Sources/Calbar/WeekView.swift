@@ -74,16 +74,16 @@ struct WeekView: View {
     private var gutter: CGFloat { home == nil ? 40 : 74 }
     static let clockWidth: CGFloat = 32
 
-    /// "NYC PAR" over the hour columns, away from home.
+    /// "EST CET" over the hour columns, away from home.
     @ViewBuilder private var zoneTitles: some View {
         if let home {
             HStack(spacing: 4) {
-                Text(AirportCode.code(city: nil, zone: .current))
+                Text(TimeZone.current.abbreviation() ?? "")
                     .fontWeight(.bold)
                     .foregroundStyle(.secondary)
                     .frame(width: Self.clockWidth, alignment: .trailing)
                     .help("Here, \(HomeClock.name(.current, at: Date()))")
-                Text(AirportCode.code(city: UserDefaults.standard.string(forKey: Prefs.homeCityKey), zone: home))
+                Text(home.abbreviation() ?? "")
                     .foregroundStyle(.tertiary)
                     .frame(width: Self.clockWidth, alignment: .trailing)
                     .help("At home, \(HomeClock.name(home, at: Date()))")
