@@ -72,6 +72,29 @@ struct WeekView: View {
         HomeClock.away(home: homeTimeZone, current: .current, at: days.first ?? Date())
     }
     private var gutter: CGFloat { home == nil ? 40 : 74 }
+    static let clockWidth: CGFloat = 32
+
+    /// "NYC PAR" over the hour columns, away from home.
+    @ViewBuilder private var zoneTitles: some View {
+        if let home {
+            HStack(spacing: 4) {
+                Text(AirportCode.code(city: nil, zone: .current))
+                    .fontWeight(.bold)
+                    .foregroundStyle(.secondary)
+                    .frame(width: Self.clockWidth, alignment: .trailing)
+                    .help("Here, \(HomeClock.name(.current, at: Date()))")
+                Text(AirportCode.code(city: UserDefaults.standard.string(forKey: Prefs.homeCityKey), zone: home))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: Self.clockWidth, alignment: .trailing)
+                    .help("At home, \(HomeClock.name(home, at: Date()))")
+            }
+            .font(.caption2)
+            .frame(width: gutter - 6, alignment: .trailing)
+            .padding(.trailing, 6)
+        } else {
+            Color.clear.frame(width: gutter)
+        }
+    }
     static let hourHeight: CGFloat = 44
     @State private var opened: String?
     /// The slot of a new event while it is dragged out, then while its
@@ -104,6 +127,8 @@ struct WeekView: View {
             // One day already has its title in the popover header.
             if days.count > 1 {
                 dayHeaders
+            } else if home != nil {
+                zoneTitles.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 2)
             }
             allDayRow(contents)
             Divider()
@@ -143,7 +168,7 @@ struct WeekView: View {
 
     private var dayHeaders: some View {
         HStack(spacing: 0) {
-            Color.clear.frame(width: gutter)
+            zoneTitles
             ForEach(days, id: \.self) { day in
                 let today = Calendar.current.isDateInToday(day)
                 Button { onShowDay(day) } label: {
@@ -364,13 +389,16 @@ struct WeekView: View {
                 ForEach(0..<24, id: \.self) { hour in
                     HStack(alignment: .top, spacing: 0) {
                         HStack(spacing: 4) {
-                            // Where I am on the left, home beside the grid.
+                            // Where I am on the left, in bold; home beside the grid.
                             Text(String(format: "%02d:00", hour))
-                                .foregroundStyle(.tertiary)
+                                .fontWeight(home == nil ? .regular : .bold)
+                                .foregroundStyle(home == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+                                .frame(width: home == nil ? nil : Self.clockWidth, alignment: .trailing)
                             if let home, let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0,
                                                                             of: days.first ?? Date()) {
                                 Text(HomeClock.label(date, in: home))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.tertiary)
+                                    .frame(width: Self.clockWidth, alignment: .trailing)
                                     .help("At home, \(HomeClock.name(home, at: date))")
                             }
                         }

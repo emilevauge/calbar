@@ -27,3 +27,13 @@ struct HomeClockTests {
         #expect(HomeClock.name(TimeZone(identifier: "America/New_York")!, at: date) == "New York (GMT-5)")
     }
 }
+
+struct AirportCodeTests {
+    @Test func codes() {
+        let paris = TimeZone(identifier: "Europe/Paris")!
+        #expect(AirportCode.code(city: "Lyon", zone: paris) == "LYS")
+        #expect(AirportCode.code(city: "Villeurbanne", zone: paris) == "PAR")
+        #expect(AirportCode.code(city: nil, zone: TimeZone(identifier: "America/New_York")!) == "NYC")
+        #expect(AirportCode.code(city: nil, zone: TimeZone(identifier: "America/Boise")!) == TimeZone(identifier: "America/Boise")!.abbreviation())
+    }
+}
