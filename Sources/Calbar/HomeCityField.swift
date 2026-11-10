@@ -58,6 +58,8 @@ struct HomeCityField: View {
                 Text(error).font(.caption).foregroundStyle(.red)
             }
         }
+        // The window gives its first field the focus: not this one.
+        .onAppear { DispatchQueue.main.async { NSApp.keyWindow?.makeFirstResponder(nil) } }
     }
 
     private var label: String {

@@ -319,8 +319,8 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   "Week view from" to "Week view until" (9 and 19 by default) fill the visible height; the grid
   covers the whole day and opens scrolled to the first one. Away from home ("Home" in the
   settings) in a zone whose time differs (`HomeClock.away`, offsets compared, so Berlin is not
-  away from Paris), the gutter widens from 40 to 74 pt and each hour shows the home time
-  ("15:00", "19:30" for a half-hour zone) before the local one, the zone on its tooltip. A
+  away from Paris), the gutter widens from 40 to 74 pt and each hour shows the local time, then
+  the home time ("15:00", "19:30" for a half-hour zone) beside the grid, the zone on its tooltip. A
   system time zone change resets the cached zone and refreshes. Timed events are opaque blocks (a
   text background base under the calendar color, 30 % in light mode, 42 % in dark) with a
   hairline border and a leading bar, 1 pt apart, title and start time followed by the calendar's
@@ -654,7 +654,8 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
   `Calendar` weekday numbers ("23456"). "Home" (`HomeCityField`): type a city, `MKLocalSearchCompleter`
   (addresses, titles with digits left out) suggests five places; a click looks the place up
   with `MKLocalSearch` and keeps its map item's time zone (`homeTimeZone`, "" for none) and
-  title (`homeCity`). Then it reads "Lyon · Paris (GMT+1)" with a clear button. Footer "The week view shows these days and hours; scroll for
+  title (`homeCity`). Then it reads "Lyon · Paris (GMT+1)" with a clear button. The field never takes the focus
+  when the window opens. Footer "The week view shows these days and hours; scroll for
   the rest of the day. Away from home, in another time zone, it also shows the home time of
   each hour."
 - Global shortcut: "Open Calbar", default `⌃⌥M`. Recorded by `ShortcutRecorder`: click, type the

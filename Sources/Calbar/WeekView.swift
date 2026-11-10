@@ -364,14 +364,15 @@ struct WeekView: View {
                 ForEach(0..<24, id: \.self) { hour in
                     HStack(alignment: .top, spacing: 0) {
                         HStack(spacing: 4) {
+                            // Where I am on the left, home beside the grid.
+                            Text(String(format: "%02d:00", hour))
+                                .foregroundStyle(.tertiary)
                             if let home, let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0,
                                                                             of: days.first ?? Date()) {
                                 Text(HomeClock.label(date, in: home))
                                     .foregroundStyle(.secondary)
                                     .help("At home, \(HomeClock.name(home, at: date))")
                             }
-                            Text(String(format: "%02d:00", hour))
-                                .foregroundStyle(.tertiary)
                         }
                         .font(.caption2)
                         .monospacedDigit()
