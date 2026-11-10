@@ -645,9 +645,11 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
   (`CalendarInfo.shared`: named after the contact when known, a color from the email, alerts
   off, read only, `isAdded`), kept by `merge` although Google's calendar list does not have
   it, and fetched like the others. A minus button removes it. A meeting the user also has
-  keeps the copy of the user's own calendar (`EventMerger`). Then a card with "Add a Google account…" or the sign-in progress with "Cancel", and the
-  last sign-in error; its footer gives the OAuth client ID, shortened, with "Import…" or
-  "Replace…".
+  keeps the copy of the user's own calendar (`EventMerger`). Then a card with an accent "Add a Google account…" row (a plus icon) or the sign-in
+  progress with "Cancel", the last sign-in error, and an "OAuth client" row: the client ID,
+  shortened, with a small "Import…" or "Replace…".
+- Zoom, once connected: one row like an account, a blue camera badge, "Zoom" over
+  "Connected", and a small "Disconnect"; the setup footer only shows before that.
 - Alerts: "Alert before" (1 to 60 min, default 10), "Keep after the start" (0 to 30 min, default
   5), "Show the panel before a meeting" (on), "Play a sound" (on, disabled when the panel
   setting is off). Footer: "Before each meeting and at its start, the

@@ -44,9 +44,15 @@ struct SettingsView: View {
                 if app.isSigningIn {
                     SignInProgress()
                 } else {
-                    Button("Add a Google account…") {
+                    Button {
                         app.addAccount()
+                    } label: {
+                        Label("Add a Google account…", systemImage: "plus.circle.fill")
+                            .foregroundStyle(Color.accentColor)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     .disabled(busy || app.auth == nil)
                 }
                 if let error = app.authError {
@@ -54,10 +60,9 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
+                oauthClientRow
             } header: {
                 if accounts.accounts.isEmpty { Text("Google accounts") }
-            } footer: {
-                oauthClientFooter
             }
 
             zoomSection
@@ -220,26 +225,27 @@ struct SettingsView: View {
 
     /// The imported client, its ID shortened, never the secret.
     @ViewBuilder
-    private var oauthClientFooter: some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private var oauthClientRow: some View {
+        LabeledContent {
             HStack(spacing: 8) {
-                Text("OAuth client: \(app.auth.map { OAuthClientFile.maskedID($0.client.clientID) } ?? "none")")
+                Text(app.auth.map { OAuthClientFile.maskedID($0.client.clientID) } ?? "None")
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Spacer(minLength: 8)
+                    .foregroundStyle(.secondary)
                 Button(app.auth == nil ? "Import…" : "Replace…") {
                     app.importOAuthClient()
                 }
                 .controlSize(.small)
                 .disabled(app.isSigningIn)
             }
-            if let error = app.clientImportError {
-                Text(error)
-                    .foregroundStyle(.red)
-            }
+        } label: {
+            Text("OAuth client")
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        if let error = app.clientImportError {
+            Text(error)
+                .font(.caption)
+                .foregroundStyle(.red)
+        }
     }
 
     /// Zoom meetings for new events: the user's own Zoom app, then a
@@ -247,11 +253,19 @@ struct SettingsView: View {
     private var zoomSection: some View {
         Section {
             if zoom.isConnected {
-                HStack {
-                    Label("Connected", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Spacer()
+                HStack(spacing: 10) {
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color(red: 0.04, green: 0.36, blue: 1)))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Zoom").fontWeight(.medium)
+                        Text("Connected").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
                     Button("Disconnect") { zoom.disconnect() }
+                        .controlSize(.small)
                 }
             } else {
                 TextField("Client ID", text: $zoomClientID)
@@ -280,9 +294,12 @@ struct SettingsView: View {
         } header: {
             Text("Zoom")
         } footer: {
-            Text("Adds Zoom as a video call when you create an event. In your Zoom app, set the redirect URL and allow list to \(ZoomOAuth.redirectURI).")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            // Setup help, useless once connected.
+            if !zoom.isConnected {
+                Text("Adds Zoom as a video call when you create an event. In your Zoom app, set the redirect URL and allow list to \(ZoomOAuth.redirectURI).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .onAppear {
             zoom.loadClient()
