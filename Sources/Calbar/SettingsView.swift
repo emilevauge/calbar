@@ -16,7 +16,6 @@ struct SettingsView: View {
     @AppStorage(Prefs.weekStartHourKey) private var weekStartHour = 9
     @AppStorage(Prefs.weekEndHourKey) private var weekEndHour = 19
     @AppStorage(Prefs.weekDaysKey) private var weekDays = "1234567"
-    @AppStorage(Prefs.homeTimeZoneKey) private var homeTimeZone = ""
     @AppStorage(Prefs.notifyBeforeMeetingsKey) private var notifyBeforeMeetings = true
     @AppStorage(Prefs.soundBeforeMeetingsKey) private var soundBeforeMeetings = true
     @AppStorage(Prefs.openPanelAtDayStartKey) private var openPanelAtDayStart = true
@@ -90,7 +89,7 @@ struct SettingsView: View {
                     valueRow("Week view until", String(format: "%02d:00", weekEndHour))
                 }
                 weekDaysRow
-                homeRow
+                HomeCityField()
             } header: {
                 Text("Display")
             } footer: {
@@ -293,25 +292,6 @@ struct SettingsView: View {
     }
 
     /// One toggle per weekday, from the user's first weekday, and presets.
-    private var homeRow: some View {
-        let now = Date()
-        let zones = TimeZone.knownTimeZoneIdentifiers.compactMap(TimeZone.init(identifier:))
-            .sorted { ($0.secondsFromGMT(for: now), $0.identifier) < ($1.secondsFromGMT(for: now), $1.identifier) }
-        return HStack {
-            Picker("Home", selection: $homeTimeZone) {
-                Text("None").tag("")
-                Divider()
-                ForEach(zones, id: \.identifier) { zone in
-                    Text(HomeClock.name(zone, at: now)).tag(zone.identifier)
-                }
-            }
-            if homeTimeZone.isEmpty {
-                Button("Here") { homeTimeZone = TimeZone.current.identifier }
-                    .help("Use the current time zone, \(HomeClock.name(.current, at: now))")
-            }
-        }
-    }
-
     private var weekDaysRow: some View {
         let shown = WeekLayout.weekdays(weekDays)
         var english = Calendar(identifier: .gregorian)

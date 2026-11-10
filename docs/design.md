@@ -651,9 +651,10 @@ A grouped form in a popover anchored to the gear button, 380 pt wide, scrolling 
 - Display: "Show declined events" (off), "Week view from" (0 to 23, default 09:00) and "Week
   view until" (1 to 24, default 19:00), "Week view days": one toggle per weekday from the
   user's first weekday (at least one stays on) with "Mon-Fri" and "All" presets, stored as
-  `Calendar` weekday numbers ("23456"). "Home": a time zone menu, "None" first (the default,
-  stored as ""), then every known zone as "Paris (GMT+1)", by offset; with "None", a "Here"
-  button picks the current zone. Footer "The week view shows these days and hours; scroll for
+  `Calendar` weekday numbers ("23456"). "Home" (`HomeCityField`): type a city, `MKLocalSearchCompleter`
+  (addresses, titles with digits left out) suggests five places; a click looks the place up
+  with `MKLocalSearch` and keeps its map item's time zone (`homeTimeZone`, "" for none) and
+  title (`homeCity`). Then it reads "Lyon · Paris (GMT+1)" with a clear button. Footer "The week view shows these days and hours; scroll for
   the rest of the day. Away from home, in another time zone, it also shows the home time of
   each hour."
 - Global shortcut: "Open Calbar", default `⌃⌥M`. Recorded by `ShortcutRecorder`: click, type the

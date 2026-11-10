@@ -21,6 +21,8 @@ enum Prefs {
     /// Time zone identifier of home ("Europe/Paris"), "" for none: away
     /// from it, the grid also shows the home time of each hour.
     static let homeTimeZoneKey = "homeTimeZone"
+    /// The city picked for it, shown in the settings.
+    static let homeCityKey = "homeCity"
     /// "yyyy-MM-dd" of the last day the popover opened by itself.
     static let lastDayStartOpenKey = "lastDayStartOpen"
 
@@ -37,6 +39,7 @@ enum Prefs {
             viewModeKey: "day",
             weekDaysKey: "1234567",
             homeTimeZoneKey: "",
+            homeCityKey: "",
         ])
     }
 
