@@ -697,6 +697,7 @@ struct WeekView: View {
                  onToggle: {}, onJoin: { onJoin(event) })
             .frame(width: 360)
             .padding(.vertical, 6)
+            .cardHeight()
             // ⌫ in the open card deletes the event (⌘Z in the panel undoes).
             .focusable()
             .focusEffectDisabled()

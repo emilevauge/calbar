@@ -336,7 +336,7 @@ global shortcut, "Open Calbar", notifications). Width 380 pt, list up to 560 pt 
   invitation waits, a lighter tint and grey text once past or declined, struck through when
   declined. A red line with a
   dot marks the current time in today's column, tinted lightly. A click on a block opens its
-  card in a popover (Join, RSVP, guests, documents). The week is fetched in one request window
+  card in a popover (Join, RSVP, guests, documents), at most 560 pt tall, then it scrolls (`cardHeight`). The week is fetched in one request window
   for the days the regular refresh does not cover, then kept in the day cache.
 - Card: "NOW" in red for an ongoing meeting, the time range and the time left ("35 min left")
   or the relative time ("in 12 min"), the title on up to 3 lines, and a "Join" button on the

@@ -333,3 +333,13 @@ struct MeetingProgress: View {
         }
     }
 }
+
+extension View {
+    /// An event card in a popover: as tall as its content, then it
+    /// scrolls, so a long description (an email thread) stays on screen.
+    func cardHeight() -> some View {
+        ScrollView { self }
+            .frame(maxHeight: 560)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}

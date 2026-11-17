@@ -127,6 +127,7 @@ struct AllDayStrip: View {
                          MeetingOpener.open(link)
                      })
                 .frame(width: 360)
+                .cardHeight()
                 .padding(.vertical, 6)
         }
     }
